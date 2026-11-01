@@ -48,7 +48,7 @@ tab open. The AI button in the top bar shows whether an agent is connected.
 
 ## Access from your Wi-Fi or VPN
 
-Set `JUMPSTART_LAN_ADDRESS` to your server's LAN IP and, optionally, `JUMPSTART_CAD_ORIGIN` to your HTTPS CAD hostname in `.env`, then run `make up-lan`.
+Set `JUMPSTART_LAN_ADDRESS` to your server's LAN IP and, optionally, `JUMPSTART_CAD_ORIGIN` to your HTTPS CAD hostname in `.env`, then run `make deploy`.
 
 The same container publishes the editor on `<LAN-IP>:3210` and AR shares on port `3211`. The LAN editor accepts only the configured addresses. A reverse proxy can forward the CAD hostname to `<LAN-IP>:3210` and the AR hostname to `<LAN-IP>:3211`. Use the Wi-Fi network or your VPN on the phone.
 
@@ -87,7 +87,8 @@ the CAD engine, so it takes a few seconds to open. The demo has no AI agent conn
 
 | Command | Use it when |
 | --- | --- |
-| `make up` | Build and start the app |
+| `make up` | Build and start the app for localhost access |
+| `make deploy` | Build and start the app for LAN and reverse proxy access |
 | `make down` | Stop the app |
 | `make logs` | See server messages |
 | `make mcp-config` | Print the MCP config for TOML-based clients |
@@ -152,4 +153,4 @@ MIT. Based on JumpStart 3D; see [NOTICE.md](NOTICE.md) and
 
 ## Versions and builds
 
-Studio has its own release version in `package.json` (currently 0.1.0), separate from the upstream editor version in `src/version.js` (currently 2.7.7). About, the loading screen and `version.json` show both plus the build's short Git revision. `make up` and `make up-lan` pass the revision into Docker; development builds are marked `-dirty` when the checkout has changes. Builds without Git or an explicit revision show `unversioned`. For a direct Docker build, pass `JUMPSTART_BUILD_REVISION` as a build argument. Use `npm version patch --no-git-tag-version` to bump the Studio release and lockfile together.
+Studio has its own release version in `package.json` (currently 0.1.0), separate from the upstream editor version in `src/version.js` (currently 2.7.7). About, the loading screen and `version.json` show both plus the build's short Git revision. `make up` and `make deploy` pass the revision into Docker; development builds are marked `-dirty` when the checkout has changes. Builds without Git or an explicit revision show `unversioned`. For a direct Docker build, pass `JUMPSTART_BUILD_REVISION` as a build argument. Use `npm version patch --no-git-tag-version` to bump the Studio release and lockfile together.
