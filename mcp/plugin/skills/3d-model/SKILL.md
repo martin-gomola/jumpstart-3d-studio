@@ -2,7 +2,7 @@
 name: 3d-model
 description: Creates and revises editable CAD parts, measured drawer layouts, Gridfinity bins, baseplates and custom inserts, household objects, and imported-part assemblies in JumpStart through local MCP. Use for drawer organization, magnet pockets, measured cutouts, trays, brackets, enclosures, hooks, phone holders and cases, spacers, knobs, fit checks, imported STL resizing, dimensioned SVG or PDF drawings, and tutorial models. Avoid generic 3D illustration, rendering, website design, and standalone product comparisons.
 metadata:
-  version: "1.19.0"
+  version: "1.20.0"
 ---
 
 # Model a part in JumpStart
@@ -27,6 +27,7 @@ copy the entire tool catalog into working notes.
 | A dimensioned drawing to model from, or a drawing (SVG, PDF) of the model | [Dimensioned drawings](references/dimensioned-drawings.md) |
 | Existing native part, feature or interface edits | [Edit existing parts](references/edit-existing-parts.md) |
 | STL/3MF/STEP imports and resizing | [Imported parts](references/imported-parts.md) |
+| A shaped insert or sleeve fitted into an existing imported holder | [Fitted adapters](references/fitted-adapters.md) |
 | A named or pictured JumpStart tutorial | [Tutorial models](references/tutorial-models.md) |
 | Clearances, mating parts, pair checks, fit coupons | [Fit and print checks](references/fit-and-print-checks.md) |
 | Printed parts, the default printer profile, print pose, screw, nut and insert holes | [Print setup and hardware](references/print-and-hardware.md) |

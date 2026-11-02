@@ -1,4 +1,4 @@
-version: 5
+version: 6
 status: not-run
 baseline:
   source: "Observed spacer workflow and MCP workflow-polish work; not a controlled no-skill trial."
@@ -7,6 +7,7 @@ baseline:
     - "A missing wall dimension became an assumed 5 mm wall."
     - "Transport closure led to a raw HTTP workaround."
     - "Lathe requested thickness can differ from sampled geometry."
+    - "An AirPods insert was replaced with a generic frame, shown only in preview, then trimmed with a mesh Boolean whose reported success did not remove the measured overlap."
 cases:
   - id: magnetic-drawer-height
     prompt: "Add 6 by 2 mm magnets to my baseplates and bins, keeping this drawer's height."
@@ -346,3 +347,27 @@ cases:
     expect:
       - "Reviews complete context and before/after detail in the same world-space region."
       - "Does not infer interface quality from whole-body minimum distance or a cropped image alone."
+  - id: shaped-insert-in-imported-holder
+    prompt: "Fit the exact AirPods 4 STEP sleeve I added into this imported SKÅDIS holder and fill the gaps."
+    setup: "The holder is a mesh; the sleeve has a shaped item opening and is parked beside it. An obsolete agent draft is also present."
+    expect:
+      - "Loads fitted-adapters, identifies all three bodies and rereads their current placements."
+      - "Measures the holder cavity at multiple world-space stations, preserving the mounting hooks and item opening."
+      - "Builds outward from the STEP sleeve, verifies wall thickness and inner/outer intervals before applying, then exports only the final sleeve."
+    fail_if:
+      - "Substitutes a generic rounded rectangle for the supplied case contour."
+      - "Treats whole-body bounds or a valid mesh Boolean as proof of cavity fit."
+      - "Calls a preview visible in the editor before applying it."
+  - id: mesh-boolean-no-material-delta
+    prompt: "Use the imported holder as a hole to trim this larger sleeve."
+    setup: "The combine preview reports valid, but interval probes show the sleeve still overlaps the holder wall."
+    expect:
+      - "Checks the material delta and same-coordinate intervals rather than trusting the Boolean status."
+      - "Does not apply the overlapping preview; uses a measured native envelope or reports the capability gap."
+  - id: adapter-after-user-edit
+    prompt: "I added the real case-shaped part. Fix that one and remove the old draft."
+    setup: "The user changed the document after an agent preview; undo would now affect user work."
+    expect:
+      - "Rereads body ids and revision and selects the new user-supplied part as the target."
+      - "Does not undo later user edits or apply an expired preview."
+      - "Identifies an obsolete draft explicitly if the MCP cannot remove it safely."

@@ -1,4 +1,4 @@
-version: 5
+version: 6
 status: not-run
 cases:
   - prompt: "Add magnet pockets to the Gridfinity baseplate and matching bins in JumpStart."
@@ -84,6 +84,12 @@ cases:
     mode: implicit
 
   - prompt: "Move the existing hole in this native CAD plate and preserve its mating face."
+    expected: invoke
+    mode: implicit
+  - prompt: "Make an insert from my exact AirPods case shape that fits the imported SKÅDIS holder."
+    expected: invoke
+    mode: implicit
+  - prompt: "Fill the gaps around this STEP sleeve inside my printed holder without changing its inner opening."
     expected: invoke
     mode: implicit
   - prompt: "Remove an existing fillet from this JumpStart model without rebuilding other parts."
