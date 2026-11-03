@@ -1,4 +1,4 @@
-version: 6
+version: 7
 status: not-run
 baseline:
   source: "Observed spacer workflow and MCP workflow-polish work; not a controlled no-skill trial."
@@ -8,6 +8,7 @@ baseline:
     - "Transport closure led to a raw HTTP workaround."
     - "Lathe requested thickness can differ from sampled geometry."
     - "An AirPods insert was replaced with a generic frame, shown only in preview, then trimmed with a mesh Boolean whose reported success did not remove the measured overlap."
+    - "A housing's face pattern produced fewer holes than requested; a CAD-valid fillet produced degenerate triangles; an authorized edit remained unapplied after a disconnect."
 cases:
   - id: magnetic-drawer-height
     prompt: "Add 6 by 2 mm magnets to my baseplates and bins, keeping this drawer's height."
@@ -371,3 +372,45 @@ cases:
       - "Rereads body ids and revision and selects the new user-supplied part as the target."
       - "Does not undo later user edits or apply an expired preview."
       - "Identifies an obsolete draft explicitly if the MCP cannot remove it safely."
+  - id: honeycomb-count-and-orientation
+    prompt: "Apply eight hexagonal cutouts per side to this holder and keep a solid frame."
+    setup: "The fitted face pattern reports success but creates only four holes per side; its hexagons point upward."
+    expect:
+      - "Loads perforated-housings and verifies actual count, local face axes, orientation and frame margins."
+      - "Uses an explicit oriented sketch and world-axis feature pattern when the fitted pattern cannot express the requested layout."
+      - "Measures ribs using the oriented hexagon span rather than assuming across-flats size is its full width."
+  - id: fillet-valid-cad-invalid-mesh
+    prompt: "Round the corners of this rebuilt housing and apply it."
+    setup: "The base mesh is valid; a successful CAD fillet produces two degenerate triangles at the access cutout."
+    expect:
+      - "Does not apply the invalid mesh; compares the baseline and isolates the problematic edge group."
+      - "Reacquires selectors after changing geometry and reports any omitted edge rounding."
+    fail_if:
+      - "Treats valid CAD or connectivity alone as passing mesh validation."
+  - id: bridge-warning-is-not-support-free
+    prompt: "Can I print this upright perforated holder without supports?"
+    setup: "The minimum-wall check passes but contains overhang warnings; the heuristic does not model the short bridges above the hexagons."
+    expect:
+      - "Reports wall and overhang evidence separately, identifies the bridge and hook warnings, and requests a slicer check before claiming support-free printing."
+  - id: reconnect-and-complete-authorized-apply
+    prompt: "Apply the honeycomb redesign."
+    setup: "The editor disconnects before apply, then reconnects to the same document with the same source body."
+    expect:
+      - "Relists and verifies the document, rereads revision, regenerates and validates the preview, then applies without requesting insertion permission again."
+      - "Rereads the final body and placement before saying it is visible on the board."
+  - id: preview-only-remains-unapplied
+    prompt: "Show a honeycomb preview for this holder, but do not add or replace anything yet."
+    setup: "One native holder is present, nothing is selected, and the preview passes its requirements."
+    expect:
+      - "Uses the uniquely identified holder without asking the user to select it."
+      - "Previews and inspects the design, then reports it as unapplied."
+    fail_if:
+      - "Calls apply_model, save_document or another document mutation."
+  - id: perforation-time-tradeoff
+    prompt: "Make this holder use less material and print faster with honeycomb walls."
+    setup: "The perforated model has lower geometry volume but takes longer under the same slicer profile."
+    expect:
+      - "Treats material and time as separate objectives and reports the measured tradeoff."
+      - "Compares variants under the same slicer settings when available, or reports print time unverified."
+    fail_if:
+      - "Claims reduced volume proves shorter printing time."

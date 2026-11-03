@@ -2,14 +2,17 @@
 name: 3d-model
 description: Creates and revises editable CAD parts, measured drawer layouts, Gridfinity bins, baseplates and custom inserts, household objects, and imported-part assemblies in JumpStart through local MCP. Use for drawer organization, magnet pockets, measured cutouts, trays, brackets, enclosures, hooks, phone holders and cases, spacers, knobs, fit checks, imported STL resizing, dimensioned SVG or PDF drawings, and tutorial models. Avoid generic 3D illustration, rendering, website design, and standalone product comparisons.
 metadata:
-  version: "1.20.0"
+  version: "1.21.0"
 ---
 
 # Model a part in JumpStart
 
-Use the installed `jumpstart` MCP with a running local editor. This instruction-only
-skill writes native models and exports through MCP. It requires no shell scripts,
-external uploads, API keys, or extra services. Model coordinates are millimetres.
+Use the installed `jumpstart` MCP with a running local editor. Model coordinates are millimetres.
+This instruction-only skill needs no shell scripts, external uploads, API keys or extra services.
+
+## Contents
+
+[Workflows](#load-the-relevant-workflow) · [Inspect](#inspect) · [Specify](#specify) · [Build](#build-and-validate) · [Apply](#apply-and-deliver) · [Boundaries](#boundaries-and-maintenance)
 
 ## Load the relevant workflow
 
@@ -22,6 +25,7 @@ copy the entire tool catalog into working notes.
 | Drawer organization, multi-bin layouts and fitting a measured drawer | [Drawer layouts](references/drawer-layouts.md) |
 | Gridfinity inserts, bins, baseplates, measured cutouts and item-source research for those models | [Gridfinity](references/gridfinity.md) |
 | Frames, trays, brackets, hooks, cups, parameter models | [Household parts](references/household-parts.md) |
+| Rebuilding an STL housing, softer corners, honeycomb or other wall perforations | [Perforated housings](references/perforated-housings.md) |
 | Knurled knobs, shaft bores, gears, turned (Lathe) parts | [Knobs, gears and turned parts](references/knobs-gears-and-turned-parts.md) |
 | Phone holders, cradles and cases, board mounts, imported assemblies | [Mounts and assemblies](references/mounts-and-assemblies.md) |
 | A dimensioned drawing to model from, or a drawing (SVG, PDF) of the model | [Dimensioned drawings](references/dimensioned-drawings.md) |
@@ -42,7 +46,8 @@ copy the entire tool catalog into working notes.
 2. Start with `jumpstart_get_document` and compact capabilities using
    `jumpstart_get_capabilities({includeSchemas:false})`; `planVocabulary` lists type ids (holes and fillets are `modifier` operations).
    Read only the fields the task needs with `schemaPaths`, e.g. `["plan.operations.knurl"]`; generators list only their type in `tools/list`. Use current tool schemas rather than guessing fields or relying on a copied catalog.
-   Resolve "this part" or "the selected one" from `selectedBodyIds`; ask when it is empty or ambiguous. After an apply it holds the applied bodies, not a user choice.
+   Resolve the target from `selectedBodyIds`, the request and document; proceed with a single clear target and ask only if ambiguous.
+   After an apply the selection holds the applied bodies, not a user choice.
 3. For edits, use the target’s `editing` context to choose parameters, a supported native feature edit or a new operation. Read [Edit existing parts](references/edit-existing-parts.md) for local edits and preservation contracts. Read selected `bodyIds` with `includeGeometry:true`. Turn off
    `includeSelectors`, `includeFeatureTree`, or `includeSketches` when not needed.
    Use MCP geometry for dimensions; use available localhost screenshots for visual context, particularly mating sides, slope, and camera orientation.
@@ -81,6 +86,10 @@ copy the entire tool catalog into working notes.
 1. Apply only the successful `previewId` using `jumpstart_apply_model` against the same editor.
    If its `meshValidation` is not valid for every body, correct the plan and preview again.
    Reread and preview again after a changed revision. Inspect state before retrying a timeout and reuse the same preview id where appropriate.
+   An authorized creation or edit includes adding the validated result to the editor;
+   honor requests for a proposal, comparison or preview only without applying.
+   Otherwise, apply without another insertion request. After a disconnect, verify
+   the same document and regenerate stale previews; if still offline, report unapplied state.
 2. Confirm the final document, measured dimensions, and intended assembly pose.
    Preserve unrelated work. Undo only the agent's intended edit using the
    current revision. Save only when requested or part of the agreed task.

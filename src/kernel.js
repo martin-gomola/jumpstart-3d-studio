@@ -3162,7 +3162,11 @@ function solidFromMesh(V, I, k = 1, merge = true, shellOnly = false) {
   if (merge && nf <= 20000) {
     const bb = bboxOf(shape), diag = Math.hypot(...bb.size) || 1;
     const u = unifiedTol(shape, Math.max(1e-6, diag * 2e-6), 2e-4);
-    if (u) { shape.delete(); shape = u; }
+    // Unifying curved STL facets can invalidate an otherwise closed solid.
+    if (u) {
+      if (validSolid(u)) { shape.delete(); shape = u; }
+      else u.delete();
+    }
   }
   T.unify = Date.now();
   if (typeof process !== "undefined" && process.env && process.env.MESH_T) console.log("mesh build ms: faces", T.faces - T.t0, "solid", T.solid - T.faces, "unify", T.unify - T.solid);

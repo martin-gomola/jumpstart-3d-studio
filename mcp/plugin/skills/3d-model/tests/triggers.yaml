@@ -1,6 +1,9 @@
-version: 6
+version: 7
 status: not-run
 cases:
+  - prompt: "Rebuild this STL holder with softer corners and printable honeycomb side walls in JumpStart."
+    expected: invoke
+    mode: implicit
   - prompt: "Add magnet pockets to the Gridfinity baseplate and matching bins in JumpStart."
     expected: invoke
     mode: implicit

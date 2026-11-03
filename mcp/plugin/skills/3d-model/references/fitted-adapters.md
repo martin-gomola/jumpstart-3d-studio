@@ -4,8 +4,8 @@ Use when a new insert must fit an existing holder while preserving the item-faci
 opening and the holder's mounting features. Load [Imported parts](imported-parts.md)
 only when import handling or resizing is also needed.
 
-1. Identify three roles in the current document: original holder, shaped insert,
-   and any earlier agent draft. Reread the document after the user adds or moves a
+1. Identify the holder, shaped insert and any earlier agent drafts that are
+   present. Reread the document after the user adds or moves a
    body. Never treat a prior preview or applied-body selection as the user's new
    choice. Preserve the holder and unrelated bodies in attached requirements.
 2. Establish the fit frame: insertion direction, holder wall or floor, item-facing
@@ -18,12 +18,15 @@ only when import handling or resizing is also needed.
    supplied STEP or measured outline. If the shaped insert is already present,
    build outward from that body; do not replace it with a generic frame. Keep
    external holder clearance separate from internal item clearance.
-4. For a one-piece filler, create a native outer envelope inside the measured
-   holder cavity, cut a generous item-opening protection region from the filler,
-   then join it to the shaped insert. If the source insert was over-trimmed, first
-   position and clip its exterior to the envelope. Keep the resulting wall
-   connected and thick enough at the front, back and side sections. Do not scale
-   the entire source when that also changes its item-facing opening.
+4. Choose a supported edit that preserves the item-facing shape and meets the
+   measured external clearance and wall requirements. One option for a filler is
+   a native outer envelope with the item opening removed, joined to the existing
+   insert. Check that the added material overlaps the insert sufficiently to join
+   without gaps or thin slivers, while remaining outside the protected opening.
+   If the source was over-trimmed, positioning and clipping may be needed before
+   adding material. Prefer a simpler supported parameter or feature edit when it
+   meets the same requirements. Do not scale the entire source when that also
+   changes its item-facing opening.
 5. Preview before apply. Check the source holder is unchanged; compare inner
    opening intervals before and after at multiple stations; check outer intervals
    against the holder at the same world coordinates and several heights; inspect
@@ -31,8 +34,9 @@ only when import handling or resizing is also needed.
    `combine` or mesh validation does not prove that a mesh used as a cutting tool
    actually removed overlapping material. Verify the expected material delta
    independently. Failed, unknown or contradictory fit evidence blocks apply.
-6. Make the result visible in the editor. A preview is not an applied body; say
-   which it is. Apply a successful preview, reread the document, identify the
+6. For an authorized model edit, make the result visible in the editor; honor a
+   request for a proposal or preview only. A preview is not an applied body; say
+   which it is. After applying a successful preview, reread the document, identify the
    final body, and export only that printable body when an export is needed.
    Earlier agent drafts must not be described as the final insert. If the MCP
    cannot remove an obsolete draft safely, identify it explicitly rather than

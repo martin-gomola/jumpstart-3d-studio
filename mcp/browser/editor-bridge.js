@@ -922,6 +922,8 @@ export function initMcp(app) {
     } catch (error) {
       showStatus({ checking: false, online: false, connected: false, recent: false });
       retry = !stopped && (!(error instanceof DOMException) || error.name !== "AbortError");
+      // Background timer throttling or a broker restart can expire registration.
+      if (retry) await heartbeat();
     } finally {
       pollAbort = null;
       polling = false;
@@ -932,9 +934,8 @@ export function initMcp(app) {
     }
   };
 
-  heartbeat();
+  void heartbeat().then(poll);
   const heartbeatTimer = setInterval(heartbeat, HEARTBEAT_MS);
-  void poll();
   window.addEventListener("pagehide", () => {
     stopped = true;
     clearInterval(heartbeatTimer);

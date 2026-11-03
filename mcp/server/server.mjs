@@ -370,6 +370,8 @@ function pruneEditors() {
   const now = Date.now();
   for (const [editorId, editor] of editors) {
     if (now - editor.lastSeen <= EDITOR_STALE_MS || waiters.has(editorId)) continue;
+    // CAD work can block browser heartbeats; the command's own deadline bounds it.
+    if ([...pending.values()].some(entry => entry.editorId === editorId && entry.delivered)) continue;
     editors.delete(editorId);
     queues.delete(editorId);
     for (const [commandId, entry] of pending) {
@@ -522,7 +524,12 @@ async function handleBridge(req, res, pathname) {
     const result = await promise;
     done = true;
     res.removeListener("close", onClose);
-    if (!res.writableEnded) json(res, 200, { command: result });
+    if (!res.writableEnded && !res.destroyed) {
+      // A live long poll outlasts the heartbeat lease, even in a background tab.
+      const current = editors.get(body.editorId);
+      if (current) current.lastSeen = Date.now();
+      json(res, 200, { command: result });
+    }
     return;
   }
 
@@ -530,6 +537,7 @@ async function handleBridge(req, res, pathname) {
     if (typeof body.editorId !== "string" || typeof body.commandId !== "string" || typeof body.ok !== "boolean") return json(res, 400, { error: "Invalid command result" });
     if (pending.get(body.commandId)?.editorId !== body.editorId) return json(res, 200, { accepted: false });
     const accepted = settlePending(body.commandId, { ok: body.ok, data: body.data, error: typeof body.error === "string" ? body.error.slice(0, 4000) : undefined });
+    if (accepted && editors.has(body.editorId)) editors.get(body.editorId).lastSeen = Date.now();
     return json(res, 200, { accepted });
   }
   return json(res, 404, { error: "Unknown local MCP bridge route" });
