@@ -81,6 +81,10 @@ sources:
     url: https://cnckitchen.store/
     trust: "Vendor hole diameters for standard-length threaded heat-set inserts. Other inserts need their own datasheet."
     mutable: true
+  - id: user-print-rules
+    locator: "User's Bambu Lab 0.4 mm design rules for walls, perimeters, fillets, overhangs, layer orientation and fit clearance in this development conversation."
+    trust: "The user's chosen design defaults for the X2D profile; starting values, not slicer output, material data or tested fit."
+    mutable: false
   - id: bambu-x2d-specs
     url: https://bambulab.com/en-eu/x2d/specs
     trust: "Manufacturer build volumes: main nozzle 256 × 256 × 260 mm, auxiliary and dual nozzle 235.5 × 256 × 256 mm."

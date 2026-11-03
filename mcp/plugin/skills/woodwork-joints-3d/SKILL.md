@@ -61,7 +61,7 @@ are millimetres and no external tools, scripts or uploads are required.
      `maximumOverlapVolume` 0 for clearance fits. Faces that touch in the
      real assembly, such as a tenon shoulder, measure 0 mm; pose the part
      off by the fit gap so the check measures the joint clearance;
-   - attach the printability check (0.9 mm minimum wall, 45° overhang) to
+   - attach the printability check (1.0 mm minimum wall, 45° overhang) to
      each body that already lies in its print pose. It always tests the
      modelled pose along +Z;
    - call `jumpstart_inspect_geometry` with `printOrientations: {}` and

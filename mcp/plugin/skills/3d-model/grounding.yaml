@@ -141,6 +141,18 @@ rules:
     skillFile: references/print-and-hardware.md
     sources: [bambu-x2d-specs, bambu-a1-p2s-specs, print-area-presets]
     locator: "Build volume tables and the editor's 2 mm edge reserve"
+  - instruction: "at least 2.0 mm for free-standing fins, tabs, cantilevers and lips."
+    skillFile: references/print-and-hardware.md
+    sources: [user-print-rules]
+    locator: "Supported 1.0 mm and unsupported 2.0 mm wall minimums"
+  - instruction: "with a radius of at least 0.4 mm and preferably 1 mm or more."
+    skillFile: references/print-and-hardware.md
+    sources: [user-print-rules]
+    locator: "Fillets on loaded corners and transitions"
+  - instruction: "at 0.2 mm clearance per side (0.4 mm diametral)."
+    skillFile: references/fit-and-print-checks.md
+    sources: [user-print-rules]
+    locator: "Default starting clearance for inserted parts"
 
   - instruction: "Equal total volume or bounds alone cannot establish preservation."
     skillFile: references/edit-existing-parts.md

@@ -8,6 +8,7 @@ and holes or pockets for screws, nuts and heat-set inserts. Clearances between m
 ## Contents
 
 - Hand off to the slicer
+- Design rules for the default profile
 - Other processes and printers
 - Report printability findings
 - Choose the print pose
@@ -36,9 +37,9 @@ and wall generator; overlap and variable widths mean a simple multiple does not
 guarantee an exact number of passes. Preserve the chosen functional dimensions and
 verify sliced paths rather than forcing every dimension to a nozzle multiple.
 
-- Use `printability` limits of `minWall` 0.9 mm (about two perimeters) and
-  `overhangAngle` 45°. When the user prints supports from the auxiliary
-  nozzle, report overhangs without reshaping the part to remove them.
+- Use `printability` limits of `minWall` 1.0 mm and `overhangAngle` 45°, and
+  apply the design rules below. When the user prints supports from the
+  auxiliary nozzle, report overhangs without reshaping the part to remove them.
 - Model parts in different materials as separate bodies so each can take its
   own filament in the slicer.
 - Run the check on each body in its print pose and fix flagged areas in the
@@ -54,6 +55,31 @@ A passing check means no flagged overhang or thin-wall area in the
 tessellation; the slicer preview and a test print remain the authority.
 To open the export in Bambu Studio or Bambu Connect, use the companion
 `bambu-handoff` skill.
+
+## Design rules for the default profile
+
+Apply these while building, not only when checking. A user's measurement,
+datasheet or tested coupon overrides them.
+
+- Closed solids only: no zero-thickness walls, open faces or loose surfaces.
+  Every body's `meshValidation` must be valid before apply.
+- Walls: at least 1.0 mm where material supports the wall along an edge, and at
+  least 2.0 mm for free-standing fins, tabs, cantilevers and lips. One
+  `minWall` covers a body, so attach 1.0 mm and measure the unsupported
+  features with sections, or report them as not checked.
+- Load-bearing walls: 1.2–1.6 mm or more, about three or four perimeters at the
+  0.4 mm nozzle. Gain strength from walls rather than denser infill, and name
+  the wall count to set in the slicer.
+- Fillets: round loaded inside corners and transitions, such as a bracket's
+  root or a hook's bend, with a radius of at least 0.4 mm and preferably 1 mm
+  or more. On bed-facing bottom edges use a 45° chamfer instead; a fillet there
+  begins as an overhang.
+- Overhangs: keep unsupported faces within 45° from vertical; chamfer or
+  teardrop downward edges and horizontal holes instead of relying on supports.
+- Fits: give printed sockets, slots and pockets for a purchased part a starting
+  clearance of 0.2 mm per side; see
+  [Fit and print checks](fit-and-print-checks.md). The hardware table below has
+  its own values.
 
 ## Other processes and printers
 
@@ -101,9 +127,10 @@ with `printOrientations: {}` (optionally `overhangAngle`) on the body. It lays
 the six axis directions and the largest flat faces on the bed and ranks them by
 overhang area, then bed contact, then height; `current: true` marks the modeled
 pose. It does not change the document and does not score layer-direction
-strength, finish or support removal. Name the chosen pose and why in the report;
-reject a top-ranked pose that puts load across layers or a cosmetic face on the
-bed. Preview a separate print layout only when that is part of the requested
+strength, finish or support removal. Name the chosen pose and why in the report.
+Lay the main load and bending plane in X/Y so layers carry it along their
+length; a load that pulls layers apart in Z delaminates them. Reject a
+top-ranked pose that puts load across layers or a cosmetic face on the bed. Preview a separate print layout only when that is part of the requested
 handoff, and retain the intended final pose.
 
 For a standalone print-ready export, check its lowest bound and exported scope;

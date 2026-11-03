@@ -92,6 +92,11 @@ the same mating profile, orientation and settings. Record the chosen tested
 variant before revising the complete part. Manufacturer-specific inserts need
 manufacturer-specific dimensions; a nominal screw size is insufficient.
 
+For the default X2D 0.4 mm PLA profile with no supplied or tested value, start
+a part inserted into a printed socket, slot or pocket, including a `step-parts`
+download, at 0.2 mm clearance per side (0.4 mm diametral). Name it as a
+starting value and suggest a coupon when the fit is critical.
+
 Use a supplied clearance or relevant calibration result instead of repeatedly
 resetting to a generic loose fit. Keep a user-requested tighter gap distinct from
 a physically tested result, and distinguish slip fit from interference fit.
