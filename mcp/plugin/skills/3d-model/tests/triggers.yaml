@@ -1,6 +1,9 @@
-version: 7
+version: 8
 status: not-run
 cases:
+  - prompt: "Keep the exact hooks from this original STL and thin the surrounding holder walls in JumpStart."
+    expected: invoke
+    mode: implicit
   - prompt: "Rebuild this STL holder with softer corners and printable honeycomb side walls in JumpStart."
     expected: invoke
     mode: implicit

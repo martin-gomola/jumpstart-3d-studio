@@ -30,6 +30,12 @@ Ask only when the answer changes the design: a part larger than the
 envelope, a material other than PLA (ABS/ASA warps on the open A1), or
 soft and rigid zones that suggest PLA with TPU on the X2D's two nozzles.
 
+Nozzle diameter is not necessarily extrusion line width. When wall thickness is
+being chosen for clean toolpaths, use the actual profile's outer/inner line widths
+and wall generator; overlap and variable widths mean a simple multiple does not
+guarantee an exact number of passes. Preserve the chosen functional dimensions and
+verify sliced paths rather than forcing every dimension to a nozzle multiple.
+
 - Use `printability` limits of `minWall` 0.9 mm (about two perimeters) and
   `overhangAngle` 45°. When the user prints supports from the auxiliary
   nozzle, report overhangs without reshaping the part to remove them.
@@ -99,6 +105,11 @@ strength, finish or support removal. Name the chosen pose and why in the report;
 reject a top-ranked pose that puts load across layers or a cosmetic face on the
 bed. Preview a separate print layout only when that is part of the requested
 handoff, and retain the intended final pose.
+
+For a standalone print-ready export, check its lowest bound and exported scope;
+do not assume an assembly offset or raised floor is automatically dropped to the
+bed. Ground a standalone part or provide the agreed print layout, while preserving
+the installation pose of an assembly that still needs it.
 
 ## Hardware holes and pockets
 

@@ -92,6 +92,13 @@ the same mating profile, orientation and settings. Record the chosen tested
 variant before revising the complete part. Manufacturer-specific inserts need
 manufacturer-specific dimensions; a nominal screw size is insufficient.
 
+Use a supplied clearance or relevant calibration result instead of repeatedly
+resetting to a generic loose fit. Keep a user-requested tighter gap distinct from
+a physically tested result, and distinguish slip fit from interference fit.
+For a circular insert, record both item-to-insert and insert-to-holder diametral
+clearances. Measure the holder at several depths before choosing a straight ring:
+an approximate diameter can hide taper, an offset axis or a sloping seating face.
+
 Build envelope and interfaces first, functional walls/openings second, then
 finishing features. Preserve smooth surfaces and requested fillets. Use ribs
 and thin contact plates where appropriate rather than adding an unnecessary

@@ -9,18 +9,27 @@ conversion or structural certification.
    If fillets require native geometry but only a mesh is available, explain the
    limitation and obtain agreement to reconstruct before replacing it. Once
    reconstruction is authorized, measure floor, cavity, access cutout and hooks
-   from sections and line samples. Distinguish measured reconstruction from exact
-   preservation of an imported mating surface; retained outer bounds do not prove
-   hook fit. Keep the source available for comparison.
+   from sections and line samples. Prefer retaining source mounting geometry to
+   recreating it from a 2D extrusion: matching its middle section can still lose
+   the 3D rounding needed for insertion. Distinguish reconstructed surfaces from
+   retained ones, and keep the source available for comparison.
 2. Establish a visible design change: outer corner radius, touch-edge radius,
    perforation count, hole orientation, rib thickness and solid perimeter. Keep
    floor and load paths around mounting roots solid. Change corner radii in the
    native base profile before selecting later edge modifiers.
+   When thinning a fitted holder, preserve its functional cavity unless changing
+   the fit is requested. Consider trimming the exterior instead of enlarging the
+   pocket; retain local root pads if necessary to connect original hooks. Measure
+   wall and floor sections independently and report any retained thicker zones.
 3. Verify a face pattern's local axes and actual output. A requested row/column
    count may be filtered by the selected flat face and margin. Inspect the number
    and position of holes on both sides rather than reporting the requested count.
    Measure margins to the full housing boundary separately from the tool's margin
    to a reduced planar face. Do not reduce a required frame to make a pattern fit.
+   Recheck the pattern after changing wall thickness or curvature. A cut near a
+   curved transition can leave knife edges despite adequate nominal wall thickness.
+   Move, resize or reduce an unconstrained pattern to resolve them and report the
+   departure; do not silently drop an explicitly required hole count.
 4. If a fitted pattern cannot express the orientation or layout, use an explicit
    `regularPolygon` sketch, a native cut extrusion and `featurePattern` along a
    named world axis. A cut through both walls is suitable only when the intervening

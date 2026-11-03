@@ -26,6 +26,14 @@ details; it does not independently adjust a fit clearance. An imported STL remai
 a mesh. Use native features for edits around it, and report physical fit as
 unverified until supported measurements establish it.
 
+Inspect support for each requested operation separately. A mesh without editable
+fillet history may still support cuts and intersections. Preview supported typed
+operations and inspect their material delta;
+an empty or unchanged Boolean result can also be a failed solid conversion.
+Do not declare a general capability limit from one failed operation or silently
+replace the source with an approximate reconstruction. Diagnose the reported
+failure through supported tools; application-code changes require their own scope.
+
 ## Preservation checklist
 
 Name the exact target body and list existing bodies that must stay intact. Attach
@@ -33,3 +41,10 @@ Name the exact target body and list existing bodies that must stay intact. Attac
 native definitions, resolved inputs and placements; they do not prove exact
 solid equality or recover a mesh feature tree. Inspect the changed region from
 complete views before applying.
+
+For critical mating geometry, prefer retaining the original source region while
+editing surrounding material when the tools support it. Bounds and a single
+section cannot capture rounding across a hook's width, tapered ends or a latch
+undercut. Compare several transverse and longitudinal sections in an aligned
+frame, including entry tips and roots. State which surfaces are retained from
+the source and which are reconstructed; sampled agreement is not a global proof.

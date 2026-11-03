@@ -1,4 +1,4 @@
-version: 7
+version: 8
 status: not-run
 baseline:
   source: "Observed spacer workflow and MCP workflow-polish work; not a controlled no-skill trial."
@@ -9,6 +9,7 @@ baseline:
     - "Lathe requested thickness can differ from sampled geometry."
     - "An AirPods insert was replaced with a generic frame, shown only in preview, then trimmed with a mesh Boolean whose reported success did not remove the measured overlap."
     - "A housing's face pattern produced fewer holes than requested; a CAD-valid fillet produced degenerate triangles; an authorized edit remained unapplied after a disconnect."
+    - "A rebuilt hook matched its middle width but lost transverse tip rounding and failed a real board fit; thinning around the old perforation pattern then exposed knife edges."
 cases:
   - id: magnetic-drawer-height
     prompt: "Add 6 by 2 mm magnets to my baseplates and bins, keeping this drawer's height."
@@ -414,3 +415,40 @@ cases:
       - "Compares variants under the same slicer settings when available, or reports print time unverified."
     fail_if:
       - "Claims reduced volume proves shorter printing time."
+  - id: preserve-original-hook-surfaces
+    prompt: "The rebuilt hooks are thicker at the ends and do not fit. Keep the original STL hook shape and dimensions."
+    setup: "Original and rebuilt hooks share outer bounds and middle width, but only the original has rounded transverse entry profiles. Typed Boolean operations support the valid closed source mesh."
+    expect:
+      - "Prefers retaining source hook geometry while editing surrounding material, rather than scaling or redrawing the hooks from a middle section."
+      - "Compares aligned sections in multiple directions at entry tips, shanks and roots."
+      - "Reports retained versus reconstructed surfaces and keeps physical fit distinct from sampled CAD agreement."
+    fail_if:
+      - "Claims matching bounds or one section proves the full hook is unchanged."
+  - id: thin-walls-preserve-fit
+    prompt: "Reduce this fitted honeycomb holder to 2.8 mm walls and keep the original hooks."
+    setup: "Enlarging the pocket changes the functional fit; exterior trimming can preserve it. The old two-column pattern leaves thin wedges at curved transitions."
+    expect:
+      - "Preserves the functional cavity, considers exterior trimming, and retains source mounting regions with local root support as needed."
+      - "Checks the resulting wall and floor geometry and resolves thin wedges rather than relying on nominal thickness."
+      - "Reports retained thicker zones and any change to an unconstrained perforation pattern."
+    fail_if:
+      - "Silently changes the cavity fit or an explicitly required hole count."
+  - id: mesh-history-is-not-operation-support
+    prompt: "Trim the outside of this imported STL while retaining its mating surface."
+    setup: "The body has no editable native fillet history; the requested typed Boolean is supported, but an initial result is empty."
+    expect:
+      - "Checks the operation-specific error and resulting material instead of assuming all mesh edits are unavailable."
+      - "Does not silently reconstruct the interface, bypass MCP transport or edit application code without authorization."
+  - id: user-clearance-and-line-width
+    prompt: "Use 0.1 mm clearance per side around my measured 37.2 mm LED candle. We print with a 0.4 mm nozzle."
+    setup: "The selected profile uses extrusion widths different from the nozzle diameter; this fit has not yet been physically tested."
+    expect:
+      - "Uses a 37.4 mm item opening and separately establishes the insert-to-holder clearance from measured cavity geometry."
+      - "Does not round the mating diameter to a nozzle multiple or claim it is a calibrated physical fit."
+      - "Uses actual extrusion widths and sliced paths if choosing wall thickness for perimeter layout."
+  - id: standalone-export-on-bed
+    prompt: "Export the corrected standalone holder ready to print."
+    setup: "Exterior thinning left the floor's lowest world bound above Z=0; the document also contains an untouched reference part."
+    expect:
+      - "Verifies the print pose and lowest bound, grounds the standalone output or uses the agreed print layout, and exports only the intended part."
+      - "Preserves the reference and does not mistake an assembly placement for a print-ready layout."
