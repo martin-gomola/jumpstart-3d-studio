@@ -156,12 +156,14 @@ test("corner spacers occupy only drawer margins and remain editable owned native
   assert.throws(() => compileMcpModel(edited, { operations: [{ ...input, replaceExisting: true }] }), /edited/);
 });
 
-test("top spring clips stay below bin seats and remain owned editable native parts", () => {
+test("top staple clips follow the grid surface and remain owned editable native parts", () => {
   const input = layout({ width: 9 * 42, depth: 5 * 42, bins: [], baseplateClips: true });
   const parts = drawerParts(input), clips = parts.filter(p => p.type === "baseplateClip");
   assert.deepEqual(clips.map(c => [c.position[0], c.position[1], c.axis]), [[-21, -63, "x"], [-21, 21, "x"], [-21, 84, "x"], [147, -63, "x"], [147, 21, "x"], [147, 84, "x"], [-147, 63, "y"], [-63, 63, "y"], [21, 63, "y"], [105, 63, "y"], [168, 63, "y"]]);
-  assert.deepEqual([clips[0].width, clips[0].length, clips[0].height, clips[0].clearance], [2.8, 4.5, 2.5, 0.2]);
-  assert.ok(clips.every(c => c.position[2] === 0.2 && c.position[2] + c.height < 2.85));
+  assert.deepEqual([clips[0].width, clips[0].length, clips[0].height, clips[0].clearance], [2.8, 4.5, 4.8, 0.2]);
+  assert.ok(clips.every(c => c.position[2] === 0.2 && c.position[2] + c.height === 5));
+  assert.deepEqual(clips[0].seatingGrid, { columns: 2, rows: 2 });
+  assert.deepEqual(clips[2].seatingGrid, { columns: 2, rows: 1 });
   const tile = parts.find(p => p.id === "baseplate-0-0");
   assert.deepEqual(tile.clipSlots.map(s => [s.x, s.y, s.axis, s.width, s.length, s.depth]), [[84, -42, "x", 2.8 + 0.4, 4.9, 2.5], [84, 42, "x", 2.8 + 0.4, 4.9, 2.5], [-42, 84, "y", 2.8 + 0.4, 4.9, 2.5], [42, 84, "y", 2.8 + 0.4, 4.9, 2.5]]);
   assert.equal(drawerParts(layout({ width: 4 * 42, depth: 4 * 42, bins: [], baseplateClips: true })).some(p => p.type === "baseplateClip"), false);
@@ -174,7 +176,9 @@ test("top spring clips stay below bin seats and remain owned editable native par
   assert.equal(clipBodies[0].node.children.length, 5);
   const [bridge, leg, tip] = clipBodies[0].node.children;
   assert.deepEqual(bridge.m.slice(12, 15), [0, 0, 1.85]);
-  assert.equal(bridge.node.p.h, 0.65);
+  assert.ok(Math.abs(bridge.node.p.h - 2.95) < 1e-8);
+  assert.equal(bridge.node.mods[0].op, "intersect");
+  assert.ok(Object.keys(clipBodies[0].mcpBaseplateClip.sketchSignatures).length > 0);
   assert.equal(leg.m[14], 0);
   assert.equal(leg.node.p.h, 2.5);
   assert.equal(tip.node.mods[0].t, "halfspace", "the foot has a lead-in ramp");

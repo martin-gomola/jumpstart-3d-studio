@@ -473,6 +473,7 @@ test("top spring clips join split tiles and persist through apply, save and reop
   expect(inspection.meshValidation.disconnectedComponents).toBe(1);
   for (const name of clip.baseplateClip.joint) {
     const plate = applied.bodies.find(body => body.name === name);
+    expect(clip.bounds.max[2], "the bridge must meet the grid's upper surface").toBeCloseTo(plate.bounds.max[2], 5);
     const pair = await tool("jumpstart_inspect_geometry", { editorId, expectedRevision: applied.revision, bodyId: plate.id, againstBodyId: clip.id, mesh: true, pairChecks: { maximumOverlapVolume: 0 } });
     expect(pair.pair.acceptance.passed).toBe(true);
     expect(pair.meshValidation.valid).toBe(true);

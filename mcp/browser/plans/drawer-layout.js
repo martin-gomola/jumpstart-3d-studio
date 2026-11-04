@@ -51,22 +51,27 @@ export function buildDrawerLayout(raw, { document, addBody, idFactory, nextSeq, 
   };
   for (const { clipSlots, pockets = [], integratedSpacers = [], ...spec } of drawerParts(op)) {
     if (spec.type === "baseplateClip") {
-      const { arm, barb } = BASEPLATE_CLIP;
+      const { arm, barb, slotDepth, bottom } = BASEPLATE_CLIP;
       const box = (w, d, h, x, z) => ({
         node: { t: "prim", kind: "box", p: { w: spec.axis === "x" ? w : d, d: spec.axis === "x" ? d : w, h, r: 0, c: 0 }, mods: [] },
         m: matrixForTransform(spec.axis === "x" ? [x, 0, z] : [0, x, z], [0, 0, 0]), hole: false,
       });
+      const bridgeZ = slotDepth - arm;
+      const bridge = box(spec.width, spec.length, spec.height - bridgeZ, 0, bridgeZ);
+      // Reuse the native socket profile so the cap meets the surrounding grid and clears bin feet.
+      const surface = buildGridfinity({ id: `${spec.id}-surface`, type: "gridfinity", kind: "baseplate", ...spec.seatingGrid }, { document, idFactory, nextSeq });
+      bridge.node.mods.push({ t: "bool", op: "intersect", tool: { t: "group", mods: [], children: [{ node: surface.node, m: matrixForTransform([0, 0, -bottom - bridgeZ], [0, 0, 0]), hole: false }] } });
       const node = { t: "group", mods: [], children: [
-        box(spec.width, spec.length, arm, 0, spec.height - arm),
+        bridge,
         ...[-1, 1].flatMap(sign => {
           const tip = box(arm + barb, spec.length, 0.8, sign * (spec.width - arm + barb) / 2, 0);
           const x = sign * (arm - barb) / 2;
           tip.node.mods.push({ t: "halfspace", plane: { o: spec.axis === "x" ? [x, 0, 0] : [0, x, 0], n: spec.axis === "x" ? [-sign * 0.3, 0, barb] : [0, -sign * 0.3, barb] }, side: 1 });
-          return [box(arm, spec.length, spec.height, sign * (spec.width - arm) / 2, 0), tip];
+          return [box(arm, spec.length, slotDepth, sign * (spec.width - arm) / 2, 0), tip];
         }),
       ] };
       const body = addBody(spec.name, node, matrixForTransform(spec.position, [0, 0, 0]));
-      body.mcpBaseplateClip = { opening: "top", style: "staple", axis: spec.axis, joint: spec.joint, clearance: spec.clearance, width: spec.width, length: spec.length, height: spec.height, sketchSignatures: {} };
+      body.mcpBaseplateClip = { opening: "top", style: "staple", surface: "grid-profile", axis: spec.axis, joint: spec.joint, clearance: spec.clearance, width: spec.width, length: spec.length, height: spec.height, sketchSignatures: surface.recipe.sketchSignatures };
       own(body, spec); continue;
     }
     if (spec.type === "drawerSpacer") {

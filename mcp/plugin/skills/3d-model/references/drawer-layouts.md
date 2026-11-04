@@ -34,9 +34,10 @@ baseplate raises bin seating by its pocket depth +0.8 mm; usable-height checks
 include this added carrier. Use the directly linked magnet guidance for sizes.
 
 When the grid splits into several baseplate tiles, `baseplateClips: true` adds
-separate inverted-U staple clips pressed into tile-edge slots from above. A
-recessed upper bridge joins downward legs with ramped tips; retaining shoulders
-capture the tips below the bin seats. Print the staple on its broad side.
+separate inverted-U staple clips pressed into tile-edge slots from above. The
+upper bridge follows the native grid surface and socket profile, joining downward
+legs with ramped tips. Retaining shoulders capture the tips below the bin seats.
+Print the staple on its broad side.
 These use an independent geometry inspired by the CLICKbase joining principle;
 they do not mate with original CLICKbase parts. Print one joint first to check
 clearance, insertion, retention and removal before printing the full layout.

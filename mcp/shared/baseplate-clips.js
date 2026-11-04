@@ -1,6 +1,7 @@
 import { magnetCarrierHeight } from "./gridfinity-magnets.js";
+import { partEnvelope } from "./gridfinity-envelope.js";
 
-// Top-inserted spring clips stay below the sloping bin-seating profile.
+// The staple bridge follows the baseplate surface; its snap legs sit below it.
 export const BASEPLATE_CLIP = Object.freeze({ width: 2.8, length: 4.5, slotDepth: 2.5, maxPerJoint: 2, arm: 0.65, barb: 0.2, bottom: 0.2 });
 
 export function normalizeBaseplateClips(value) {
@@ -32,8 +33,10 @@ export function baseplateClipLayout(drawer, metrics, tile) {
   const add = (a, b, world, axis) => {
     const n = clips.length + 1;
     const z = magnetCarrierHeight(drawer.baseplateMagnets) + BASEPLATE_CLIP.bottom;
+    const height = partEnvelope({ kind: "baseplate", columns: 1, rows: 1, magnets: drawer.baseplateMagnets }).height - z;
+    const seatingGrid = { columns: (world[0] + metrics.gridWidth / 2) % 42 === 0 ? 2 : 1, rows: (world[1] + metrics.gridDepth / 2) % 42 === 0 ? 2 : 1 };
     clips.push({ id: `clip-${n}`, type: "baseplateClip", name: `Top spring clip ${n}`, axis, joint: [tileName(...a), tileName(...b)], clearance,
-      position: [world[0], world[1], z], width: BASEPLATE_CLIP.width, length: BASEPLATE_CLIP.length, height: BASEPLATE_CLIP.slotDepth });
+      position: [world[0], world[1], z], width: BASEPLATE_CLIP.width, length: BASEPLATE_CLIP.length, height, seatingGrid });
     for (const owner of [a, b]) {
       const [cx, cy] = center(...owner), id = tileId(...owner);
       if (!slots.has(id)) slots.set(id, []);
