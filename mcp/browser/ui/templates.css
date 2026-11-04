@@ -103,6 +103,16 @@
 .drawer-settings, .drawer-review { align-content: start; }
 .drawer-inspector-header { position: static; inset-block-start: 0; z-index: 1; display: grid; gap: var(--ai-status-gap); padding-block: var(--ai-status-gap); background: var(--panel); }
 .drawer-saved, .drawer-inspector, .drawer-advanced, .drawer-measure-fields { display: grid; gap: var(--ai-status-panelGap); }
+.drawer-divider-editor, .drawer-divider-fields, .drawer-divider-axis { display: grid; gap: var(--ai-status-panelGap); min-inline-size: 0; }
+.drawer-divider-editor { scroll-margin-block-start: calc(var(--drawer-inspector-height, 0rem) + var(--ai-status-gap)); }
+.drawer-divider-diagram { display: block; inline-size: min(100%, 24rem); max-block-size: 18rem; margin-inline: auto; overflow: visible; color: var(--ink-3); touch-action: none; user-select: none; scroll-margin-block-start: calc(var(--drawer-inspector-height, 0rem) + var(--ai-status-gap)); }
+.drawer-divider-outline { fill: var(--panel-2); stroke: currentColor; stroke-width: 12; vector-effect: non-scaling-stroke; }
+.drawer-divider-line { stroke: var(--accent); stroke-width: 10; vector-effect: non-scaling-stroke; pointer-events: none; }
+.drawer-divider-hit { fill: transparent; cursor: grab; }
+.drawer-divider-handle:active .drawer-divider-hit { cursor: grabbing; }
+.drawer-divider-knob { fill: var(--panel); stroke: var(--accent); stroke-width: 8; vector-effect: non-scaling-stroke; pointer-events: none; }
+.drawer-divider-handle:focus-visible .drawer-divider-knob { stroke: var(--focus); stroke-width: 14; }
+.drawer-divider-axis h4 { margin: 0; font: 600 var(--ai-status-font)/var(--ai-status-panelBodyLine) var(--f-ui); color: var(--ink-2); }
 .drawer-measurements summary { color: var(--ink); }
 .drawer-swap-dimensions { align-self: end; }
 .drawer-stepper { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: var(--ai-status-gap); }
@@ -216,11 +226,12 @@
 .ai-workspace-tabs .ai-pictogram { display: none; }
 .ai-setup-panel .ai-setup-header .ai-setup-close { white-space: nowrap; margin-inline-start: auto; min-block-size: var(--ai-status-workspaceControlHeight); border: 0; background: transparent; color: var(--accent); }
 .ai-setup-panel[data-active-tab="templates"] .ai-templates { padding: var(--ai-status-workspaceGutter); overflow-y: auto; scroll-padding-block: var(--ai-status-sectionGap); }
+.ai-workspace-context, .ai-generator-header--desktop { display: none; }
 .ai-generator { container: drawer-workspace / inline-size; gap: var(--ai-status-sectionGap); }
-.ai-generator-header { gap: var(--ai-status-sectionGap); padding: 0; align-items: flex-start; }
-.ai-workflow-heading { gap: var(--ai-status-gap); flex: 1; }
-.ai-setup-panel .ai-workflow-heading h3 { font: 700 var(--ai-status-workspaceTitle)/1.2 var(--f-ui); letter-spacing: -.025em; }
-.ai-workflow-heading .ai-template-note { font-size: var(--ai-status-workspaceLeadFont); line-height: 1.4; }
+.ai-generator-header { gap: var(--ai-status-panelPadding); padding: 0; align-items: center; }
+.ai-workflow-heading { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--ai-status-panelGap); flex: 1; }
+.ai-setup-panel .ai-workflow-heading h3 { font: 650 var(--ai-status-workspaceCardTitle)/1.2 var(--f-ui); letter-spacing: normal; }
+.ai-workflow-heading .ai-template-note { font-size: var(--ai-status-font); line-height: var(--ai-status-panelBodyLine); }
 .ai-template-mode { margin-block-start: var(--ai-status-gap); flex: none; gap: 0; padding: calc(var(--ai-status-gap) / 2); border: var(--ai-status-panelBorder) solid var(--line); border-radius: var(--ai-status-workspaceCardRadius); background: var(--panel); }
 .ai-setup-panel .ai-template-mode button { position: relative; min-block-size: var(--ai-status-workspaceControlHeight); padding-inline: var(--ai-status-workspaceCardPadding); border: 0; border-radius: 0; background: transparent; color: var(--ink-2); font-size: var(--ai-status-sectionTitle); }
 .ai-setup-panel .ai-template-mode button[aria-pressed="true"] { background: transparent; color: var(--ink); font-weight: 600; }
@@ -273,8 +284,23 @@
 @media (min-width: 64rem) {
   .ai-drawer-mode { grid-template-columns: minmax(0,min(var(--ai-status-workspaceSettingsWidth),var(--ai-status-templateSettingsShare))) minmax(0,1fr); grid-template-rows: minmax(0,1fr); }
 }
+@media (min-width: 90rem) {
+  .ai-setup-panel .ai-setup-header h2 { flex: none; white-space: nowrap; }
+  .ai-setup-panel .ai-workspace-tabs { margin-inline-end: 0; }
+  .ai-setup-panel .ai-workspace-context { display: flex; flex: 1; min-inline-size: 0; }
+  .ai-setup-panel[data-active-tab="connection"] .ai-workspace-context { display: none; }
+  .ai-setup-panel[data-active-tab="connection"] .ai-workspace-tabs { margin-inline-end: auto; }
+  .ai-setup-panel[data-active-tab="templates"] .ai-generator-header--mobile { display: none; }
+  .ai-setup-panel[data-active-tab="templates"] .ai-generator-header--desktop { display: flex; flex-direction: row; align-items: center; flex: 1; gap: var(--ai-status-panelPadding); min-inline-size: 0; }
+  .ai-setup-panel .ai-workflow-heading { flex: 1; flex-wrap: nowrap; min-inline-size: 0; padding-inline-start: var(--ai-status-panelPadding); border-inline-start: var(--ai-status-panelBorder) solid var(--line); }
+  .ai-setup-panel .ai-workflow-heading h3 { white-space: nowrap; }
+  .ai-setup-panel .ai-template-mode { flex: none; margin-block-start: 0; white-space: nowrap; }
+  .ai-setup-panel .ai-template-mode button[aria-pressed="true"] { border-radius: var(--ai-status-workspaceCardRadius); background: var(--accent-soft); color: var(--ink); }
+  .ai-setup-panel .ai-setup-header .ai-setup-close { margin-inline-start: 0; }
+}
 @container drawer-workspace (max-width: 64rem) {
   .ai-generator-header { flex-direction: column; align-items: stretch; }
+  .ai-workflow-heading { align-items: baseline; }
   .ai-template-mode { align-self: start; }
   .ai-drawer-mode { grid-template-columns: minmax(0,1fr); grid-template-rows: auto auto; flex: none; align-content: start; overflow: visible; min-block-size: auto; }
   .ai-drawer-mode > .ai-template-settings { overflow: visible; }

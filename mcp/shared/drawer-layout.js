@@ -4,6 +4,7 @@ import { normalizePrintArea, baseplateTileLimits, checkPrintFit } from "./print-
 import { normalizeCornerSpacers, cornerSpacerParts } from "./drawer-spacers.js";
 import { normalizeBaseplateClips, baseplateClipLayout } from "./baseplate-clips.js";
 import { GRIDFINITY_LIMITS, normalizeBinLimits } from "./gridfinity-limits.js";
+import { normalizeDividerPositions, rotateDividerPositions } from "./gridfinity-dividers.js";
 // Drawer planning uses grid cells; the native Gridfinity generator owns interface geometry.
 import { normalizeMagnetPockets, magnetCarrierHeight } from "./gridfinity-magnets.js";
 import { normalizePocket, POCKET_LIMITS } from "./pockets.js";
@@ -74,6 +75,7 @@ export function rotateDrawerLayout(drawer) {
   next.binLimits = { columns: limits.rows, rows: limits.columns };
   next.bins = next.bins.map(bin => ({ ...bin, x: bin.y, y: columns - bin.x - bin.columns,
     columns: bin.rows, rows: bin.columns, dividers: { x: bin.dividers?.y ?? 0, y: bin.dividers?.x ?? 0 }, openSides: rotateOpenSides(bin.openSides),
+    ...(bin.dividerPositions ? { dividerPositions: rotateDividerPositions(bin.dividerPositions) } : {}),
     ...(bin.pockets ? { pockets: rotateBinPockets(bin.pockets) } : {}) }));
   if (next.bins.length) normalizeDrawerLayout(next);
   return next;
@@ -112,7 +114,7 @@ export function normalizeDrawerLayout(raw) {
   if (!raw.bins.length && !result.includeBaseplate) fail("Enable matching baseplates or add a bin before previewing.");
   const ids = new Set();
   for (const [i, entry] of raw.bins.entries()) {
-    object(entry, ["id", "label", "x", "y", "columns", "rows", "heightUnits", "kind", "dividers", "lip", "magnets", "openSides", "closeGaps", "floor", "wall", "pockets"], `bin ${i + 1}`);
+    object(entry, ["id", "label", "x", "y", "columns", "rows", "heightUnits", "kind", "dividers", "dividerPositions", "lip", "magnets", "openSides", "closeGaps", "floor", "wall", "pockets"], `bin ${i + 1}`);
     const bin = { id: text(entry.id, `bin ${i + 1} id`), label: text(entry.label, `bin ${i + 1} label`, `Bin ${i + 1}`),
       x: number(entry.x, 0, 19, "column", true), y: number(entry.y, 0, 19, "row", true),
       columns: number(entry.columns, 1, GRIDFINITY_LIMITS.columns, "bin width", true), rows: number(entry.rows, 1, GRIDFINITY_LIMITS.rows, "bin depth", true),
@@ -127,6 +129,8 @@ export function normalizeDrawerLayout(raw) {
     if (bin.kind === "insert" && (bin.lip || bin.dividers.x || bin.dividers.y)) fail("insert blanks do not use dividers or stacking lips");
     if (entry.floor !== undefined) bin.floor = number(entry.floor, 0.8, 6, `${bin.label} floor`);
     if (entry.wall !== undefined) bin.wall = number(entry.wall, 0.8, 4, `${bin.label} wall`);
+    const dividerPositions = normalizeDividerPositions(entry.dividerPositions, bin.dividers, bin.columns * GRID_PITCH - 0.5, bin.rows * GRID_PITCH - 0.5, binWall(result, bin), `${bin.label} dividerPositions`);
+    if (dividerPositions) bin.dividerPositions = dividerPositions;
     const pockets = normalizeBinPockets(result, bin, entry.pockets);
     if (pockets) bin.pockets = pockets;
     const baseZ = drawerBinBaseZ(result), floor = binFloor(result, bin);
@@ -149,14 +153,28 @@ export function drawerParts(raw) {
     position: [(x + columns / 2) * 42 - m.gridWidth / 2, (y + rows / 2) * 42 - m.gridDepth / 2, kind === "baseplate" ? 0 : drawerBinBaseZ(drawer)], ...extra });
   for (const bin of drawer.bins) parts.push(part(bin.id, bin.kind, bin.x, bin.y, bin.columns, bin.rows,
     { name: bin.label, heightUnits: bin.heightUnits, floor: binFloor(drawer, bin), wall: binWall(drawer, bin), lip: bin.lip, openSides: bin.openSides, closeGaps: bin.closeGaps, dividers: bin.dividers, magnets: bin.magnets,
+      ...(bin.dividerPositions ? { dividerPositions: bin.dividerPositions } : {}),
       ...(bin.pockets ? { pockets: bin.pockets.map(pocket => binPocketOperation(drawer, bin, pocket)) } : {}) }));
-  const tile = drawer.includeBaseplate ? baseplateTileLimits(drawer.printArea, m) : { columns: 4, rows: 4 };
+  const tileLimit = drawer.includeBaseplate ? baseplateTileLimits(drawer.printArea, m) : { columns: 4, rows: 4 };
+  const tile = drawer.cornerSpacers?.integrated && drawer.printArea
+    ? { columns: Math.max(1, tileLimit.columns - 1), rows: Math.max(1, tileLimit.rows - 1) }
+    : tileLimit;
   const clips = baseplateClipLayout(drawer, m, tile);
+  const integratedSpacers = drawer.cornerSpacers?.integrated ? cornerSpacerParts(drawer, m) : [];
   if (drawer.includeBaseplate) for (let y = 0; y < m.rows; y += tile.rows) for (let x = 0; x < m.columns; x += tile.columns) {
     const clipSlots = clips.slots.get(`baseplate-${x}-${y}`);
-    parts.push(part(`baseplate-${x}-${y}`, "baseplate", x, y, Math.min(tile.columns, m.columns - x), Math.min(tile.rows, m.rows - y), { name: `Baseplate ${x / tile.columns + 1}, ${y / tile.rows + 1}`, magnets: drawer.baseplateMagnets, ...(clipSlots ? { clipSlots } : {}) }));
+    const plate = part(`baseplate-${x}-${y}`, "baseplate", x, y, Math.min(tile.columns, m.columns - x), Math.min(tile.rows, m.rows - y), { name: `Baseplate ${x / tile.columns + 1}, ${y / tile.rows + 1}`, magnets: drawer.baseplateMagnets, ...(clipSlots ? { clipSlots } : {}) });
+    const attached = integratedSpacers.filter(spacer => spacer.rectangles.some(rect => {
+      const gx = spacer.position[0] + rect.x, gy = spacer.position[1] + rect.y;
+      return gx + rect.width / 2 > plate.position[0] - plate.columns * 21 && gx - rect.width / 2 < plate.position[0] + plate.columns * 21 && gy + rect.depth / 2 > plate.position[1] - plate.rows * 21 && gy - rect.depth / 2 < plate.position[1] + plate.rows * 21;
+    })).map(spacer => {
+      const sx = spacer.corner.includes("right") ? 1 : -1, sy = spacer.corner.includes("back") ? 1 : -1;
+      return { ...spacer, bridge: { x: sx * m.gridWidth / 2 - plate.position[0], y: sy * m.gridDepth / 2 - plate.position[1], sx, sy, radius: 4 } };
+    });
+    if (attached.length) plate.integratedSpacers = attached;
+    parts.push(plate);
   }
-  parts.push(...clips.clips, ...cornerSpacerParts(drawer, m));
+  parts.push(...clips.clips, ...cornerSpacerParts(drawer, m).filter(spacer => spacer.type === "drawerSpacer"));
   if (new Set(parts.map(part => part.id)).size !== parts.length) fail("Bin ids conflict with generated baseplate or spacer ids; rename the bin id.");
   return parts;
 }

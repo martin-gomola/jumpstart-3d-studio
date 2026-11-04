@@ -56,6 +56,8 @@ import { normalizeMagnetPockets, magnetCarrierHeight, magnetCenters, MAGNET_CARR
 import { normalizeOpenSides, normalizeCloseGaps, binFootprint } from "../../shared/gridfinity-walls.js";
 import { partEnvelope, usableDepthError } from "../../shared/gridfinity-envelope.js";
 import { GRIDFINITY_LIMITS } from "../../shared/gridfinity-limits.js";
+import { BASEPLATE_CLIP } from "../../shared/baseplate-clips.js";
+import { normalizeDividerPositions, evenDividerPositions } from "../../shared/gridfinity-dividers.js";
 export { GRIDFINITY_LIMITS } from "../../shared/gridfinity-limits.js";
 const IDENTITY = [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];
 const sourceRevision = "910e22d8607fd7f5f51ad5e5cbc5287a76810bfd";
@@ -83,7 +85,7 @@ function triple(value, label, min, max) {
 
 export function normalizeGridfinity(raw, label = "operation") {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) fail(`${label} must be an object`);
-  const allowed = new Set(["id", "type", "name", "kind", "columns", "rows", "heightUnits", "floor", "wall", "lip", "openSides", "closeGaps", "dividers", "magnets", "position", "rotation"]);
+  const allowed = new Set(["id", "type", "name", "kind", "columns", "rows", "heightUnits", "floor", "wall", "lip", "openSides", "closeGaps", "dividers", "dividerPositions", "magnets", "position", "rotation"]);
   for (const key of Object.keys(raw)) if (!allowed.has(key)) fail(`${label}.${key} is not supported`);
   if (raw.type !== "gridfinity") fail(`${label}.type must be gridfinity`);
   const kind = raw.kind ?? "insert";
@@ -103,10 +105,12 @@ export function normalizeGridfinity(raw, label = "operation") {
   if (!dividers || typeof dividers !== "object" || Array.isArray(dividers) || Object.keys(dividers).some(key => !["x", "y"].includes(key))) fail(`${label}.dividers must contain only x and y counts`);
   const x = integer(dividers.x, `${label}.dividers.x`, 0, GRIDFINITY_LIMITS.dividers, 0);
   const y = integer(dividers.y, `${label}.dividers.y`, 0, GRIDFINITY_LIMITS.dividers, 0);
+  const dividerPositions = raw.dividerPositions === undefined ? undefined
+    : normalizeDividerPositions(raw.dividerPositions, { x, y }, columns * 42 - 0.5, rows * 42 - 0.5, wall, `${label}.dividerPositions`);
   if (kind !== "bin" && (lip || x || y)) fail(`${label}: stacking lip and dividers are only supported for bins`);
   if (kind === "baseplate" && (raw.heightUnits !== undefined && heightUnits !== 3 || raw.floor !== undefined && floor !== 2 || raw.wall !== undefined && wall !== 1.2)) fail(`${label}: baseplate height is fixed at 5 mm; bin height, floor and wall overrides are unsupported`);
   const depthError = usableDepthError({ kind, heightUnits, floor }, label); if (depthError) fail(depthError);
-  return { type: "gridfinity", id: text(raw.id, `${label}.id`), name: text(raw.name, `${label}.name`, `Gridfinity ${kind}`), kind, columns, rows, heightUnits, floor, wall, lip, openSides, closeGaps, dividers: { x, y }, magnets: normalizeMagnetPockets(raw.magnets, `${label}.magnets`), position: triple(raw.position, `${label}.position`, -10000, 10000), rotation: triple(raw.rotation, `${label}.rotation`, -360, 360) };
+  return { type: "gridfinity", id: text(raw.id, `${label}.id`), name: text(raw.name, `${label}.name`, `Gridfinity ${kind}`), kind, columns, rows, heightUnits, floor, wall, lip, openSides, closeGaps, dividers: { x, y }, ...(dividerPositions ? { dividerPositions } : {}), magnets: normalizeMagnetPockets(raw.magnets, `${label}.magnets`), position: triple(raw.position, `${label}.position`, -10000, 10000), rotation: triple(raw.rotation, `${label}.rotation`, -360, 360) };
 }
 
 export function buildGridfinity(operation, { document, idFactory, nextSeq, clipSlots = [] }) {
@@ -196,16 +200,17 @@ export function buildGridfinity(operation, { document, idFactory, nextSeq, clipS
     if (op.kind === "bin") {
       const h = topZ-7-op.floor;
       const box = (w,d) => ({ t: "prim", kind: "box", p: { w,d,h,r:0,c:0 }, mods: [] });
-      for (let i = 1; i <= op.dividers.x; i++) {
+      const dividerPositions = op.dividerPositions ?? evenDividerPositions(op.dividers);
+      for (const position of dividerPositions.x) {
         const lo = op.closeGaps && op.openSides.includes("front") ? footprint.minY : -depth/2+op.wall-0.01;
         const hi = op.closeGaps && op.openSides.includes("back") ? footprint.maxY : depth/2-op.wall+0.01;
-        const divider = child(box(op.wall, op.closeGaps ? hi-lo : depth-2*op.wall+0.02), -width/2+op.wall+(width-2*op.wall)*i/(op.dividers.x+1), op.closeGaps ? (lo+hi)/2 : 0, 7+op.floor-0.01);
+        const divider = child(box(op.wall, op.closeGaps ? hi-lo : depth-2*op.wall+0.02), -width/2+op.wall+(width-2*op.wall)*position, op.closeGaps ? (lo+hi)/2 : 0, 7+op.floor-0.01);
         solids.push(divider); dividerNodes.add(divider);
       }
-      for (let i = 1; i <= op.dividers.y; i++) {
+      for (const position of dividerPositions.y) {
         const lo = op.closeGaps && op.openSides.includes("left") ? footprint.minX : -width/2+op.wall-0.01;
         const hi = op.closeGaps && op.openSides.includes("right") ? footprint.maxX : width/2-op.wall+0.01;
-        const divider = child(box(op.closeGaps ? hi-lo : width-2*op.wall+0.02,op.wall), op.closeGaps ? (lo+hi)/2 : 0, -depth/2+op.wall+(depth-2*op.wall)*i/(op.dividers.y+1), 7+op.floor-0.01);
+        const divider = child(box(op.closeGaps ? hi-lo : width-2*op.wall+0.02,op.wall), op.closeGaps ? (lo+hi)/2 : 0, -depth/2+op.wall+(depth-2*op.wall)*position, 7+op.floor-0.01);
         solids.push(divider); dividerNodes.add(divider);
       }
       if (op.lip) {
@@ -263,8 +268,22 @@ export function buildGridfinity(operation, { document, idFactory, nextSeq, clipS
     node.mods.push({ id: idFactory("f"), seq: seq(), t: "bool", src: "magnetPockets", op: "cut", tool: group(centers.map(([x, y]) => child(cutter, x, y, bottom))), m: IDENTITY.slice() });
   }
   if (op.kind === "baseplate" && clipSlots.length) {
-    const slot = s => ({ t: "prim", kind: "box", p: { w: s.axis === "x" ? s.length : s.width, d: s.axis === "x" ? s.width : s.length, h: s.depth + 0.01, r: 0, c: 0 }, mods: [] });
-    node.mods.push({ id: idFactory("f"), seq: seq(), t: "bool", src: "clipSlots", op: "cut", tool: group(clipSlots.map(s => child(slot(s), s.x, s.y, -0.01))), m: IDENTITY.slice() });
+    const cutters = clipSlots.flatMap(s => {
+      const clearance = (s.width - BASEPLATE_CLIP.width) / 2;
+      const { width, arm, barb, bottom, slotDepth } = BASEPLATE_CLIP;
+      const outerClearance = Math.min(clearance, barb / 2);
+      const innerClearance = Math.max(clearance, barb - outerClearance + 0.05);
+      const slot = (w, d, h, x, z = -0.01) => child({ t: "prim", kind: "box", p: { w: s.axis === "x" ? w : d, d: s.axis === "x" ? d : w, h, r: 0, c: 0 }, mods: [] },
+        s.x + (s.axis === "x" ? x : 0), s.y + (s.axis === "x" ? 0 : x), carrierHeight + z);
+      // Separate leg pockets preserve the inner keeper walls that resist tile separation.
+      return [slot(s.width, s.length, 5.02, 0, bottom + slotDepth - arm - clearance),
+        ...[-1, 1].flatMap(sign => [
+          // Keep the outer snap interference; reserve only the inward release travel needed.
+          slot(arm + innerClearance + outerClearance, s.length, 5.02, sign * (width - arm + outerClearance - innerClearance) / 2),
+          slot(arm + barb + 2 * clearance, s.length, 1.21, sign * (width - arm + barb) / 2),
+        ])];
+    });
+    node.mods.push({ id: idFactory("f"), seq: seq(), t: "bool", src: "clipSlots", op: "cut", tool: group(cutters), m: IDENTITY.slice() });
   }
   const referencedSketches = new Set();
   JSON.stringify(node, (key, value) => { if (key === "sketch" && typeof value === "string") referencedSketches.add(value); return value; });

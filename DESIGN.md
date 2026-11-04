@@ -14,9 +14,12 @@ settings column and an expanding layout/preview area on desktop. Cap the column
 against the available workspace at intermediate widths and enlarged text sizes;
 let field groups respond to their container width instead of the window alone.
 Create and AI connection share this full width. Create opens by default; no AI
-connection is required to use the generators. Keep the title, workspace
-tabs and Close action on one compact desktop header row; switching tabs must not
-resize or shift the panel. Stack header navigation only at narrower widths.
+connection is required to use the generators. On wide desktop, keep the workspace
+title, tabs, current generator title, workflow switch and Back to editor action on
+one compact header row at 90 rem and wider. Hide generator context on the AI connection tab without
+changing the header height. At narrower widths, keep generator context in its own
+content row and retain the explanatory lead. Switching tabs must not resize or
+shift the panel.
 Keep the main mode switch available. Covered CAD regions are inert until the
 workspace closes; preserve their prior inert state, scene and document. Back to
 editor, Escape and choosing a CAD mode restore access. Workspace keys must not
@@ -69,7 +72,9 @@ choosing a CAD mode closes the AI workspace.
 - Draw and move bins directly on the grid, with keyboard and stepper alternatives.
   Reject overlap and out-of-bounds placement; keep the previous valid arrangement.
 - Reveal the selected bin's name, footprint, height and Stackable rim option initially. Keep
-  compartment choices in their disclosure, opening it for configured dividers. Put
+  compartment choices in their disclosure, opening it for configured dividers. New divider
+  positions start evenly spaced; show a top-down editor with draggable, keyboard-operable
+  handles and explicit millimetre fields measured from the left/front inside walls. Put
   construction settings under Advanced. Show physical millimetres alongside cells.
 - Selecting a bin collapses drawer measurements and reveals the inspector near the
   top of the left column. Keep its bin name and Rotate/Duplicate/Remove actions

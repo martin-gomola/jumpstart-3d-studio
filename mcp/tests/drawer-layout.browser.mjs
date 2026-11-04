@@ -397,6 +397,26 @@ test("corner spacers preview as connected native stops outside the grid, persist
   expect(errors).toEqual([]);
 });
 
+test("integrated corner spacers bridge the rounded baseplate corner as one native solid", async ({ page }, info) => {
+  const editorId = await openPlanner(page);
+  await dimensions(page, 230, 695, 60);
+  await page.locator("#drawer-corner-spacers").check();
+  await page.locator("#drawer-integrated-spacers").check();
+  await page.getByRole("button", { name: "Preview layout", exact: true }).click();
+  await expect(page.locator("#drawer-message")).toContainText("Preview ready", { timeout: 90_000 });
+  await page.getByRole("button", { name: "3D preview", exact: true }).click();
+  await page.screenshot({ path: info.outputPath("integrated-spacer-corner.png") });
+  await page.getByRole("button", { name: "Add layout to document", exact: true }).click();
+  const applied = await tool("jumpstart_get_document", { editorId, includeGeometry: true });
+  const plates = applied.bodies.filter(body => body.gridfinity?.kind === "baseplate" && body.gridfinity.integratedSpacers?.length);
+  expect(plates).toHaveLength(4);
+  for (const plate of plates) {
+    const inspection = await tool("jumpstart_inspect_geometry", { editorId, expectedRevision: applied.revision, bodyId: plate.id, mesh: true });
+    expect(inspection.meshValidation.valid).toBe(true);
+    expect(inspection.meshValidation.disconnectedComponents).toBe(1);
+  }
+});
+
 test("an empty drawer can preview and add only baseplates and spacers, then save, reopen and undo", async ({ page }, info) => {
   const errors = watchErrors(page), editorId = await openPlanner(page);
   await dimensions(page, 230, 695, 60);
@@ -432,12 +452,12 @@ test("an empty drawer can preview and add only baseplates and spacers, then save
   expect(errors).toEqual([]);
 });
 
-test("baseplate clips join split tiles from below and persist through apply, save and reopen", async ({ page }, info) => {
+test("top spring clips join split tiles and persist through apply, save and reopen", async ({ page }, info) => {
   const errors = watchErrors(page), editorId = await openPlanner(page);
   await dimensions(page, 210, 210, 40);
   await page.getByText("Advanced construction", { exact: true }).click();
   await page.locator("#drawer-baseplate-clips").check();
-  await expect(page.getByRole("status").filter({ hasText: "6 separate 2 × 16 mm clips" })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "6 separate staple clips press in from above" })).toBeVisible();
   await page.getByRole("button", { name: "Preview layout", exact: true }).click();
   await expect(page.locator("#drawer-message")).toContainText("Preview ready", { timeout: 90_000 });
   await page.screenshot({ path: info.outputPath("baseplate-clips.png") });
@@ -445,8 +465,48 @@ test("baseplate clips join split tiles from below and persist through apply, sav
   await expect(page.locator("#drawer-message")).toContainText("Layout added");
   const applied = await tool("jumpstart_get_document", { editorId });
   expect(applied.bodies.filter(body => body.baseplateClip)).toHaveLength(6);
+  const clips = applied.bodies.filter(body => body.baseplateClip);
+  // Cover an interior X joint and the one-cell Y joint at the tile corner.
+  for (const clip of [clips[0], clips.at(-1)]) {
+  const inspection = await tool("jumpstart_inspect_geometry", { editorId, expectedRevision: applied.revision, bodyId: clip.id, mesh: true });
+  expect(inspection.meshValidation.valid).toBe(true);
+  expect(inspection.meshValidation.disconnectedComponents).toBe(1);
+  for (const name of clip.baseplateClip.joint) {
+    const plate = applied.bodies.find(body => body.name === name);
+    const pair = await tool("jumpstart_inspect_geometry", { editorId, expectedRevision: applied.revision, bodyId: plate.id, againstBodyId: clip.id, mesh: true, pairChecks: { maximumOverlapVolume: 0 } });
+    expect(pair.pair.acceptance.passed).toBe(true);
+    expect(pair.meshValidation.valid).toBe(true);
+    expect(pair.meshValidation.disconnectedComponents).toBe(1);
+    const cells = [];
+    for (let y = 0; y < plate.gridfinity.rows; y++) for (let x = 0; x < plate.gridfinity.columns; x++) {
+      cells.push([plate.bounds.min[0] + 21 + x * 42, plate.bounds.min[1] + 21 + y * 42]);
+    }
+    const nearest = cells.sort((a, b) => Math.hypot(a[0] - clip.bounds.center[0], a[1] - clip.bounds.center[1]) - Math.hypot(b[0] - clip.bounds.center[0], b[1] - clip.bounds.center[1]))[0];
+    const seated = await tool("jumpstart_preview_model", { editorId, expectedRevision: applied.revision,
+      plan: { name: "Probe bin seating", operations: [{ id: "seated", type: "gridfinity", kind: "bin", columns: 1, rows: 1, position: [...nearest, plate.gridfinity.baseplatePlacementZ] }] },
+      requirements: { pairs: [{ id: "bin-clearance", a: clip.id, b: "seated", maximumOverlapVolume: 0 }] }, includeImage: false });
+    expect(seated.valid, "the recessed staple bridge must clear the adjacent bin foot").toBe(true);
+    const axis = clip.baseplateClip.axis === "x" ? 0 : 1;
+    const outward = [0, 0, 0];
+    const side = Math.sign(plate.bounds.center[axis] - clip.bounds.center[axis]);
+    outward[axis] = side * 0.19;
+    const free = await tool("jumpstart_preview_model", { editorId, expectedRevision: applied.revision,
+      plan: { name: "Probe assembly clearance", operations: [{ id: "free", type: "transform", target: plate.id, position: outward, relative: true }] },
+      requirements: { pairs: [{ id: "clearance", a: clip.id, b: "free", maximumOverlapVolume: 0 }] }, includeImage: false });
+    expect(free.acceptance.pairs[0].overlapVolumeMm3, "0.19 mm movement must fit within the 0.2 mm clearance").toBeLessThan(0.00001);
+    outward[axis] = side * 0.21;
+    const pull = await tool("jumpstart_preview_model", { editorId, expectedRevision: applied.revision,
+      plan: { name: "Probe tile retention", operations: [{ id: "pulled", type: "transform", target: plate.id, position: outward, relative: true }] },
+      requirements: { pairs: [{ id: "retention", a: clip.id, b: "pulled", maximumOverlapVolume: 0 }] }, includeImage: false });
+    expect(pull.acceptance.pairs[0].overlapVolumeMm3, "a captive clip must obstruct pulling either tile away").toBeGreaterThan(0.01);
+    const lift = await tool("jumpstart_preview_model", { editorId, expectedRevision: applied.revision,
+      plan: { name: "Probe clip retention", operations: [{ id: "lifted", type: "transform", target: clip.id, position: [0, 0, 0.5], relative: true }] },
+      requirements: { pairs: [{ id: "retention", a: plate.id, b: "lifted", maximumOverlapVolume: 0 }] }, includeImage: false });
+    expect(lift.acceptance.pairs[0].overlapVolumeMm3, "spring tips must catch beneath both retaining shoulders").toBeGreaterThan(0.01);
+  }
+  }
   expect(applied.bodies.filter(body => body.gridfinity?.clipSlots).map(body => body.gridfinity.clipSlots.length).sort()).toEqual([2, 3, 3, 4]);
-  expect(applied.drawerLayouts[0].definition.baseplateClips).toEqual({ clearance: 0.15 });
+  expect(applied.drawerLayouts[0].definition.baseplateClips).toEqual({ clearance: 0.2 });
   await tool("jumpstart_save_document", { editorId, expectedRevision: applied.revision });
   await tool("jumpstart_reopen_document", { editorId, expectedRevision: applied.revision, documentId: applied.document.id });
   const reopened = await tool("jumpstart_get_document", { editorId });
@@ -456,6 +516,16 @@ test("baseplate clips join split tiles from below and persist through apply, sav
   await page.locator("#drawer-baseplate").uncheck();
   await expect(page.locator("#drawer-baseplate-clips")).toBeDisabled();
   await expect(page.locator("#drawer-baseplate-clips")).not.toBeChecked();
+  await waitIdle(page);
+  await page.locator("#ai-setup-close").click();
+  await page.evaluate(id => {
+    const app = window.__app;
+    app.setMode("advanced", true);
+    for (const [bodyId, view] of app.scene.views) view.group.visible = bodyId === id;
+    app.vp.setView("front", app.scene.bodyTightBox(id));
+  }, clips[0].id);
+  await page.waitForFunction(() => !window.__app.vp.anim);
+  await page.screenshot({ path: info.outputPath("staple-front.png") });
   expect(errors).toEqual([]);
 });
 
@@ -523,6 +593,56 @@ test("printer settings size baseplate tiles for the selected nozzle and preserve
   expect(errors).toEqual([]);
 });
 
+
+test("compartment dividers default evenly and can be adjusted by keyboard, distance or drag", async ({ page }, info) => {
+  const errors = watchErrors(page), editorId = await openPlanner(page);
+  await dimensions(page, 168, 168, 40);
+  await page.getByRole("button", { name: "Add bin", exact: true }).click();
+  await page.locator(".drawer-compartment-options summary").click();
+  const count = page.locator("#drawer-bin-compartments-x");
+  await count.fill("2"); await count.press("Tab");
+  const slider = page.getByRole("slider", { name: "Across width divider 1" });
+  await expect(slider).toBeVisible();
+  const initial = Number(await slider.getAttribute("aria-valuenow"));
+  expect(Math.abs(initial - 40.55)).toBeLessThan(0.1);
+  const distance = page.locator("#drawer-bin-divider-x-0");
+  await distance.fill("25"); await distance.press("Tab");
+  await expect(slider).toHaveAttribute("aria-valuenow", "25.0");
+  await slider.focus(); await page.keyboard.press("ArrowRight");
+  await expect(slider).toHaveAttribute("aria-valuenow", "26.0");
+  const diagram = page.locator(".drawer-divider-diagram"), box = await diagram.boundingBox();
+  const point = fraction => ({ x: box.x + (80 + fraction * 840) / 1000 * box.width, y: box.y + box.height / 2 });
+  const from = point(26 / (2 * 42 - 0.5 - 2.4)), to = point(0.66);
+  await page.mouse.move(from.x, from.y); await page.mouse.down();
+  await page.mouse.move(to.x, to.y, { steps: 6 }); await page.mouse.up();
+  const dragged = Number(await slider.getAttribute("aria-valuenow"));
+  expect(Math.abs(dragged - 0.66 * (2 * 42 - 0.5 - 2.4))).toBeLessThan(0.2);
+  await page.locator(".drawer-inspector").getByRole("button", { name: "Rotate", exact: true }).click();
+  const rotated = page.getByRole("slider", { name: "Along depth divider 1" });
+  await expect(rotated).toBeVisible();
+  expect(Math.abs(Number(await rotated.getAttribute("aria-valuenow")) - 0.34 * (2 * 42 - 0.5 - 2.4))).toBeLessThan(0.2);
+  await page.locator(".drawer-divider-diagram").evaluate(diagram => diagram.scrollIntoView({ block: "start" }));
+  const diagramBox = await page.locator(".drawer-divider-diagram").boundingBox();
+  const stickyBox = await page.locator(".drawer-inspector-header").boundingBox();
+  expect(diagramBox.y).toBeGreaterThanOrEqual(stickyBox.y + stickyBox.height);
+  await page.screenshot({ path: info.outputPath("compartment-editor.png") });
+  await page.evaluate(() => { document.documentElement.dataset.ui = "dark"; });
+  await page.screenshot({ path: info.outputPath("compartment-editor-dark.png") });
+  await page.evaluate(() => { document.documentElement.dataset.ui = "light"; });
+  await page.setViewportSize({ width: 320, height: 720 });
+  const mobile = await page.locator(".drawer-divider-editor").evaluate(editor => ({
+    width: editor.clientWidth, scrollWidth: editor.scrollWidth,
+    outside: [...editor.querySelectorAll("svg,label,input")].filter(element => element.getBoundingClientRect().right > innerWidth + 1).length,
+  }));
+  expect(mobile.scrollWidth).toBeLessThanOrEqual(mobile.width);
+  expect(mobile.outside).toBe(0);
+  await page.getByRole("button", { name: "Preview layout", exact: true }).click();
+  await expect(page.locator("#drawer-message")).toContainText("Preview ready", { timeout: 90_000 });
+  await page.getByRole("button", { name: "Add layout to document", exact: true }).click();
+  const saved = await tool("jumpstart_get_document", { editorId, includeGeometry: true });
+  expect(saved.drawerLayouts[0].definition.bins[0].dividerPositions.y[0]).toBeCloseTo(0.34, 2);
+  expect(errors).toEqual([]);
+});
 
 test("matching open sides support separately printed long-item bins through preview, save and undo", async ({ page }, info) => {
   const errors = watchErrors(page), editorId = await editor(page);

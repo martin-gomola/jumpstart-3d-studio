@@ -19,6 +19,9 @@ test("nozzle areas choose native capped tiles and use rotation when it reduces t
   assert.deepEqual(parts.filter(p => p.kind === "baseplate").map(p => [p.columns, p.rows]), [[5, 6], [5, 6], [5, 4]]);
   assert.equal(parts.filter(p => p.type === "drawerSpacer").length, 4);
   for (const p of parts.filter(p => p.kind === "baseplate")) assert.doesNotThrow(() => checkPrintFit(PRINT_AREA_PRESETS[0], p.columns * 42, p.rows * 42, 5));
+  const joined = drawerParts(layout({ printArea: PRINT_AREA_PRESETS[0], cornerSpacers: { integrated: true } })).filter(p => p.kind === "baseplate");
+  assert.ok(joined.every(p => p.columns <= 5 && p.rows <= 5));
+  assert.equal(joined.reduce((sum, p) => sum + (p.integratedSpacers?.length ?? 0), 0), 4);
 });
 test("per-part fit handles bin gaps, 90 degree placement, height and magnetic carriers", () => {
   assert.equal(checkPrintFit(PRINT_AREA_PRESETS[1], 252, 210, 5).rotation, 90);

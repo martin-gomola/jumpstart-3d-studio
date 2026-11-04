@@ -17,10 +17,20 @@ test("Gridfinity normalizer has bounded explicit dimensions and rejects unused g
   assert.equal(op.kind,"insert");
   assert.deepEqual([op.columns,op.rows,op.heightUnits,op.floor,op.wall],[1,1,3,2,1.2]);
   assert.equal(GRIDFINITY_LIMITS.cells,36);
-  for (const overrides of [{columns:0},{rows:7},{heightUnits:1},{columns:1.5},{floor:NaN},{wall:0.1},{lip:"yes"},{kind:"other"},{kind:"insert",lip:true},{kind:"insert",dividers:{x:1}},{kind:"bin",dividers:{y:7}},{kind:"bin",dividers:{z:1}},{kind:"baseplate",heightUnits:4},{kind:"baseplate",wall:2},{extra:1},{position:[0,0]},{rotation:[0,0,361]}]) {
+  for (const overrides of [{columns:0},{rows:7},{heightUnits:1},{columns:1.5},{floor:NaN},{wall:0.1},{lip:"yes"},{kind:"other"},{kind:"insert",lip:true},{kind:"insert",dividers:{x:1}},{kind:"bin",dividers:{y:7}},{kind:"bin",dividers:{z:1}},{kind:"bin",dividers:{x:1},dividerPositions:{x:[0.5,0.6]}},{kind:"bin",dividers:{x:1},dividerPositions:{x:[0]}},{kind:"baseplate",heightUnits:4},{kind:"baseplate",wall:2},{extra:1},{position:[0,0]},{rotation:[0,0,361]}]) {
     assert.throws(()=>normalizeGridfinity(raw(overrides)),JSON.stringify(overrides));
   }
   assert.throws(()=>normalizeGridfinity({id:"grid"}),/type/);
+});
+
+test("custom divider positions use measured inside distances and legacy counts stay evenly split", () => {
+  const operation = normalizeGridfinity(raw({ kind: "bin", columns: 2, rows: 3, dividers: { x: 1, y: 1 }, dividerPositions: { x: [0.25], y: [0.75] } }));
+  assert.deepEqual(operation.dividerPositions, { x: [0.25], y: [0.75] });
+  const { node } = build({ kind: "bin", columns: 2, rows: 3, dividers: { x: 1, y: 1 }, dividerPositions: { x: [0.25], y: [0.75] } });
+  assert.ok(Math.abs(node.children[7].m[12] - (-20.275)) < 1e-8);
+  assert.ok(Math.abs(node.children[8].m[13] - 30.775) < 1e-8);
+  const equal = normalizeGridfinity(raw({ kind: "bin", dividers: { x: 1, y: 2 } }));
+  assert.equal(equal.dividerPositions, undefined);
 });
 
 test("2 by 3 insert repeats native feet on pitch while sharing editable foot sketches", () => {

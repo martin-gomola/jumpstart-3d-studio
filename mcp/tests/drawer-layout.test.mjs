@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { drawerMetrics, normalizeDrawerLayout, placementError, drawerParts, fillDrawerGaps, firstDrawerSpace } from "../shared/drawer-layout.js";
 import { compileMcpModel } from "../browser/plans/models.js";
 import { summarizeDrawerLayouts } from "../browser/plans/drawer-layout.js";
+import { findRegions, resolveSketch } from "../../src/regions.js";
 
 const bin = (id = "bin-1", changes = {}) => ({ id, label: id, x: 0, y: 0, columns: 2, rows: 2, heightUnits: 3, kind: "bin", ...changes });
 const layout = changes => ({ id: "drawer", type: "drawerLayout", layoutId: "tools", name: "Tool drawer", width: 260, depth: 180, height: 40, bins: [bin()], ...changes });
@@ -21,6 +22,19 @@ test("layout bounds, overlap, height, unknown fields and budgets are rejected wi
   assert.equal(normalizeDrawerLayout(layout({ includeBaseplate: false, height: 21 })).bins[0].heightUnits, 3);
   assert.throws(() => normalizeDrawerLayout(layout({ height: 25, bins: [bin("b", { lip: true })] })), /too tall/);
   assert.throws(() => normalizeDrawerLayout(layout({ bins: [bin("b", { kind: "insert", dividers: { x: 1 } })] })), /insert blanks/);
+});
+test("custom drawer divider positions persist as millimetre fractions and rotate with each bin", async () => {
+  const { rotateDrawerLayout } = await import("../shared/drawer-layout.js");
+  const custom = layout({ bins: [bin("tray", { columns: 2, rows: 3, dividers: { x: 1, y: 2 }, dividerPositions: { x: [0.25], y: [0.25, 0.75] } })] });
+  const normalized = normalizeDrawerLayout(custom);
+  assert.deepEqual(normalized.bins[0].dividerPositions, { x: [0.25], y: [0.25, 0.75] });
+  assert.deepEqual(drawerParts(normalized)[0].dividerPositions, { x: [0.25], y: [0.25, 0.75] });
+  const rotated = rotateDrawerLayout(normalized);
+  assert.deepEqual(rotated.bins[0].dividers, { x: 2, y: 1 });
+  assert.deepEqual(rotated.bins[0].dividerPositions, { x: [0.25, 0.75], y: [0.75] });
+  for (const positions of [{ x: [0.4, 0.6], y: [0.5] }, { x: [0], y: [0.5] }, { x: [0.25], y: [0.75, 0.25] }]) {
+    assert.throws(() => normalizeDrawerLayout(layout({ bins: [bin("tray", { dividers: { x: 1, y: 2 }, dividerPositions: positions })] })));
+  }
 });
 test("space search and gap filling preserve existing bins and reject unprintable partial results atomically", () => {
   const input = layout(), snapshot = JSON.stringify(input);
@@ -111,7 +125,21 @@ test("corner spacers occupy only drawer margins and remain editable owned native
   const normalized = normalizeDrawerLayout(input), parts = drawerParts(normalized).filter(p => p.type === "drawerSpacer");
   assert.equal(parts.length, 4);
   assert.throws(() => drawerParts({ ...input, bins: [bin("spacer-front-left")] }), /conflict/);
-  assert.deepEqual(normalized.cornerSpacers, { clearance: 0.2, height: 5, legLength: 20 });
+  assert.deepEqual(normalized.cornerSpacers, { clearance: 0.2, height: 5, legLength: 20, integrated: false });
+  const integrated = drawerParts(layout({ width: 230, depth: 695, height: 60, cornerSpacers: { integrated: true } }));
+  assert.equal(integrated.filter(p => p.type === "drawerSpacer").length, 0);
+  const integratedStops = integrated.filter(p => p.type === "gridfinity" && p.kind === "baseplate").flatMap(p => p.integratedSpacers ?? []);
+  assert.equal(integratedStops.length, 4);
+  const frontLeft = integratedStops.find(stop => stop.corner === "front-left");
+  const [xArm, yArm] = frontLeft.rectangles;
+  assert.equal(xArm.width, 9.8);
+  assert.equal(yArm.depth, 11.3);
+  assert.equal(frontLeft.bridge.radius, 4);
+  const integratedDocument = compileMcpModel(doc(), { operations: [layout({ width: 230, depth: 695, height: 60, cornerSpacers: { integrated: true } })] }).document;
+  const joinAreas = integratedDocument.sketches.filter(sketch => sketch.name.startsWith("Rounded spacer join "))
+    .map(sketch => findRegions(resolveSketch(sketch))[0].area);
+  assert.equal(joinAreas.length, 4);
+  assert.ok(joinAreas.every(area => area < 5 && Math.abs(area - joinAreas[0]) < 1e-7), "all four joins use the same minor quarter arc");
   for (const part of parts) for (const rect of part.rectangles) {
     const minX = part.position[0] + rect.x - rect.width / 2, maxX = minX + rect.width;
     const minY = part.position[1] + rect.y - rect.depth / 2, maxY = minY + rect.depth;
@@ -128,13 +156,14 @@ test("corner spacers occupy only drawer margins and remain editable owned native
   assert.throws(() => compileMcpModel(edited, { operations: [{ ...input, replaceExisting: true }] }), /edited/);
 });
 
-test("baseplate clips join tile joints from below and stay owned, editable native parts", () => {
+test("top spring clips stay below bin seats and remain owned editable native parts", () => {
   const input = layout({ width: 9 * 42, depth: 5 * 42, bins: [], baseplateClips: true });
   const parts = drawerParts(input), clips = parts.filter(p => p.type === "baseplateClip");
-  assert.deepEqual(clips.map(c => [c.position[0], c.position[1], c.axis]), [[-21, -63, "x"], [-21, 21, "x"], [-21, 84, "y"], [147, -63, "x"], [147, 21, "x"], [147, 84, "y"], [-147, 63, "y"], [-63, 63, "y"], [21, 63, "y"], [105, 63, "y"], [168, 63, "x"]]);
-  assert.deepEqual([clips[0].width, clips[0].length, clips[0].height, clips[0].clearance], [2, 15.7, 1.85, 0.15]);
+  assert.deepEqual(clips.map(c => [c.position[0], c.position[1], c.axis]), [[-21, -63, "x"], [-21, 21, "x"], [-21, 84, "x"], [147, -63, "x"], [147, 21, "x"], [147, 84, "x"], [-147, 63, "y"], [-63, 63, "y"], [21, 63, "y"], [105, 63, "y"], [168, 63, "y"]]);
+  assert.deepEqual([clips[0].width, clips[0].length, clips[0].height, clips[0].clearance], [2.8, 4.5, 2.5, 0.2]);
+  assert.ok(clips.every(c => c.position[2] === 0.2 && c.position[2] + c.height < 2.85));
   const tile = parts.find(p => p.id === "baseplate-0-0");
-  assert.deepEqual(tile.clipSlots.map(s => [s.x, s.y, s.axis, s.width, s.length, s.depth]), [[84, -42, "x", 2.3, 16, 2], [84, 42, "x", 2.3, 16, 2], [-42, 84, "y", 2.3, 16, 2], [42, 84, "y", 2.3, 16, 2]]);
+  assert.deepEqual(tile.clipSlots.map(s => [s.x, s.y, s.axis, s.width, s.length, s.depth]), [[84, -42, "x", 2.8 + 0.4, 4.9, 2.5], [84, 42, "x", 2.8 + 0.4, 4.9, 2.5], [-42, 84, "y", 2.8 + 0.4, 4.9, 2.5], [42, 84, "y", 2.8 + 0.4, 4.9, 2.5]]);
   assert.equal(drawerParts(layout({ width: 4 * 42, depth: 4 * 42, bins: [], baseplateClips: true })).some(p => p.type === "baseplateClip"), false);
   assert.deepEqual(normalizeDrawerLayout(layout({ baseplateClips: { clearance: 0.2 } })).baseplateClips, { clearance: 0.2 });
   for (const baseplateClips of [{ clearance: 0 }, { clearance: 1 }, { size: 10 }, "yes"]) assert.throws(() => normalizeDrawerLayout(layout({ baseplateClips })));
@@ -142,15 +171,23 @@ test("baseplate clips join tile joints from below and stay owned, editable nativ
   const compiled = compileMcpModel(doc(), { operations: [input] }).document;
   const clipBodies = compiled.bodies.filter(body => body.mcpBaseplateClip);
   assert.equal(clipBodies.length, 11);
-  assert.deepEqual(clipBodies[0].node.p, { w: 15.7, d: 2, h: 1.85, r: 0, c: 0 });
+  assert.equal(clipBodies[0].node.children.length, 5);
+  const [bridge, leg, tip] = clipBodies[0].node.children;
+  assert.deepEqual(bridge.m.slice(12, 15), [0, 0, 1.85]);
+  assert.equal(bridge.node.p.h, 0.65);
+  assert.equal(leg.m[14], 0);
+  assert.equal(leg.node.p.h, 2.5);
+  assert.equal(tip.node.mods[0].t, "halfspace", "the foot has a lead-in ramp");
+  assert.equal(clipBodies[0].mcpBaseplateClip.style, "staple");
+  assert.equal(clipBodies[0].mcpBaseplateClip.opening, "top");
   const slotted = compiled.bodies.find(body => body.mcpDrawerLayout?.partId === "baseplate-0-0");
-  assert.equal(slotted.node.mods.find(mod => mod.src === "clipSlots").tool.children.length, 4);
+  assert.equal(slotted.node.mods.find(mod => mod.src === "clipSlots").tool.children.length, 20);
   assert.equal(slotted.mcpGridfinity.clipSlots.length, 4);
   assert.equal(summarizeDrawerLayouts(compiled)[0].editable, true);
   const revised = compileMcpModel(compiled, { operations: [{ ...input, replaceExisting: true, baseplateClips: false }] }).document;
   assert.equal(revised.bodies.filter(body => body.mcpBaseplateClip).length, 0);
   assert.equal(revised.bodies.some(body => body.node.mods?.some(mod => mod.src === "clipSlots")), false);
-  const edited = structuredClone(compiled); edited.bodies.find(body => body.mcpBaseplateClip).node.p.h += 1;
+  const edited = structuredClone(compiled); edited.bodies.find(body => body.mcpBaseplateClip).node.children[0].node.p.h += 1;
   assert.equal(summarizeDrawerLayouts(edited)[0].editable, false);
 });
 

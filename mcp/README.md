@@ -231,7 +231,9 @@ The `drawerLayout` operation accepts `width`, `depth`, `height`, `bins`, optiona
 `includeBaseplate`, `baseplateMagnets`, `floor`, `wall`, and explicit `replaceExisting`. Bin positions
 `x`/`y` are whole cells from the front-left; +Y goes toward the back. Each bin has
 `id`, `label`, `columns`, `rows`, `heightUnits`, `kind` (bin/insert), optional
-`dividers` and `lip`. The drawer's `floor` and `wall` are defaults; a bin's own
+`dividers`, `dividerPositions` and `lip`. Divider positions are fractions across
+the clear inside width/depth from the left/front inside wall; omit them for even
+spacing. The drawer's `floor` and `wall` are defaults; a bin's own
 `floor` or `wall` overrides them. Insert bins accept `pockets`: the `pocket`
 operation's fields without `type` and `target`, positioned from the insert
 centre. `minimumFloor` and `minimumWall` default to the bin's floor and wall, and

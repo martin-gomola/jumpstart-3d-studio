@@ -72,6 +72,7 @@ test("Generators groups the drawer workflow and printer settings under the Gridf
   await expect(panel).toBeVisible();
   const connection = page.getByRole("tab", { name: "AI connection" });
   const templates = page.getByRole("tab", { name: "Create" });
+  const context = page.locator("#ai-workspace-context");
   const connectionBounds = await panel.boundingBox();
   expect(connectionBounds.x).toBe(0);
   expect(connectionBounds.width).toBe(page.viewportSize().width);
@@ -80,6 +81,8 @@ test("Generators groups the drawer workflow and printer settings under the Gridf
   expect(await page.locator(".topbar").evaluate(el => el.inert)).toBe(false);
   await expect(templates).toHaveAttribute("aria-selected", "true");
   await expect(page.locator("#drawer-width")).toBeVisible();
+  await expect(context).toBeHidden();
+  await expect(page.locator("#ai-templates-panel .ai-generator-header--mobile")).toBeVisible();
   await connection.click();
   await expect(page.locator("#ai-setup-codex")).toBeVisible();
   await expect(page.locator("#ai-setup-claude")).toBeHidden();
@@ -95,16 +98,26 @@ test("Generators groups the drawer workflow and printer settings under the Gridf
   await expect(templates).toHaveAttribute("aria-selected", "true");
   await expect(page.locator("#ai-templates-panel")).toBeVisible();
   expect(await panel.boundingBox()).toEqual(connectionBounds);
+  await page.setViewportSize({ width: 1600, height: 880 });
+  await expect(context).toBeVisible();
+  await expect(context.locator("#ai-gridfinity-title")).toHaveText("Organize your drawer");
+  await expect(page.locator("#ai-templates-panel .ai-generator-header--mobile")).toBeHidden();
+  await page.screenshot({ path: "exports/ai-panel/drawer-wide.png" });
+  const wideBounds = await panel.boundingBox();
   const headerLayout = await page.locator(".ai-setup-header").evaluate(header => {
     const bounds = header.getBoundingClientRect(), tabs = header.querySelector('[role="tablist"]').getBoundingClientRect();
-    return { height: bounds.height, tabsInside: tabs.top >= bounds.top && tabs.bottom <= bounds.bottom };
+    const context = header.querySelector("#ai-workspace-context").getBoundingClientRect();
+    return { height: bounds.height, tabsInside: tabs.top >= bounds.top && tabs.bottom <= bounds.bottom,
+      contextInside: context.top >= bounds.top && context.bottom <= bounds.bottom };
   });
   expect(headerLayout.height).toBeLessThanOrEqual(72);
   expect(headerLayout.tabsInside).toBe(true);
+  expect(headerLayout.contextInside).toBe(true);
   const gridfinity = page.getByRole("region", { name: "Gridfinity", exact: true });
   await expect(gridfinity).toBeVisible();
-  await expect(gridfinity.getByRole("group", { name: "Gridfinity workflow" })).toBeVisible();
-  await expect(gridfinity.getByRole("button", { name: "Drawer layout", exact: true })).toBeVisible();
+  const workflow = page.getByRole("group", { name: "Gridfinity workflow" });
+  await expect(workflow).toBeVisible();
+  await expect(workflow.getByRole("button", { name: "Drawer layout", exact: true })).toBeVisible();
   await expect(gridfinity.getByRole("button", { name: "Single part", exact: true })).toHaveCount(0);
   await expect(page.locator("#drawer-width")).toBeVisible();
   await expect(page.locator("#ai-connection-panel")).toBeHidden();
@@ -113,9 +126,13 @@ test("Generators groups the drawer workflow and printer settings under the Gridf
   await expect(connection).toBeFocused();
   await expect(connection).toHaveAttribute("aria-selected", "true");
   await expect(page.locator("#ai-connection-panel")).toBeVisible();
-  expect(await panel.boundingBox()).toEqual(connectionBounds);
+  await expect(context).toBeHidden();
+  expect(await page.locator(".ai-setup-header").evaluate(header => header.getBoundingClientRect().height)).toBe(headerLayout.height);
+  expect(await panel.boundingBox()).toEqual(wideBounds);
   await page.setViewportSize({ width: 320, height: 640 });
   await templates.click();
+  await expect(page.locator("#ai-workspace-context")).toBeHidden();
+  await expect(page.locator("#ai-templates-panel .ai-generator-header--mobile")).toBeVisible();
   const mobileBounds = await page.locator("#ai-setup-panel").evaluate(panel => {
     const rect = panel.getBoundingClientRect(), content = panel.querySelector("#ai-templates-panel");
     return { left: rect.left, right: rect.right, contentWidth: content.clientWidth, contentScrollWidth: content.scrollWidth,

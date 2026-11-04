@@ -20,6 +20,11 @@ silently truncating a large drawer or changing requested dimensions.
 
 Choose bin heights against the usable drawer height. A stacking lip adds height;
 bins seated on included baseplates also use the generator's placement offset.
+For bins with dividers, `dividers.x/y` are divider counts. Optional
+`dividerPositions.x/y` arrays store each divider's normalized fraction across the
+clear inside width/depth, from the left/front inside wall. Omit them for an even
+split; in the editor, dividers start evenly spaced and can be dragged or entered
+as millimetre distances. Keep array lengths equal to their divider counts.
 Validate those complete heights rather than only comparing nominal height units.
 Physical printed fit remains unverified. Propose an agreed small interface or
 fit coupon when calibration is missing.
@@ -29,9 +34,12 @@ baseplate raises bin seating by its pocket depth +0.8 mm; usable-height checks
 include this added carrier. Use the directly linked magnet guidance for sizes.
 
 When the grid splits into several baseplate tiles, `baseplateClips: true` adds
-separate straight clips that join neighbouring tiles from below; the bin-seating
-profile is unchanged. Clips do not reduce filament; offer them for alignment and
-holding tiles together, and recommend printing one joint to check clearance.
+separate inverted-U staple clips pressed into tile-edge slots from above. A
+recessed upper bridge joins downward legs with ramped tips; retaining shoulders
+capture the tips below the bin seats. Print the staple on its broad side.
+These use an independent geometry inspired by the CLICKbase joining principle;
+they do not mate with original CLICKbase parts. Print one joint first to check
+clearance, insertion, retention and removal before printing the full layout.
 
 Attach supported acceptance requirements, preview, and inspect the generated
 parts for dimensions, geometry errors and connected meshes. Distinguish a planned

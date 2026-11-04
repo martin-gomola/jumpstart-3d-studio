@@ -16,7 +16,7 @@ test("wider controls and labeled pictograms remain aligned and operable across w
     await page.fill(`#drawer-${id}`, amount); await page.locator(`#drawer-${id}`).press("Tab");
   }
   for (const [view, name] of [["drawer", "Drawer layout"], ["settings", "Printer & settings"]]) {
-    const button = page.locator(`[data-workspace-view="${view}"]`);
+    const button = page.locator(`[data-workspace-view="${view}"]:visible`);
     await expect(button).toHaveAccessibleName(name);
     await expect(button.locator("svg")).toHaveCount(1);
     await expect(button.locator("svg")).toHaveAttribute("aria-hidden", "true");

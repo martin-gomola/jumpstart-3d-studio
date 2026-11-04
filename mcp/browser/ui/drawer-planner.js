@@ -1,6 +1,7 @@
 import { rotateOpenSides } from "../../shared/gridfinity-walls.js";
 import { partPrintFit } from "../../shared/gridfinity-envelope.js";
 import { drawerMetrics, normalizeDrawerLayout, rotateDrawerLayout, placementError, firstDrawerSpace, fillDrawerGaps, DRAWER_LIMITS, drawerBinBaseZ, binFloor, rotateBinPockets } from "../../shared/drawer-layout.js";
+import { rotateDividerPositions } from "../../shared/gridfinity-dividers.js";
 import { normalizeMagnetPockets, magnetCarrierHeight } from "../../shared/gridfinity-magnets.js";
 import { normalizeBinLimits } from "../../shared/gridfinity-limits.js";
 import { normalizeCornerSpacers, cornerSpacerParts } from "../../shared/drawer-spacers.js";
@@ -22,12 +23,12 @@ export function drawerStatus(draft) {
   let error; try { normalizeDrawerLayout(draft); } catch (failure) { error = failure.message; }
   let spacerNote = "";
   if (draft.cornerSpacers) {
-    try { const parts = cornerSpacerParts(draft, m); spacerNote = parts.length ? `${parts.length} separate flat-bottom spacers, ${draft.cornerSpacers.height} mm tall. Test printed fit before making all four.` : "The grid fills the drawer; no spacers are needed."; }
+    try { const parts = cornerSpacerParts(draft, m); spacerNote = parts.length ? `${parts.length} ${draft.cornerSpacers.integrated ? "baseplate-integrated" : "separate flat-bottom"} spacers, ${draft.cornerSpacers.height} mm tall. Test printed fit before making all four.` : "The grid fills the drawer; no spacers are needed."; }
     catch (failure) { error = failure.message; spacerNote = failure.message; }
   }
   let clipNote = "";
   if (draft.baseplateClips && ready) {
-    try { const count = baseplateClipLayout(draft, m, baseplateTileLimits(draft.printArea, m)).clips.length; clipNote = count ? `${count} separate 2 × 16 mm clips press into slots under the tile joints. Test one joint before printing them all.` : "One baseplate tile covers the grid; no clips are needed."; }
+    try { const count = baseplateClipLayout(draft, m, baseplateTileLimits(draft.printArea, m)).clips.length; clipNote = count ? `${count} separate staple clips press in from above. Test one joint before printing them all.` : "One baseplate tile covers the grid; no clips are needed."; }
     catch (failure) { clipNote = failure.message; }
   }
   let carrierNote = "";
@@ -80,6 +81,7 @@ export function createDrawerPlanner({ request, onBusy = () => {}, storage = glob
   function updateBin(changes) {
     const bin = picked(); if (!bin || state.busy) return false;
     const candidate = { ...bin, ...changes }, next = copy(state.draft);
+    if (Object.hasOwn(changes, "dividers") && !Object.hasOwn(changes, "dividerPositions")) delete candidate.dividerPositions;
     if (JSON.stringify(candidate) === JSON.stringify(bin)) { refresh(); return true; }
     const error = placementError(state.draft, candidate, bin.id);
     if (error) { announce(error, true); return false; }
@@ -206,7 +208,7 @@ export function createDrawerPlanner({ request, onBusy = () => {}, storage = glob
       const next = copy(state.draft); next.bins = next.bins.filter(entry => entry.id !== bin.id);
       put({ selectedId: null }); commit(next, "Bin removed. Undo layout restores it.");
     }),
-    rotateBin: act(() => { const bin = picked(); if (bin) updateBin({ columns: bin.rows, rows: bin.columns, dividers: { x: bin.dividers.y, y: bin.dividers.x }, openSides: rotateOpenSides(bin.openSides), ...(bin.pockets ? { pockets: rotateBinPockets(bin.pockets) } : {}) }); }),
+    rotateBin: act(() => { const bin = picked(); if (bin) updateBin({ columns: bin.rows, rows: bin.columns, dividers: { x: bin.dividers.y, y: bin.dividers.x }, openSides: rotateOpenSides(bin.openSides), ...(bin.dividerPositions ? { dividerPositions: rotateDividerPositions(bin.dividerPositions) } : {}), ...(bin.pockets ? { pockets: rotateBinPockets(bin.pockets) } : {}) }); }),
     duplicateBin: act(() => perform(() => {
       const bin = picked(), space = firstDrawerSpace(state.draft, bin.columns, bin.rows); if (!space) throw new Error("No space for another bin of that size.");
       if (state.draft.bins.length >= 16) throw new Error("This layout supports up to 16 bins.");

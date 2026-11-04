@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { createPortal, flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
-import { flushSync } from "react-dom";
 import { GRIDFINITY_LIMITS } from "../../shared/gridfinity-limits.js";
 import { PRINT_AREA_PRESETS, normalizePrintArea, baseplateTileLimits } from "../../shared/print-area.js";
 import { createDrawerPlanner } from "./drawer-planner.js";
@@ -66,6 +66,7 @@ export function initTemplatePanel({ request, subscribe, createPreviewView }) {
 
 function Workspace({ root, drawer, createPreviewView, view }) {
   const [mode, setMode] = useState("drawer"), [settingsSeq, setSettingsSeq] = useState(0);
+  const [wideHeader, setWideHeader] = useState(() => window.matchMedia("(min-width: 90rem)").matches);
   const drawerBusy = useSyncExternalStore(drawer.subscribe, () => drawer.getState().busy);
   const references = useSyncExternalStore(drawer.subscribe, () => drawer.getState().references);
   useEffect(() => { root.setAttribute("aria-busy", String(drawerBusy)); }, [drawerBusy]);
@@ -75,17 +76,29 @@ function Workspace({ root, drawer, createPreviewView, view }) {
     drawer.deactivate();
   };
   useEffect(() => { view.choose = choose; });
+  useEffect(() => {
+    const media = window.matchMedia("(min-width: 90rem)"), update = () => setWideHeader(media.matches);
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+  const desktopContext = document.getElementById("ai-workspace-context");
   return <section className="ai-generator" aria-label="Gridfinity">
-    <div className="ai-generator-header">
-      <div className="ai-workflow-heading"><h3 id="ai-gridfinity-title">{title}</h3><p className="ai-template-note">{note}</p></div>
-      <div className="ai-template-mode" role="group" aria-label="Gridfinity workflow">
-        {MODES.map(([key, text, icon]) => <button key={key} type="button" className={`ai-with-pictogram${key === "settings" ? " ai-settings-link" : ""}`}
-          aria-pressed={String(mode === key)} data-workspace-view={key} disabled={drawerBusy} onClick={() => choose(key)}><Labelled icon={icon}>{text}</Labelled></button>)}
-      </div>
-    </div>
+    <WorkflowHeader className="ai-generator-header--mobile" title={title} note={note} mode={mode} drawerBusy={drawerBusy} choose={choose} hidden={wideHeader} />
+    {desktopContext && createPortal(<WorkflowHeader className="ai-generator-header--desktop" title={title} mode={mode} drawerBusy={drawerBusy} choose={choose} hidden={!wideHeader} />, desktopContext)}
     <DrawerPlanner planner={drawer} hidden={mode !== "drawer"} createPreviewView={createPreviewView} references={references} />
     <PrinterSettings key={settingsSeq} drawer={drawer} hidden={mode !== "settings"} />
   </section>;
+}
+
+function WorkflowHeader({ className, title, note, mode, drawerBusy, choose, hidden }) {
+  return <div className={`ai-generator-header ${className}`} hidden={hidden}>
+    <div className="ai-workflow-heading"><h3 id={!hidden ? "ai-gridfinity-title" : undefined}>{title}</h3>
+      {note && <p className="ai-template-note">{note}</p>}</div>
+    <div className="ai-template-mode" role="group" aria-label="Gridfinity workflow">
+      {MODES.map(([key, text, icon]) => <button key={key} type="button" className={`ai-with-pictogram${key === "settings" ? " ai-settings-link" : ""}`}
+        aria-pressed={String(mode === key)} data-workspace-view={key} disabled={drawerBusy} onClick={() => choose(key)}><Labelled icon={icon}>{text}</Labelled></button>)}
+    </div>
+  </div>;
 }
 
 const printerTexts = area => Object.fromEntries(PRINTER_FIELDS.map(([key]) => [key, String(area[key])]));

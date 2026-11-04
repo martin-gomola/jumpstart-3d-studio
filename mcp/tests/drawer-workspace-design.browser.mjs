@@ -67,7 +67,7 @@ test('drawer workspace guides measurements, keeps actions nearby and adapts thro
       expect(Math.abs(left.y + left.height - right.y - right.height)).toBeLessThan(1);
       const art = await page.locator('.drawer-measure-art').boundingBox();
       expect(art.width).toBe(508); expect(art.y - right.y).toBeLessThan(160);
-      expect(await page.locator('#ai-gridfinity-title').evaluate(el => getComputedStyle(el).fontSize)).toBe('48px');
+      expect(Number.parseFloat(await page.locator('#ai-gridfinity-title').evaluate(el => getComputedStyle(el).fontSize))).toBeLessThan(48);
       expect(await page.locator('.ai-flow li').first().evaluate(el => getComputedStyle(el).flexDirection)).toBe('column');
       await expect(drawer.locator('.drawer-measure-card').getByRole('button', { name: 'Preview layout', exact: true })).toBeVisible();
       expect(await page.locator('.ai-workspace-tabs button[aria-selected="true"]').evaluate(el => getComputedStyle(el).borderBottomWidth)).toBe('0px');
