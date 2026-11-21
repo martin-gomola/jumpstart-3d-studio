@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { el } from "../../src/util.js";
 
 // Read-only view of cached preview meshes; never connects to the editor scene.
-export function previewViewer(meshes) {
+export function previewViewer(meshes, cameraState = {}) {
   const canvas = el("canvas", { tabindex: "0", role: "region", "aria-label": "Interactive 3D preview. Drag or use arrow keys to rotate. Scroll or use plus and minus to zoom. Press zero to reset." });
   const frame = el("div", { class: "ai-preview-canvas" }, canvas);
   const reset = el("button", { type: "button" }, "Reset view");
@@ -15,6 +15,7 @@ export function previewViewer(meshes) {
   const scene = new THREE.Scene(), camera = new THREE.OrthographicCamera();
   camera.up.set(0, 0, 1);
   const material = new THREE.MeshStandardMaterial({ roughness: 1 });
+  const contextMaterial = new THREE.MeshStandardMaterial({ roughness: 1 });
   const edgeMaterial = new THREE.LineBasicMaterial({ transparent: true, opacity: 0.45 });
   const resources = [];
   scene.add(new THREE.HemisphereLight(0xffffff, 0xffffff, 2));
@@ -27,11 +28,12 @@ export function previewViewer(meshes) {
     geometry.computeVertexNormals();
     const edges = new THREE.EdgesGeometry(geometry, 25);
     resources.push(geometry, edges);
-    scene.add(new THREE.Mesh(geometry, material), new THREE.LineSegments(edges, edgeMaterial));
+    scene.add(new THREE.Mesh(geometry, mesh.context ? contextMaterial : material), new THREE.LineSegments(edges, edgeMaterial));
   }
   const box = new THREE.Box3().setFromObject(scene), center = box.getCenter(new THREE.Vector3());
   const radius = Math.max(box.getBoundingSphere(new THREE.Sphere()).radius, 1);
-  let yaw = -Math.PI / 4, pitch = 0.65, zoom = 1, drag = null, disposed = false;
+  let { yaw = -Math.PI / 4, pitch = 0.65, zoom = 1 } = cameraState;
+  let drag = null, disposed = false;
   const draw = () => {
     if (disposed || !frame.clientWidth || !frame.clientHeight) return;
     const width = frame.clientWidth, height = frame.clientHeight, aspect = width / height;
@@ -42,7 +44,12 @@ export function previewViewer(meshes) {
     camera.up.set(0, Math.abs(pitch) === Math.PI / 2 ? 1 : 0, Math.abs(pitch) === Math.PI / 2 ? 0 : 1);
     camera.lookAt(center); camera.updateProjectionMatrix(); renderer.render(scene, camera);
   };
-  const update = () => { pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch)); zoom = Math.max(0.15, Math.min(6, zoom)); draw(); };
+  const update = () => {
+    pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
+    zoom = Math.max(0.15, Math.min(6, zoom));
+    Object.assign(cameraState, { yaw, pitch, zoom });
+    draw();
+  };
   const home = () => { yaw = -Math.PI / 4; pitch = 0.65; zoom = 1; update(); };
   reset.onclick = home;
   top.onclick = () => { pitch = Math.PI / 2; update(); };
@@ -73,6 +80,7 @@ export function previewViewer(meshes) {
   const recolor = () => {
     const theme = getComputedStyle(document.documentElement);
     material.color.set(theme.getPropertyValue("--hole").trim());
+    contextMaterial.color.set(theme.getPropertyValue("--ink-3").trim());
     edgeMaterial.color.set(theme.getPropertyValue("--ink-2").trim()); draw();
   };
   const resize = new ResizeObserver(draw), theme = new MutationObserver(recolor);
@@ -80,7 +88,7 @@ export function previewViewer(meshes) {
   return { element, dispose() {
     if (disposed) return;
     disposed = true; resize.disconnect(); theme.disconnect();
-    resources.forEach(resource => resource.dispose()); material.dispose(); edgeMaterial.dispose();
+    resources.forEach(resource => resource.dispose()); material.dispose(); contextMaterial.dispose(); edgeMaterial.dispose();
     renderer.dispose(); renderer.forceContextLoss(); element.remove();
   } };
 }

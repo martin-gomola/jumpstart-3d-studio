@@ -878,12 +878,19 @@ export function initMcp(app) {
     return result;
   };
   const localRequest = (action, params) => enqueue({ action, params });
-  const createPreviewView = previewId => {
+  const createPreviewView = (previewId, baseplateId, cameraState) => {
     const preview = previews.get(previewId);
     if (!preview) throw new Error("Preview expired. Generate it again.");
-    return previewViewer(preview.compiled.affectedBodyIds.map(id => preview.geometries.get(id).mesh));
+    const meshes = preview.compiled.affectedBodyIds.map(id => preview.geometries.get(id).mesh);
+    if (baseplateId) {
+      const [{ body, view, pending, error }] = readyBodies(app, [baseplateId]);
+      if (error || pending) throw new Error(error || "The baseplate is still building.");
+      meshes.push({ vertices: view.data.vertices, triangles: view.data.triangles, matrix: body.m, context: true });
+    }
+    return previewViewer(meshes, cameraState);
   };
-  const templates = initTemplatePanel({ request: localRequest, subscribe: listener => store.on(listener), createPreviewView });
+  const templates = initTemplatePanel({ request: localRequest, subscribe: listener => store.on(listener), createPreviewView,
+    getDocument: () => store.doc, getRevision: currentRevision });
   const openWorkspace = view => { templates?.show(view); workspace.open(); };
   const parameterHost = document.createElement("div");
   parameterHost.id = "model-params-root";

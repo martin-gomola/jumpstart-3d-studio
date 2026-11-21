@@ -148,6 +148,7 @@ export function initAiSetupPanel() {
       panel.dispatchEvent(new Event("workspaceopen"));
     }
     else {
+      panel.dispatchEvent(new Event("workspaceclose"));
       if (dismissTooltip) trigger.dataset.tooltipDismissed = "true";
       if (restoreFocus) trigger.focus();
     }

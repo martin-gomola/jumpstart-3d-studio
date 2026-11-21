@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 
 test("a failed local design write does not claim a saved version and can recover on the next save", async ({ page }) => {
+  await page.setViewportSize({ width: 1800, height: 900 });
   await page.goto("/");
   await page.waitForFunction(() => window.__app?.kernel?.ready, null, { timeout: 90_000 });
   await page.waitForSelector("#loading", { state: "hidden", timeout: 20_000 });
@@ -16,8 +17,17 @@ test("a failed local design write does not claim a saved version and can recover
     Storage.prototype.setItem = blocked;
     return { docId, key };
   });
+  const exportButton = page.locator("#btn-export");
+  const before = await exportButton.boundingBox();
   await page.click("#btn-save");
   await expect(page.locator("#savestate")).toContainText("Not saved");
+  await expect(page.locator("#savestate")).toHaveAttribute("title", /Export a project file/);
+  const after = await exportButton.boundingBox();
+  expect(Math.abs(after.x - before.x)).toBeLessThan(1);
+  expect(after.x + after.width).toBeLessThanOrEqual(1800);
+  await exportButton.click();
+  await expect(page.locator("#menu-export")).toBeVisible();
+  await exportButton.click();
   expect(await page.evaluate(({ docId, key }) => ({
     document: localStorage.getItem(key),
     version: localStorage.getItem(`jumpstart3d.ver.${docId}`),

@@ -43,9 +43,10 @@ choosing a CAD mode closes the AI workspace.
   with Drawer layout as its workflow. Printer & settings is a
   secondary action. Future unrelated generators
   belong beside Gridfinity, not inside its drawer or part controls.
-- Make single Gridfinity parts with the editor's Gridfinity part dialog, beside the other
-  part tools, not in the AI workspace. It previews in the viewport, checks the saved
-  printer area and keeps one entry point for manual single parts.
+- Standalone bin sits beside Drawer layout in Create. Keep dimensions, compartments and
+  open sides visible beside the live CAD preview. A native upright baseplate can provide
+  a placement grid in its own cell coordinates. Apply adds just the bin in one undoable edit.
+  The editor's Gridfinity part dialog also supports inserts and baseplates.
 - Allow an empty bin arrangement to preview/apply matching baseplates and optional
   spacers. Label it Baseplates only, explain that bins are optional, and reject
   output with neither bins nor baseplates.

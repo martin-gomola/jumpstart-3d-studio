@@ -333,3 +333,17 @@
   .drawer-measure-card > #drawer-fit { padding-block-end: var(--ai-status-panelGap); }
   .ai-setup-panel .drawer-measure-submit > button { min-block-size: var(--ai-status-workspaceControlHeight); }
 }
+
+.standalone-bin { min-block-size: 0; gap: var(--ai-status-sectionGap); }
+.standalone-bin .ai-template-settings, .standalone-bin .ai-template-review { min-block-size: 0; }
+.standalone-bin legend { margin-block-end: var(--ai-status-gap); padding: 0; font-weight: 600; }
+.standalone-bin .ai-template-fields, .standalone-bin-sides { grid-template-columns: repeat(2,minmax(0,1fr)); }
+.standalone-bin-sides { display: grid; gap: var(--ai-status-gap) var(--ai-status-panelGap); }
+.standalone-bin .ai-template-submit { display: grid; gap: var(--ai-status-gap); }
+.standalone-bin .ai-template-preview:empty { display: none; }
+.standalone-bin .ai-template-review > details { overflow-wrap: anywhere; }
+@container drawer-workspace (min-width: 64rem) {
+  .standalone-bin { flex: 1; grid-template-columns: minmax(0,1fr) minmax(0,min(var(--ai-status-workspaceSettingsWidth),var(--ai-status-templateSettingsShare))); }
+  .standalone-bin .ai-template-review:has(.ai-preview-viewer) { overflow-y: auto; }
+  .standalone-bin .ai-template-review > details { flex: none; }
+}

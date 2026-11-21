@@ -165,6 +165,7 @@ for (const axis of ["x", "z"]) {
 test("Beginner: Shift (or Free) turns by the pointer's own angle, not by 15; a press with no movement turns nothing", async () => {
   const box0 = await open("beginner");
   await clickBox();
+  await expect.poll(() => rotHandles()).toEqual(["x", "y", "z"]);
   const C = [0, 1, 2].map((i) => (box0[i] + box0[i + 3]) / 2);
   const depth = await undoDepth();
 
@@ -388,7 +389,7 @@ test("touch (tablet): the Snap 15 / Free switch changes what a finger drag turns
     const spot = await spotOnBox(p);
     await p.touchscreen.tap(spot.x, spot.y);
     await expect.poll(() => p.evaluate(() => window.__app.sel.join(","))).toBe("b1");
-    expect(await rotHandles(p)).toEqual(["x", "y", "z"]);
+    await expect.poll(() => rotHandles(p)).toEqual(["x", "y", "z"]);
 
     // 44 CSS px targets for the turn buttons and the switch
     const sizes = await p.evaluate(() => [...document.querySelectorAll(".rot-btn button")].map((b) => { const r = b.getBoundingClientRect(); return [b.id || b.textContent, Math.round(r.width * 10) / 10, Math.round(r.height * 10) / 10]; }));
@@ -444,6 +445,12 @@ test("touch (tablet): in Advanced a second finger or a cancelled touch drops the
     await p.locator("#mv-d0").blur();
     const moved = tr(5, 0, 0);
     const wantMoved = mul(moved, M0);
+    // Typing queues a preview and a redraw. Aim at the ring after both have caught up.
+    await expect.poll(() => p.evaluate(() => {
+      let ringX;
+      window.__app.vp.overlay.traverseVisible(o => { if (o.userData.axis === "rot-z") ringX = o.parent.position.x; });
+      return [window.__store.preview?.bodies[0].m[12], ringX];
+    })).toEqual([wantMoved[12], (box0[0] + box0[3]) / 2 + 5]);
 
     for (const how of ["second finger", "cancel"]) {
       const pl = await plan(p, "ring", "z", 40, 6);

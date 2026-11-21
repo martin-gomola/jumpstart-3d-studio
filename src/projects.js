@@ -22,7 +22,7 @@ export function initProjects(app) {
   let remoteOk = false;
   let dirty = false;
   const stateEl = $("savestate");
-  const setState = (t) => { stateEl.textContent = t; };
+  const setState = (t) => { stateEl.textContent = t; stateEl.title = t; };
 
   // ---------------------------------------------------------------- capability setup
   async function capabilities() {

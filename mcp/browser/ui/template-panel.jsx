@@ -7,18 +7,20 @@ import { createDrawerPlanner } from "./drawer-planner.js";
 import { numberValid } from "./field-text.js";
 import { useInvalidMarks } from "./part-form.jsx";
 import { DrawerPlanner } from "./drawer-panel.jsx";
+import { BinWorkspace } from "./bin-workspace.jsx";
 import { Labelled, NumberField, DimensionGuide, revealInvalid } from "./controls.jsx";
 import { iconLabel } from "./pictograms.js";
 
-const MODES = [["drawer", "Drawer layout", "grid"], ["settings", "Printer & settings", "gear"]];
+const MODES = [["drawer", "Drawer layout", "grid"], ["bin", "Standalone bin", "box"], ["settings", "Printer & settings", "gear"]];
 const HEADINGS = {
   drawer: ["Organize your drawer", "Measure the inside, arrange your bins, then review your printable parts."],
+  bin: ["Design a bin", "Edit one Gridfinity bin with a live 3D preview."],
   settings: ["Set up your printer", "Check that each part fits your build area. These defaults are remembered in this browser."],
 };
 const PRINTER_FIELDS = [["width", "Print width (mm)", 1, 2000], ["depth", "Print depth (mm)", 1, 2000], ["height", "Print height (mm)", 1, 2000], ["edgeMargin", "Reserve per bed edge (mm)", 0, 20]];
 const BIN_LIMITS = { columns: { min: 1, max: GRIDFINITY_LIMITS.columns, step: 1 }, rows: { min: 1, max: GRIDFINITY_LIMITS.rows, step: 1 } };
 
-export function initTemplatePanel({ request, subscribe, createPreviewView }) {
+export function initTemplatePanel({ request, subscribe, createPreviewView, getDocument, getRevision }) {
   const root = document.getElementById("ai-templates-panel");
   const tabs = [...document.querySelectorAll('.ai-workspace-tabs [role="tab"]')];
   if (!root || !tabs.length) return;
@@ -26,9 +28,10 @@ export function initTemplatePanel({ request, subscribe, createPreviewView }) {
   iconLabel(document.getElementById("ai-setup-close"), "arrowLeft");
   // Commit each planner change before returning, so chained clicks see current controls.
   const drawer = createDrawerPlanner({ request, notify: flushSync });
-  const view = { choose: null };
+  const view = { choose: null, activate: null };
   subscribe(kind => { if (!["preview", "version"].includes(kind)) drawer.deactivate(); });
-  flushSync(() => createRoot(root).render(<Workspace root={root} drawer={drawer} createPreviewView={createPreviewView} view={view} />));
+  flushSync(() => createRoot(root).render(<Workspace root={root} drawer={drawer} createPreviewView={createPreviewView} view={view}
+    binServices={{ request, subscribe, getDocument, getRevision, createPreviewView }} />));
 
   function select(tab) {
     document.getElementById("ai-setup-panel").dataset.activeTab = tab.id === "ai-templates-tab" ? "templates" : "connection";
@@ -39,6 +42,7 @@ export function initTemplatePanel({ request, subscribe, createPreviewView }) {
   }
   async function activate(tab) {
     select(tab);
+    view.activate?.(tab.id === "ai-templates-tab" && !document.getElementById("ai-setup-panel").hidden);
     if (tab.id === "ai-templates-tab") {
       try { await drawer.refreshDocument(await request("get_document", {})); }
       catch (error) { drawer.announce(error.message, true); }
@@ -56,16 +60,19 @@ export function initTemplatePanel({ request, subscribe, createPreviewView }) {
     const selected = tabs.find(tab => tab.getAttribute("aria-selected") === "true");
     if (selected) void activate(selected);
   });
+  document.getElementById("ai-setup-panel").addEventListener("workspaceclose", () => view.activate?.(false));
   return {
     show(mode) {
       select(document.getElementById("ai-templates-tab"));
+      if (!document.getElementById("ai-setup-panel").hidden) view.activate?.(true);
       view.choose?.(mode);
     },
   };
 }
 
-function Workspace({ root, drawer, createPreviewView, view }) {
+function Workspace({ root, drawer, createPreviewView, view, binServices }) {
   const [mode, setMode] = useState("drawer"), [settingsSeq, setSettingsSeq] = useState(0);
+  const [active, setActive] = useState(false);
   const [wideHeader, setWideHeader] = useState(() => window.matchMedia("(min-width: 90rem)").matches);
   const drawerBusy = useSyncExternalStore(drawer.subscribe, () => drawer.getState().busy);
   const references = useSyncExternalStore(drawer.subscribe, () => drawer.getState().references);
@@ -75,7 +82,7 @@ function Workspace({ root, drawer, createPreviewView, view }) {
     flushSync(() => { setMode(next); if (next === "settings") setSettingsSeq(seq => seq + 1); });
     drawer.deactivate();
   };
-  useEffect(() => { view.choose = choose; });
+  useEffect(() => { view.choose = choose; view.activate = setActive; });
   useEffect(() => {
     const media = window.matchMedia("(min-width: 90rem)"), update = () => setWideHeader(media.matches);
     media.addEventListener("change", update);
@@ -86,6 +93,7 @@ function Workspace({ root, drawer, createPreviewView, view }) {
     <WorkflowHeader className="ai-generator-header--mobile" title={title} note={note} mode={mode} drawerBusy={drawerBusy} choose={choose} hidden={wideHeader} />
     {desktopContext && createPortal(<WorkflowHeader className="ai-generator-header--desktop" title={title} mode={mode} drawerBusy={drawerBusy} choose={choose} hidden={!wideHeader} />, desktopContext)}
     <DrawerPlanner planner={drawer} hidden={mode !== "drawer"} createPreviewView={createPreviewView} references={references} />
+    <BinWorkspace active={active && mode === "bin"} hidden={mode !== "bin"} printArea={drawer.getPrintArea()} {...binServices} />
     <PrinterSettings key={settingsSeq} drawer={drawer} hidden={mode !== "settings"} />
   </section>;
 }
