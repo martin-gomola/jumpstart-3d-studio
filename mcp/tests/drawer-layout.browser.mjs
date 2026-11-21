@@ -599,6 +599,10 @@ test("compartment dividers default evenly and can be adjusted by keyboard, dista
   const errors = watchErrors(page), editorId = await openPlanner(page);
   await dimensions(page, 168, 168, 40);
   await page.getByRole("button", { name: "Add bin", exact: true }).click();
+  await page.getByText("More heights", { exact: true }).click();
+  const height = page.locator(".drawer-inspector").getByLabel("Body height (7 mm steps)", { exact: true });
+  await height.fill("4"); await height.press("Tab");
+  await expect(page.getByRole("button", { name: "28 mm", exact: true })).toHaveAttribute("aria-pressed", "true");
   await page.locator(".drawer-compartment-options summary").click();
   const count = page.locator("#drawer-bin-compartments-x");
   await count.fill("2"); await count.press("Tab");

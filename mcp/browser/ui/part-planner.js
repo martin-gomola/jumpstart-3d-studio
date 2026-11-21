@@ -35,7 +35,11 @@ export function templatePlan(state) {
     grid.openSides = state.openSides || [];
     grid.closeGaps = state.closeGaps === true;
     grid.lip = state.lip;
-    grid.dividers = { x: number("dividersX", state.compartmentsX - 1, "count"), y: number("dividersY", state.compartmentsY - 1, "count") };
+    const dividers = { x: state.compartmentsX - 1, y: state.compartmentsY - 1 };
+    // Custom positions are a fixed list with one entry per divider.
+    grid.dividers = state.dividerPositions ? dividers
+      : { x: number("dividersX", dividers.x, "count"), y: number("dividersY", dividers.y, "count") };
+    if (state.dividerPositions) grid.dividerPositions = state.dividerPositions;
   }
   if (state.magnets) grid.magnets = { diameter: number("magnetPocketDiameter", state.magnets.diameter), depth: number("magnetPocketDepth", state.magnets.depth) };
   const operations = [grid];
@@ -68,7 +72,7 @@ export function templatePlan(state) {
 export function partState(draft) {
   const numbers = fields => Object.fromEntries(Object.entries(fields).map(([key, text]) => [key, Number(text)]));
   return {
-    kind: draft.kind, openSides: draft.openSides, closeGaps: draft.closeGaps, magnets: draft.magnets, lip: draft.lip, ...numbers(draft.fields),
+    kind: draft.kind, openSides: draft.openSides, closeGaps: draft.closeGaps, magnets: draft.magnets, lip: draft.lip, dividerPositions: draft.dividerPositions, ...numbers(draft.fields),
     pockets: draft.pockets.map(pocket => ({ shape: pocket.shape, referenceBodyId: pocket.referenceBodyId, evidenceKind: pocket.evidenceKind, sourceUnits: pocket.sourceUnits,
       ...numbers(pocket.fields), merge: pocket.merge, product: pocket.product.trim(), url: pocket.url.trim() })),
   };
@@ -127,7 +131,11 @@ export function createPartPlanner({ notify = run => run() } = {}) {
     getState: () => state,
     subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
     setKind: act(kind => edit({ kind })),
-    setField: act((name, text) => edit({ fields: { ...state.draft.fields, [name]: text } })),
+    setField: act((name, text) => edit({
+      fields: { ...state.draft.fields, [name]: text },
+      ...(name.startsWith("compartments") && text !== state.draft.fields[name] ? { dividerPositions: undefined } : {}),
+    })),
+    setDividerPositions: act(dividerPositions => edit({ dividerPositions })),
     setLip: act(lip => edit({ lip })),
     setWalls: act((openSides, closeGaps) => edit({ openSides, closeGaps })),
     setCloseGaps: act(closeGaps => edit({ closeGaps })),

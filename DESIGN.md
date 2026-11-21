@@ -47,6 +47,9 @@ choosing a CAD mode closes the AI workspace.
   open sides visible beside the live CAD preview. A native upright baseplate can provide
   a placement grid in its own cell coordinates. Apply adds just the bin in one undoable edit.
   The editor's Gridfinity part dialog also supports inserts and baseplates.
+- Keep bin geometry options available in all three entry points: dimensions, stackable rim,
+  compartment counts and divider positions, open sides and flush joins, floor and wall
+  thickness, and magnet pockets. Each entry point uses its own placement controls.
 - Allow an empty bin arrangement to preview/apply matching baseplates and optional
   spacers. Label it Baseplates only, explain that bins are optional, and reject
   output with neither bins nor baseplates.

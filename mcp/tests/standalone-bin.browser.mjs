@@ -32,7 +32,22 @@ test("design a bin live and add it to an existing Gridfinity baseplate", async (
   await panel.getByRole("button", { name: /4 × 3/ }).click();
   await panel.getByLabel("Depth (cells)").fill("2");
   await panel.getByLabel("Compartments across width").fill("2");
-  await panel.getByRole("checkbox", { name: "Front", exact: true }).check();
+  const closeGaps = panel.getByRole("checkbox", { name: "Close gaps on open sides" });
+  await expect(closeGaps).toBeDisabled();
+  await panel.getByRole("button", { name: "Open front side", exact: true }).click();
+  await closeGaps.check();
+  await panel.getByRole("button", { name: "Open front side", exact: true }).click();
+  await expect(closeGaps).toBeDisabled();
+  await expect(closeGaps).not.toBeChecked();
+  await panel.getByRole("button", { name: "Open front side", exact: true }).click();
+  await closeGaps.check();
+  await panel.getByText("Construction & magnets", { exact: true }).click();
+  await panel.getByLabel("Wall thickness (mm)").fill("1.5");
+  await panel.getByLabel("Floor thickness (mm)").fill("2.5");
+  await panel.getByRole("checkbox", { name: "Magnet pockets", exact: true }).check();
+  await panel.getByText("Divider positions", { exact: true }).click();
+  await panel.getByLabel("Divider 1 from left (mm)").fill("29");
+  await panel.getByLabel("Divider 1 from left (mm)").press("Tab");
   await panel.getByLabel("Column from left").fill("4");
   await expect(panel.getByRole("status").filter({ hasText: "extends beyond the baseplate" })).toBeVisible();
   await expect(add).toBeDisabled();
@@ -50,7 +65,11 @@ test("design a bin live and add it to an existing Gridfinity baseplate", async (
   const [baseplate, bin] = await page.evaluate(() => window.__store.doc.bodies);
   expect(baseplate).toEqual(original);
   expect(bin.m.slice(12, 15)).toEqual([-1, 30, 3.25]);
-  expect(bin.mcpGridfinity).toMatchObject({ kind: "bin", columns: 2, rows: 2, dividers: { x: 1, y: 0 }, openSides: ["front"] });
+  expect(bin.mcpGridfinity).toMatchObject({
+    kind: "bin", columns: 2, rows: 2, dividers: { x: 1, y: 0 }, openSides: ["front"], closeGaps: true,
+    wall: 1.5, floor: 2.5, magnetPockets: { count: 16 },
+  });
+  expect(bin.mcpGridfinity.dividerPositions.x[0]).toBeCloseTo(29 / 80.5, 8);
   await page.locator("#ai-setup-close").click();
   await page.evaluate(() => window.__store.undo());
   expect(await page.evaluate(() => window.__store.doc.bodies)).toEqual([original]);

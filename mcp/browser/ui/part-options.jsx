@@ -2,6 +2,8 @@ import { useRef } from "react";
 import { numberValid } from "./field-text.js";
 import { POCKET_LIMITS, COMPARTMENT_LIMITS, pocketFieldUsed } from "./pocket-draft.js";
 import { NumberField } from "./controls.jsx";
+import { DividerPositionEditor } from "./divider-position-editor.jsx";
+import { PART_LIMITS, partState } from "./part-planner.js";
 
 // Options shared by the Gridfinity part dialog and the drawer's bin inspector. Each caller owns the texts and decides when an edit is committed.
 const SHAPES = [["roundedRect", "Rounded"], ["circle", "Circle"], ["capsule", "Capsule"]];
@@ -22,6 +24,13 @@ export function CompartmentFields({ id, texts, onText, onCommit, onEdit, invalid
       limits={COMPARTMENT_LIMITS} disabled={disabled} describedBy={describedBy} invalid={invalid(axis)}
       onText={text => onText(axis, text)} onEdit={text => onEdit?.(axis, text)} onCommit={onCommit && (text => onCommit(axis, text))} />)}
   </div>;
+}
+
+export function PartDividerPositions({ id, message, draft, disabled, onCommit }) {
+  if (!["columns", "rows", "wall", "compartmentsX", "compartmentsY"].every(key => numberValid(draft.fields[key], PART_LIMITS[key]))) return null;
+  const bin = partState(draft);
+  const dividers = { x: bin.compartmentsX - 1, y: bin.compartmentsY - 1 };
+  return <DividerPositionEditor id={id} message={message} bin={{ ...bin, dividers }} wall={bin.wall} disabled={disabled} onCommit={onCommit} />;
 }
 
 // `onPatch(patch, commit)` commits discrete choices at once; typed text commits through `onCommit` when the field changes.

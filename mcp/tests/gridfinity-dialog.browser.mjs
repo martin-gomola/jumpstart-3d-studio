@@ -32,7 +32,7 @@ test("Gridfinity dialog sizes a part, rejects invalid values and fits a narrow w
   await page.fill("#gp-columns", "6");
   await expect(page.getByRole("button", { name: "Increase part width", exact: true })).toBeDisabled();
   await page.fill("#gp-columns", "2");
-  await page.getByText("Construction & magnets", { exact: true }).click();
+  await dialog.getByText("Construction & magnets", { exact: true }).click();
   await page.fill("#gp-floor", "0");
   await expect(ok).toBeDisabled();
   await page.fill("#gp-floor", "2");
@@ -107,10 +107,15 @@ test("Gridfinity dialog bins keep open sides, flush joins and the stackable rim"
   await page.getByRole("button", { name: "Open right side", exact: true }).click();
   await close.check();
   await page.getByRole("button", { name: "Open back side", exact: true }).click();
+  const dialog = page.locator("#cmd");
+  await dialog.getByLabel("Compartments across width").fill("2");
+  const divider = dialog.getByLabel("Divider 1 from left (mm)");
+  await divider.fill("29"); await divider.press("Tab");
   const [bin] = await create(page);
   expect(bin.recipe).toMatchObject({ kind: "bin", openSides: ["right", "back"], closeGaps: true, lip: true });
   expect(bin.size.x).toBeCloseTo(2 * 42 - 0.25, 3);
   expect(bin.size.z).toBeCloseTo(25.4, 3);
+  expect(bin.recipe.dividerPositions.x[0]).toBeCloseTo(29 / 81.1, 8);
   expect(errors).toEqual([]);
 });
 
@@ -120,7 +125,7 @@ test("Gridfinity dialog magnetic baseplates validate magnet sizes and keep nativ
   await loadDoc(page, newDoc("magnets", "beginner"));
   await open(page);
   await page.locator('[data-template="baseplate"]').click();
-  await page.getByText("Construction & magnets", { exact: true }).click();
+  await page.locator("#cmd").getByText("Construction & magnets", { exact: true }).click();
   await page.locator("#gp-magnets").check();
   await page.fill("#gp-magnets-diameter", "0");
   await expect(page.locator("#cmd-ok")).toBeDisabled();

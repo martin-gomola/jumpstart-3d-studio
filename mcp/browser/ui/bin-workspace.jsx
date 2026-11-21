@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { BIN_SIDES } from "../../shared/gridfinity-walls.js";
 import { matrixForTransform } from "../plans/plan-geometry.js";
 import { numberValid } from "./field-text.js";
-import { NumberField, usePreviewView } from "./controls.jsx";
-import { CompartmentFields } from "./part-options.jsx";
+import { MagnetControls, NumberField, usePreviewView, WallControls } from "./controls.jsx";
+import { CompartmentFields, PartDividerPositions, ThicknessFields } from "./part-options.jsx";
 import { createPartPlanner, PART_LIMITS, partFit, partReady, partState, partSummary, templatePlan } from "./part-planner.js";
 
 function supportedBaseplates(document) {
@@ -46,7 +45,9 @@ function LiveBin({ preview, createPreviewView, camera, baseplateId }) {
 
 export function BinWorkspace({ active, hidden, printArea, request, subscribe, getDocument, getRevision, createPreviewView }) {
   const [planner] = useState(createPartPlanner);
-  const { draft } = useSyncExternalStore(planner.subscribe, planner.getState);
+  const state = useSyncExternalStore(planner.subscribe, planner.getState);
+  const [magnets, setMagnets] = useState({ valid: true, value: false });
+  const draft = { ...state.draft, magnets: magnets.value };
   const document = useSyncExternalStore(subscribe, getDocument);
   const baseplates = useMemo(() => active ? supportedBaseplates(document) : [], [active, document]);
   const [selection, setSelection] = useState(null);
@@ -56,9 +57,10 @@ export function BinWorkspace({ active, hidden, printArea, request, subscribe, ge
   const pending = useRef(null), camera = useRef({}), applyLock = useRef(false);
   const baseplateId = selection?.documentId === document.id ? selection.id : "";
   const baseplate = baseplates.find(entry => entry.id === baseplateId);
-  const fit = partFit(draft, true, printArea);
+  const fit = partFit(draft, magnets.valid, printArea);
   let formError = "", plan;
-  if (!partReady(draft)) formError = "Enter valid dimensions and compartment counts.";
+  if (!magnets.valid) formError = "Enter valid magnet pocket dimensions.";
+  else if (!partReady(draft)) formError = "Enter valid bin dimensions, thicknesses and compartment counts.";
   else if (baseplateId && !baseplate) formError = "That baseplate is unavailable. Choose another baseplate or No baseplate.";
   else {
     const bin = partState(draft);
@@ -163,18 +165,22 @@ export function BinWorkspace({ active, hidden, printArea, request, subscribe, ge
             disabled={applying} describedBy="standalone-bin-status"
             invalid={axis => !numberValid(draft.fields[`compartments${axis.toUpperCase()}`], PART_LIMITS.compartmentsX) || undefined}
             onText={(axis, text) => setField(`compartments${axis.toUpperCase()}`, text)} />
+          <details className="ai-template-group" hidden={![draft.fields.compartmentsX, draft.fields.compartmentsY].some(value => Number(value) > 1)}>
+            <summary>Divider positions</summary>
+            <PartDividerPositions id="standalone-bin-divider" message="standalone-bin-status" draft={draft}
+              disabled={applying} onCommit={value => { planner.setDividerPositions(value); setNotice(null); }} />
+          </details>
         </fieldset>
-        <fieldset><legend>Open sides</legend>
-          <div className="standalone-bin-sides">
-            {BIN_SIDES.map(side => <label key={side} className="ai-template-field">
-              <input type="checkbox" checked={draft.openSides.includes(side)} disabled={applying}
-                onChange={event => {
-                  planner.setWalls(event.target.checked ? [...draft.openSides, side] : draft.openSides.filter(value => value !== side), false);
-                  setNotice(null);
-                }} />{side[0].toUpperCase() + side.slice(1)}
-            </label>)}
-          </div>
-        </fieldset>
+        <WallControls id="standalone-bin-close-gaps" heading="Open sides" value={draft.openSides} closeGaps={draft.closeGaps} disabled={applying}
+          onChange={(sides, closeGaps) => { planner.setWalls(sides, closeGaps); setNotice(null); }}
+          onCloseGaps={value => { planner.setCloseGaps(value); setNotice(null); }} />
+        <details className="ai-template-group">
+          <summary>Construction &amp; magnets</summary>
+          <ThicknessFields id="standalone-bin" texts={draft.fields} disabled={applying} describedBy="standalone-bin-status" onText={setField}
+            invalid={name => !numberValid(draft.fields[name], PART_LIMITS[name]) || undefined} />
+          <MagnetControls id="standalone-bin-magnets" value={state.draft.magnets} disabled={applying}
+            onChange={planner.setMagnets} onValid={(valid, value) => { setMagnets({ valid, value }); setNotice(null); }} />
+        </details>
       </div>
       <div className="ai-template-submit">
         <p id="standalone-bin-status" className="ai-template-message" role="status" data-error={error ? "true" : undefined}>

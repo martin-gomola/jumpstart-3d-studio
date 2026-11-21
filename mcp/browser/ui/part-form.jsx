@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { numberValid } from "./field-text.js";
 import { PART_TEMPLATES, PART_LIMITS, MAX_POCKETS } from "./part-planner.js";
 import { Labelled, NumberField, MagnetControls, WallControls } from "./controls.jsx";
-import { PocketForm, CompartmentFields, ThicknessFields } from "./part-options.jsx";
+import { PocketForm, CompartmentFields, PartDividerPositions, ThicknessFields } from "./part-options.jsx";
 
 const ILLUSTRATIONS = { insert: "M5 9h30v24H5z M11 16h11v11H11z M29 18v7", bin: "M5 9h30v24H5z M5 15h30 M20 15v18", baseplate: "M5 7h30v28H5z M20 7v28 M5 21h30" };
 
@@ -67,6 +67,7 @@ export function PartForm({ planner, draft, summary, references, marks, onMagnets
         <CompartmentFields id={ids("compartments")} texts={{ x: draft.fields.compartmentsX, y: draft.fields.compartmentsY }} disabled={kind !== "bin"} describedBy={message}
           invalid={axis => marks.has(ids(`compartments-${axis}`))} onText={(axis, text) => planner.setField(`compartments${axis.toUpperCase()}`, text)}
           onEdit={(axis, text) => marks.edit(ids(`compartments-${axis}`), numberValid(text, PART_LIMITS.compartmentsX))} />
+        {kind === "bin" && <PartDividerPositions id={ids("divider")} message={message} draft={draft} onCommit={planner.setDividerPositions} />}
         <WallControls id={wallsId} heading="Open sides" value={draft.openSides} closeGaps={draft.closeGaps} disabled={kind !== "bin"}
           onChange={planner.setWalls} onCloseGaps={planner.setCloseGaps} />
       </details>
