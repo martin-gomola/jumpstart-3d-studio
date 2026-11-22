@@ -98,6 +98,9 @@ choosing a CAD mode closes the AI workspace.
   Design / 3D preview switch close to the canvas and document actions in the settings panel.
   Standalone preview puts bin details and optional baseplate placement beside the
   model so opening either section does not shrink the canvas.
+  Standalone Design shows the compartment plan beside the live 3D model. Keep
+  the last valid model visible during rebuilding, label it while out of date,
+  and highlight the scoop wall on the plan and the rendered geometry.
   Edit compartment layout opens the selected drawer bin on the canvas with the
   same drag handles, arrow keys and millimetre fields as Standalone bin.
 - Use the same width and depth steppers and body height presets for drawer bins

@@ -1,9 +1,27 @@
 import * as THREE from "three";
 import { el } from "../../src/util.js";
 
+// Classify in bin-local coordinates so the highlight follows a rotated baseplate.
+function markScoopWall(geometry, { fingerScoop, width, depth, wall }) {
+  const axis = fingerScoop === "left" || fingerScoop === "right" ? "getX" : "getY";
+  const sign = fingerScoop === "left" || fingerScoop === "front" ? -1 : 1;
+  const boundary = (axis === "getX" ? width : depth) / 2 - Math.max(wall, 2.6) - 0.4;
+  const position = geometry.getAttribute("position"), indices = geometry.getIndex().array;
+  const plain = [], highlighted = [];
+  const atWall = i => sign * position[axis](i) >= boundary && position.getZ(i) >= 4.74;
+  for (let i = 0; i < indices.length; i += 3) {
+    const a = indices[i], b = indices[i + 1], c = indices[i + 2];
+    (atWall(a) && atWall(b) && atWall(c) ? highlighted : plain).push(a, b, c);
+  }
+  geometry.setIndex(new THREE.BufferAttribute(new Uint32Array(plain.concat(highlighted)), 1));
+  if (plain.length) geometry.addGroup(0, plain.length, 0);
+  if (highlighted.length) geometry.addGroup(plain.length, highlighted.length, 1);
+}
+
 // Read-only view of cached preview meshes; never connects to the editor scene.
 export function previewViewer(meshes, cameraState = {}) {
-  const canvas = el("canvas", { tabindex: "0", role: "region", "aria-label": "Interactive 3D preview. Drag or use arrow keys to rotate. Scroll or use plus and minus to zoom. Press zero to reset." });
+  const controlsLabel = "Interactive 3D preview. Drag or use arrow keys to rotate. Scroll or use plus and minus to zoom. Press zero to reset.";
+  const canvas = el("canvas", { tabindex: "0", role: "region", "aria-label": controlsLabel });
   const frame = el("div", { class: "ai-preview-canvas" }, canvas);
   const reset = el("button", { type: "button" }, "Reset view");
   const top = el("button", { type: "button" }, "Top view");
@@ -15,23 +33,15 @@ export function previewViewer(meshes, cameraState = {}) {
   const scene = new THREE.Scene(), camera = new THREE.OrthographicCamera();
   camera.up.set(0, 0, 1);
   const material = new THREE.MeshStandardMaterial({ roughness: 1 });
+  const scoopMaterial = new THREE.MeshStandardMaterial({ roughness: 1 });
   const contextMaterial = new THREE.MeshStandardMaterial({ roughness: 1 });
   const edgeMaterial = new THREE.LineBasicMaterial({ transparent: true, opacity: 0.45 });
-  const resources = [];
+  const models = new THREE.Group();
+  scene.add(models);
   scene.add(new THREE.HemisphereLight(0xffffff, 0xffffff, 2));
   const light = new THREE.DirectionalLight(0xffffff, 2); light.position.set(1, -2, 4); scene.add(light);
-  for (const mesh of meshes) {
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(mesh.vertices), 3));
-    geometry.setIndex(new THREE.BufferAttribute(new Uint32Array(mesh.triangles), 1));
-    geometry.applyMatrix4(new THREE.Matrix4().fromArray(mesh.matrix));
-    geometry.computeVertexNormals();
-    const edges = new THREE.EdgesGeometry(geometry, 25);
-    resources.push(geometry, edges);
-    scene.add(new THREE.Mesh(geometry, mesh.context ? contextMaterial : material), new THREE.LineSegments(edges, edgeMaterial));
-  }
-  const box = new THREE.Box3().setFromObject(scene), center = box.getCenter(new THREE.Vector3());
-  const radius = Math.max(box.getBoundingSphere(new THREE.Sphere()).radius, 1);
+  const center = new THREE.Vector3();
+  let radius = 1;
   let { yaw = -Math.PI / 4, pitch = 0.65, zoom = 1 } = cameraState;
   let drag = null, disposed = false;
   const draw = () => {
@@ -48,6 +58,29 @@ export function previewViewer(meshes, cameraState = {}) {
     pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
     zoom = Math.max(0.15, Math.min(6, zoom));
     Object.assign(cameraState, { yaw, pitch, zoom });
+    draw();
+  };
+  const clearMeshes = () => {
+    models.children.forEach(object => object.geometry.dispose());
+    models.clear();
+  };
+  const setMeshes = next => {
+    clearMeshes();
+    for (const mesh of next) {
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(mesh.vertices), 3));
+      geometry.setIndex(new THREE.BufferAttribute(new Uint32Array(mesh.triangles), 1));
+      if (mesh.scoop) markScoopWall(geometry, mesh.scoop);
+      geometry.applyMatrix4(new THREE.Matrix4().fromArray(mesh.matrix));
+      geometry.computeVertexNormals();
+      const surface = mesh.context ? contextMaterial : mesh.scoop ? [material, scoopMaterial] : material;
+      models.add(new THREE.Mesh(geometry, surface), new THREE.LineSegments(new THREE.EdgesGeometry(geometry, 25), edgeMaterial));
+    }
+    const box = new THREE.Box3().setFromObject(models);
+    box.getCenter(center);
+    radius = Math.max(box.getBoundingSphere(new THREE.Sphere()).radius, 1);
+    const side = next.find(mesh => mesh.scoop)?.scoop.fingerScoop;
+    canvas.setAttribute("aria-label", side ? `${controlsLabel} Highlighted finger scoop wall: ${side}.` : controlsLabel);
     draw();
   };
   const home = () => { yaw = -Math.PI / 4; pitch = 0.65; zoom = 1; update(); };
@@ -80,15 +113,17 @@ export function previewViewer(meshes, cameraState = {}) {
   const recolor = () => {
     const theme = getComputedStyle(document.documentElement);
     material.color.set(theme.getPropertyValue("--hole").trim());
+    scoopMaterial.color.set(theme.getPropertyValue("--accent").trim());
     contextMaterial.color.set(theme.getPropertyValue("--ink-3").trim());
     edgeMaterial.color.set(theme.getPropertyValue("--ink-2").trim()); draw();
   };
   const resize = new ResizeObserver(draw), theme = new MutationObserver(recolor);
-  resize.observe(frame); theme.observe(document.documentElement, { attributes: true, attributeFilter: ["data-ui"] }); recolor();
-  return { element, dispose() {
+  resize.observe(frame); theme.observe(document.documentElement, { attributes: true, attributeFilter: ["data-ui"] });
+  setMeshes(meshes); recolor();
+  return { element, setMeshes, dispose() {
     if (disposed) return;
     disposed = true; resize.disconnect(); theme.disconnect();
-    resources.forEach(resource => resource.dispose()); material.dispose(); contextMaterial.dispose(); edgeMaterial.dispose();
+    clearMeshes(); material.dispose(); scoopMaterial.dispose(); contextMaterial.dispose(); edgeMaterial.dispose();
     renderer.dispose(); renderer.forceContextLoss(); element.remove();
   } };
 }

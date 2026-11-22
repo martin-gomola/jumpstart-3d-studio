@@ -878,14 +878,22 @@ export function initMcp(app) {
     return result;
   };
   const localRequest = (action, params) => enqueue({ action, params });
-  const createPreviewView = (previewId, baseplateId, cameraState) => {
+  const createPreviewView = (previewId, baseplateId, cameraState, existing) => {
     const preview = previews.get(previewId);
     if (!preview) throw new Error("Preview expired. Generate it again.");
-    const meshes = preview.compiled.affectedBodyIds.map(id => preview.geometries.get(id).mesh);
+    const meshes = preview.compiled.affectedBodyIds.map(id => {
+      const mesh = preview.geometries.get(id).mesh;
+      const bin = preview.compiled.document.bodies.find(body => body.id === id)?.mcpGridfinity;
+      return bin?.fingerScoop ? { ...mesh, scoop: bin } : mesh;
+    });
     if (baseplateId) {
       const [{ body, view, pending, error }] = readyBodies(app, [baseplateId]);
       if (error || pending) throw new Error(error || "The baseplate is still building.");
       meshes.push({ vertices: view.data.vertices, triangles: view.data.triangles, matrix: body.m, context: true });
+    }
+    if (existing) {
+      existing.setMeshes(meshes);
+      return existing;
     }
     return previewViewer(meshes, cameraState);
   };

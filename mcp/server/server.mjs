@@ -564,7 +564,7 @@ async function handleHttpRpc(req, res) {
     result = {
       protocolVersion: SUPPORTED_VERSIONS.includes(params.protocolVersion) ? params.protocolVersion : "2025-11-25",
       capabilities: { tools: {} },
-      serverInfo: { name: "jumpstart-3d", version: "0.1.0" },
+      serverInfo: { name: "jumpstart-3d", version: "0.1.1" },
       instructions: SERVER_INSTRUCTIONS,
     };
   } else if (method === "ping") {
@@ -928,7 +928,7 @@ async function handleMessage(message) {
         resultType: "complete",
         supportedVersions: SUPPORTED_VERSIONS,
         capabilities: { tools: {} },
-        _meta: { "io.modelcontextprotocol/serverInfo": { name: "jumpstart-3d", version: "0.1.0" } },
+        _meta: { "io.modelcontextprotocol/serverInfo": { name: "jumpstart-3d", version: "0.1.1" } },
         instructions: SERVER_INSTRUCTIONS,
         ttlMs: 300_000,
         cacheScope: "public",
@@ -938,7 +938,7 @@ async function handleMessage(message) {
       return response(requestId, {
         protocolVersion: SUPPORTED_VERSIONS.includes(params.protocolVersion) ? params.protocolVersion : "2025-11-25",
         capabilities: { tools: {} },
-        serverInfo: { name: "jumpstart-3d", version: "0.1.0" },
+        serverInfo: { name: "jumpstart-3d", version: "0.1.1" },
         instructions: SERVER_INSTRUCTIONS,
       });
     }

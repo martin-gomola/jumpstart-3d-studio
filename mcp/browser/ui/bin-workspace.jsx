@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { matrixForTransform } from "../plans/plan-geometry.js";
 import { binFootprint } from "../../shared/gridfinity-walls.js";
 import { numberValid } from "./field-text.js";
-import { MagnetControls, NumberField, usePreviewView, WallControls, WorkspaceViewSwitch } from "./controls.jsx";
+import { MagnetControls, NumberField, WallControls, WorkspaceViewSwitch } from "./controls.jsx";
 import { BinDimensions, CompartmentFields, FingerScoopControl, PartDividerPositions, ThicknessFields } from "./part-options.jsx";
 import { createPartPlanner, PART_LIMITS, partFit, partReady, partState, partSummary, templatePlan } from "./part-planner.js";
 
@@ -37,11 +37,25 @@ function binPlacement(baseplate, bin, column, row) {
 }
 
 function LiveBin({ preview, createPreviewView, camera, baseplateId }) {
-  const container = useRef(null);
-  const fallback = usePreviewView(container, preview.previewId, id => createPreviewView(id, baseplateId, camera));
-  return <div ref={container} className="ai-preview-content">
-    {fallback && <p className="ai-template-note">The interactive 3D view is unavailable.</p>}
-  </div>;
+  const container = useRef(null), viewer = useRef(null);
+  const [fallback, setFallback] = useState(false);
+  useLayoutEffect(() => {
+    try {
+      const view = createPreviewView(preview.previewId, baseplateId, camera, viewer.current);
+      if (!viewer.current) container.current.append(view.element);
+      viewer.current = view;
+      setFallback(false);
+    } catch {
+      viewer.current?.dispose();
+      viewer.current = null;
+      setFallback(true);
+    }
+  }, [preview.previewId, baseplateId, camera, createPreviewView]);
+  useLayoutEffect(() => () => { viewer.current?.dispose(); viewer.current = null; }, []);
+  return <>
+    <div ref={container} className="ai-preview-content" />
+    {fallback && <p className="ai-template-note" role="status">The interactive 3D view is unavailable.</p>}
+  </>;
 }
 
 export function BinWorkspace({ active, hidden, printArea, request, subscribe, getDocument, getRevision, createPreviewView }) {
@@ -55,6 +69,7 @@ export function BinWorkspace({ active, hidden, printArea, request, subscribe, ge
   const [view, setView] = useState("design");
   const [cell, setCell] = useState({ column: "1", row: "1" });
   const [result, setResult] = useState(null), [retry, setRetry] = useState(0);
+  const [lastValid, setLastValid] = useState(null);
   const [applying, setApplying] = useState(false), [notice, setNotice] = useState(null);
   const pending = useRef(null), camera = useRef({}), applyLock = useRef(false);
   const baseplateId = selection?.documentId === document.id ? selection.id : "";
@@ -74,6 +89,7 @@ export function BinWorkspace({ active, hidden, printArea, request, subscribe, ge
   const planText = plan ? JSON.stringify(plan) : "";
   const current = result?.document === document && result.planText === planText && result.baseplateId === baseplateId && result.retry === retry;
   const building = !!planText && !current;
+  const shown = lastValid?.document === document ? lastValid : null;
   const error = formError || (current && result.error) || fit.error || "";
 
   useEffect(() => {
@@ -92,7 +108,11 @@ export function BinWorkspace({ active, hidden, printArea, request, subscribe, ge
           if (!inspection.meshValidation?.valid || inspection.meshValidation.disconnectedComponents !== 1) {
             throw new Error("The bin did not form one valid connected part.");
           }
-          if (!cancelled) setResult({ ...context, preview });
+          if (!cancelled) {
+            const next = { ...context, preview };
+            setResult(next);
+            setLastValid(next);
+          }
         } catch (error) { if (!cancelled) setResult({ ...context, error: error.message }); }
       };
       pending.current = run();
@@ -125,7 +145,7 @@ export function BinWorkspace({ active, hidden, printArea, request, subscribe, ge
   const location = (key, label, max) => <NumberField id={`standalone-bin-${key}`} label={label} text={cell[key]} limits={{ min: 1, max, step: 1 }}
     describedBy="standalone-bin-status" disabled={applying} onText={text => { setCell(old => ({ ...old, [key]: text })); setNotice(null); }} />;
 
-  const status = applying ? "Adding bin…" : error || (notice?.document === document ? notice.text : fit.rotated ? "Turn the bin 90° on the print bed to fit." : view === "design" && building ? "Updating 3D preview…" : "");
+  const status = applying ? "Adding bin…" : error || (notice?.document === document ? notice.text : fit.rotated ? "Turn the bin 90° on the print bed to fit." : "");
   const baseplateChoice = <details className="ai-template-group">
     <summary>{baseplate ? `Baseplate: ${baseplate.name}` : "Use an existing baseplate"}</summary>
     {baseplates.length ? <>
@@ -179,16 +199,20 @@ export function BinWorkspace({ active, hidden, printArea, request, subscribe, ge
       <section className="ai-template-review standalone-bin-stage gridfinity-compartment-stage" aria-label={view === "design" ? "Compartment design" : "3D bin preview"}>
         <div className="drawer-view-toolbar">
           <WorkspaceViewSwitch label="Bin view" value={view} onChange={setView} previewDisabled={!current || !result?.preview || !!error || applying} />
-          {view === "design" && <h3>Compartment layout</h3>}
         </div>
-        <div hidden={view !== "design"}>{dividerEditor}</div>
-        <div className="ai-template-preview" hidden={view !== "preview"}>
-          {active && view === "preview" && result?.preview && result.document === document && <LiveBin key={result.preview.previewId} preview={result.preview} createPreviewView={createPreviewView}
-            camera={camera.current} baseplateId={result.baseplateId} />}
+        <div className="standalone-bin-views">
+          <div className="standalone-bin-plan" hidden={view !== "design"}>
+            <h3>Compartment layout</h3>
+            {dividerEditor}
+          </div>
+          <div className="ai-template-preview standalone-bin-live" aria-label="Live bin model">
+            {active && shown && <LiveBin preview={shown.preview} createPreviewView={createPreviewView}
+              camera={camera.current} baseplateId={shown.baseplateId} />}
+            {(building || shown && (!current || shown !== result)) && <p className="ai-template-note" role="status">
+              {building ? "Updating 3D model…" : "Showing the last valid model."}
+            </p>}
+          </div>
         </div>
-        {view === "preview" && (building || !current && result?.preview && result.document === document) && <p className="ai-template-note" role="status">
-          {building ? "Updating 3D preview…" : "Showing the last valid preview."}
-        </p>}
       </section>
       <section className="ai-template-settings" aria-label={view === "design" ? "Bin design settings" : "Bin review"}>
         {settings}

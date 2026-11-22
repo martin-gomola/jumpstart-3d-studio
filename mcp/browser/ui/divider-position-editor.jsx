@@ -18,6 +18,12 @@ export function DividerPositionEditor({ id, message, bin, wall, disabled, onComm
   const spans = { x: axisSpan(bin, wall, "x"), y: axisSpan(bin, wall, "y") };
   const viewHeight = 1000 * bin.rows / bin.columns;
   const svgInner = { startX: 80, sizeX: 840, endX: 920, startY: viewHeight * 0.08, sizeY: viewHeight * 0.84, endY: viewHeight * 0.92, midX: 500, midY: viewHeight / 2 };
+  const scoopEdge = {
+    front: [94, viewHeight * 0.93, 906, viewHeight * 0.93],
+    back: [94, viewHeight * 0.07, 906, viewHeight * 0.07],
+    left: [70, viewHeight * 0.07 + 24, 70, viewHeight * 0.93 - 24],
+    right: [930, viewHeight * 0.07 + 24, 930, viewHeight * 0.93 - 24],
+  }[bin.fingerScoop];
   const key = JSON.stringify([bin.id, bin.dividers, bin.dividerPositions, spans]);
   const [texts, setTexts] = useState(() => dividerTexts(positions, spans));
   const [touched, setTouched] = useState({}), [dragPreview, setDragPreview] = useState(null);
@@ -84,7 +90,7 @@ export function DividerPositionEditor({ id, message, bin, wall, disabled, onComm
     flushSync(() => onCommit(next));
   };
   const xCount = positions.x.length, yCount = positions.y.length;
-  if (!xCount && !yCount && !showEmptyPlan) return <p className="ai-template-note">Set either compartment count above 1 to add a divider. New dividers start evenly spaced.</p>;
+  if (!xCount && !yCount && !showEmptyPlan && !scoopEdge) return <p className="ai-template-note">Set either compartment count above 1 to add a divider. New dividers start evenly spaced.</p>;
   const line = (axis, index) => {
     const values = visible[axis], position = values[index], bounds = dividerBounds(values, index, spans[axis], wall);
     const label = `${axis === "x" ? "Across width" : "Along depth"} divider ${index + 1}`;
@@ -100,9 +106,10 @@ export function DividerPositionEditor({ id, message, bin, wall, disabled, onComm
   };
   return <div className="drawer-divider-editor">
     <svg ref={svgRef} className="drawer-divider-diagram" viewBox={`0 0 1000 ${viewHeight}`} preserveAspectRatio="none" role="group"
-      aria-label={`${bin.label || "Bin"} compartments from above. Front of bin is at the bottom.`} style={{ aspectRatio: `${bin.columns} / ${bin.rows}` }}
+      aria-label={`${bin.label || "Bin"} compartments from above. Front of bin is at the bottom.${scoopEdge ? ` Finger scoop wall: ${bin.fingerScoop}.` : ""}`} style={{ aspectRatio: `${bin.columns} / ${bin.rows}` }}
       onPointerMove={move} onPointerUp={finishDrag} onPointerCancel={cancelDrag}>
       <rect className="drawer-divider-outline" x="70" y={viewHeight * 0.07} width="860" height={viewHeight * 0.86} rx="24" />
+      {scoopEdge && <line className="drawer-scoop-edge" x1={scoopEdge[0]} y1={scoopEdge[1]} x2={scoopEdge[2]} y2={scoopEdge[3]} />}
       {positions.x.map((_, index) => line("x", index))}
       {positions.y.map((_, index) => line("y", index))}
     </svg>

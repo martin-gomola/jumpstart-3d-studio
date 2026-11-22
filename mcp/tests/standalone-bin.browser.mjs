@@ -26,6 +26,10 @@ test("design a bin live and add it to an existing Gridfinity baseplate", async (
   await expect(panel.getByRole("group", { name: "Compartments", exact: true })).toBeVisible();
   await expect(panel.getByRole("group", { name: "Open sides" })).toBeVisible();
   await expect(panel.locator(".drawer-divider-diagram")).toBeVisible();
+  const canvas = panel.locator("canvas");
+  await expect(canvas).toBeVisible({ timeout: 30_000 });
+  const liveCanvas = await canvas.elementHandle();
+  await expect(add).toBeHidden();
   await panel.getByRole("button", { name: "Decrease depth", exact: true }).click();
   const depth = panel.locator(".gridfinity-footprint .drawer-stepper").filter({ hasText: "Depth" });
   await expect(depth).toContainText("2 cells");
@@ -65,6 +69,11 @@ test("design a bin live and add it to an existing Gridfinity baseplate", async (
   await expect(scoopWall.getByRole("button", { name: "Back", exact: true })).toBeDisabled();
   await scoopWall.getByRole("button", { name: "Right", exact: true }).click();
   await expect(levels.getByRole("button", { name: "2 Steep", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(panel.locator(".drawer-divider-diagram")).toHaveAttribute("aria-label", /Finger scoop wall: right/);
+  await expect(panel.locator(".drawer-scoop-edge")).toHaveAttribute("x1", "930");
+  await expect(canvas).toHaveAttribute("aria-label", /Highlighted finger scoop wall: right/, { timeout: 30_000 });
+  expect(await liveCanvas.evaluate(el => el.isConnected)).toBe(true);
+  await page.screenshot({ path: info.outputPath("live-bin-design.png") });
   await closeGaps.check();
   await panel.getByText("Construction & magnets", { exact: true }).click();
   await panel.getByLabel("Wall thickness (mm)").fill("1.5");
