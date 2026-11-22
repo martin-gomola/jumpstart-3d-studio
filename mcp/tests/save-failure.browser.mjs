@@ -1,10 +1,13 @@
 import { test, expect } from "@playwright/test";
 
 test("a failed local design write does not claim a saved version and can recover on the next save", async ({ page }) => {
-  await page.setViewportSize({ width: 1800, height: 900 });
+  const viewportWidth = 1761; // First pixel where the save status is visible.
+  await page.setViewportSize({ width: viewportWidth, height: 900 });
   await page.goto("/");
   await page.waitForFunction(() => window.__app?.kernel?.ready, null, { timeout: 90_000 });
   await page.waitForSelector("#loading", { state: "hidden", timeout: 20_000 });
+  // Exercise a wider fallback on hosts that have condensed system fonts.
+  await page.addStyleTag({ content: ":root { --f-label: system-ui; }" });
   const state = await page.evaluate(() => {
     const docId = window.__store.doc.id;
     const key = `workplane.doc.v1.${docId}`;
@@ -24,7 +27,7 @@ test("a failed local design write does not claim a saved version and can recover
   await expect(page.locator("#savestate")).toHaveAttribute("title", /Export a project file/);
   const after = await exportButton.boundingBox();
   expect(Math.abs(after.x - before.x)).toBeLessThan(1);
-  expect(after.x + after.width).toBeLessThanOrEqual(1800);
+  expect(after.x + after.width).toBeLessThanOrEqual(viewportWidth);
   await exportButton.click();
   await expect(page.locator("#menu-export")).toBeVisible();
   await exportButton.click();
