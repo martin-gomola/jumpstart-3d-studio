@@ -14,7 +14,7 @@ import { iconLabel } from "./pictograms.js";
 const MODES = [["drawer", "Drawer layout", "grid"], ["bin", "Standalone bin", "box"], ["settings", "Printer & settings", "gear"]];
 const HEADINGS = {
   drawer: ["Organize your drawer", "Measure the inside, arrange your bins, then review your printable parts."],
-  bin: ["Design a bin", "Set its size and compartments, then review the 3D model."],
+  bin: ["Design a bin", "Set its size and compartments, then add the bin to your document."],
   settings: ["Set up your printer", "Check that each part fits your build area. These defaults are remembered in this browser."],
 };
 const PRINTER_FIELDS = [["width", "Print width (mm)", 1, 2000], ["depth", "Print depth (mm)", 1, 2000], ["height", "Print height (mm)", 1, 2000], ["edgeMargin", "Reserve per bed edge (mm)", 0, 20]];

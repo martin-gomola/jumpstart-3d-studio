@@ -162,13 +162,13 @@ export function DimensionGuide({ title, note, width, depth, height, edgeMargin =
     [between(printerA, printerB, ratio), between(printerE, printerC, ratio)],
     [between(printerA, printerE, ratio), between(printerB, printerC, ratio)],
   ]) : [];
-  const widthText = supplied ? `${format(width)} mm wide` : drawer ? "Inside width" : "Width";
-  const depthText = supplied ? `${format(depth)} mm deep` : drawer ? "Inside depth" : "Depth";
-  const heightText = supplied ? `${format(height)} mm tall` : drawer ? "Usable height" : "Height";
+  const widthText = supplied || drawer && width > 0 ? `${format(width)} mm wide` : drawer ? "Inside width" : "Width";
+  const depthText = supplied || drawer && depth > 0 ? `${format(depth)} mm deep` : drawer ? "Inside depth" : "Depth";
+  const heightText = supplied || drawer && height > 0 ? `${format(height)} mm tall` : drawer ? "Usable height" : "Height";
   const grid = kind === "baseplate" && columns > 0 && rows > 0;
   return <section className="ai-dimension-guide" aria-label={title} hidden={hidden}>
     <h3>{title}</h3>
-    <svg viewBox="0 0 520 340" role="img" aria-label={`${title}: ${printer ? "open printer frame and build plate, " : ""}${widthText}, ${depthText}, ${heightText}`}>
+    <svg viewBox={drawer ? "80 30 360 310" : "0 0 520 340"} role="img" aria-label={`${title}: ${printer ? "open printer frame and build plate, " : ""}${widthText}, ${depthText}, ${heightText}`}>
       {printer && <g className="ai-printer-frame" fill="none" aria-hidden="true">
         {[printerA, printerB, printerE].map((point, index) => <line key={`post${index}`} x1={point[0]} y1={point[1]} x2={up(point)[0]} y2={up(point)[1]} className="ai-guide-grid" />)}
         <polygon points={points(printerTop)} className="ai-guide-grid" />
@@ -193,6 +193,11 @@ export function DimensionGuide({ title, note, width, depth, height, edgeMargin =
       {printer && <g className="ai-printer-head" aria-hidden="true">
         <rect x={printerCenter[0] - 13} y={printerMidLeft[1] - 1} width="26" height="20" rx="2" fill="var(--panel)" stroke="currentColor" strokeWidth="2" />
         <path d={`M${printerCenter[0] - 4} ${printerMidLeft[1] + 19}h8l-4 8z`} fill="var(--accent-soft)" stroke="currentColor" strokeWidth="1.5" />
+      </g>}
+      {drawer && <g className="drawer-dimension-lines" aria-hidden="true">
+        <path data-measure="width" d={`M ${center[0] - w * .38} ${center[1] - w * .19} l ${w * .76} ${w * .38}`} />
+        <path data-measure="depth" d={`M ${center[0] + d * .38} ${center[1] - d * .19} l ${-d * .76} ${d * .38}`} />
+        <path data-measure="height" d={`M ${b[0] + 12} ${b[1]} v ${h}`} />
       </g>}
       <g className="ai-guide-labels">
         <text x="150" y="290" textAnchor="middle">{widthText}</text>

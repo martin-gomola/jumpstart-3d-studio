@@ -11,10 +11,10 @@ test("wider controls and labeled pictograms remain aligned and operable across w
   await page.waitForSelector("#loading", { state: "hidden" });
   await page.click("#ai-status");
   const sidebar = page.locator(".ai-drawer-mode .ai-template-settings");
-  expect((await sidebar.boundingBox()).width).toBe(448);
   for (const [id, amount] of [["width", "695"], ["depth", "230"], ["height", "60"]]) {
     await page.fill(`#drawer-${id}`, amount); await page.locator(`#drawer-${id}`).press("Tab");
   }
+  expect((await sidebar.boundingBox()).width).toBe(448);
   for (const [view, name] of [["drawer", "Drawer layout"], ["settings", "Printer & settings"]]) {
     const button = page.locator(`[data-workspace-view="${view}"]:visible`);
     await expect(button).toHaveAccessibleName(name);

@@ -3,8 +3,8 @@
 The desktop AI workspace separates client connection setup from feature generators.
 Gridfinity serves makers arranging useful storage in a measured drawer or creating
 individual bins, baseplates and inserts. Drawer and standalone-bin creation share
-the same Design / 3D preview workbench. Design uses a task-specific 2D canvas: the
-drawer grid for placement, or the bin plan for compartment editing. The inspector
+a workbench layout. The drawer grid handles placement and the standalone bin
+plan handles compartment editing beside the live 3D model. The inspector
 keeps the same labels and order for shared bin settings. A current, inspected 3D
 preview precedes the explicit action that adds the result to the document.
 
@@ -18,7 +18,8 @@ let field groups respond to their container width instead of the window alone.
 Create and AI connection share this full width. Create opens by default; no AI
 connection is required to use the generators. On wide desktop, keep the workspace
 title, tabs, current generator title, workflow switch and Back to editor action on
-one compact header row at 90 rem and wider. Hide generator context on the AI connection tab without
+one compact header row at 90 rem and wider, matching the editor toolbar height.
+Hide generator context on the AI connection tab without
 changing the header height. At narrower widths, keep generator context in its own
 content row and retain the explanatory lead. Switching tabs must not resize or
 shift the panel.
@@ -46,10 +47,9 @@ choosing a CAD mode closes the AI workspace.
   secondary action. Future unrelated generators
   belong beside Gridfinity, not inside its drawer or part controls.
 - Keep Drawer layout, Standalone bin, and Printer & settings as the three Gridfinity
-  tasks. Drawer and bin creation share a Design / 3D preview switch, consistent
-  inspector grouping, status feedback, and reversible navigation. The design canvas
-  is a drawer placement grid or a bin's top-down compartment plan. Printer settings
-  remain a setup task without a design/preview switch.
+  tasks. Drawer layout switches between the placement grid and 3D preview.
+  Standalone bin keeps editing, preview and addition in one view. Both share
+  inspector grouping and status feedback. Printer settings remain a setup task.
 - Keep bin dimensions, compartment counts and positions, open sides, stacking rim,
   wall/floor thickness and magnets in the same order and use the same field labels
   wherever a bin is edited. A native upright baseplate can provide a placement grid
@@ -95,10 +95,9 @@ choosing a CAD mode closes the AI workspace.
   and do not reset inspector scrolling during field edits.
 - Both creation tasks show a narrow settings panel beside the work area. On wide
   screens the panel is on the left. On narrow screens it follows the canvas. Keep the
-  Design / 3D preview switch close to the canvas and document actions in the settings panel.
-  Standalone preview puts bin details and optional baseplate placement beside the
-  model so opening either section does not shrink the canvas.
-  Standalone Design shows the compartment plan beside the live 3D model. Keep
+  drawer's Design / 3D preview switch close to the canvas and document actions
+  in the settings panel. Standalone bin puts optional baseplate placement in
+  settings and keeps Add bin to document in the action footer. Keep
   the last valid model visible during rebuilding, label it while out of date,
   and highlight the scoop wall on the plan and the rendered geometry.
   Edit compartment layout opens the selected drawer bin on the canvas with the
@@ -135,9 +134,10 @@ remain text controls, rather than accumulating decorative icons.
 
 ## Beginner controls and review
 
-- Use a task heading and a Measure / Arrange / Review indicator for drawer work.
-  Keep Add bin and Fill gaps beside the canvas. Show an inside-measurement sketch
-  and an explicitly chosen sample drawer before dimensions are entered.
+- Start drawer setup with one measurement panel and a diagram beside it.
+  Focusing a measurement highlights its dimension. Offer the sample beside
+  the fields. Open the placement grid once the measurements are valid.
+  Fit the grid to the available canvas and keep Add bin and Fill gaps nearby.
 - Keep the control column's action footer outside its scrolling content. Selecting
   a bin reveals its settings without moving the canvas; keyboard focus must remain
   visible as the inspector scrolls.

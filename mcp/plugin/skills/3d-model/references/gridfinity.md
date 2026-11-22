@@ -55,12 +55,13 @@ fractions across the clear inside width/depth from the left/front inside wall;
 omit them for equal spacing. Keep every clear compartment at least 2 mm wide.
 Check current capability limits before requesting a large layout.
 The nominal top height and any additional stacking lip are separate dimensions.
-With a stacking lip, the generator lowers the dividers and scoop below the
-receiving profile where cavity depth allows. Dividers have rounded joints at
+With a stacking lip, the generator keeps the dividers below the upper bin's
+feet and the scoop below the receiving profile. Dividers have rounded joints at
 closed outer walls. Check a stack with deliberately uneven divider positions
 using a native pair overlap measurement at the intended seating height.
 Set `fingerScoop` to the closed wall that receives the full-width ramp. The
-default slope is 1; set `fingerScoopSlope: 2` for the steeper profile. Omit both
+default slope is 1 for a shallow ramp; set `fingerScoopSlope: 2` for a taller,
+longer ramp within the available space. Omit both
 fields to disable the scoop.
 Plain baseplates are 5 mm tall; bin/insert width and depth are 42 times the cell count
 minus 0.5 mm, while a baseplate spans the full cell grid. The initial generator

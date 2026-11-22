@@ -87,7 +87,7 @@ test("drawer-first planning calculates fit, draws and moves bins, rejects overla
   await tool("jumpstart_apply_model", { editorId, previewId: reference.previewId });
   const original = await tool("jumpstart_get_document", { editorId });
   await expect(page.locator(".drawer-empty")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Preview layout", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Preview layout", exact: true })).toHaveCount(0);
   await dimensions(page);
   await expect(page.locator("#drawer-fit")).toContainText("6 × 4 grid");
   await expect(page.locator("#drawer-fit")).toContainText("4.0 mm per side");
@@ -117,6 +117,7 @@ test("drawer-first planning calculates fit, draws and moves bins, rejects overla
   await page.locator(".drawer-measurements summary").click();
   await page.fill("#drawer-height", "10"); await page.locator("#drawer-height").press("Tab");
   await expect(page.locator("#drawer-message")).toContainText("usable height");
+  await expect(page.locator("#drawer-board")).toBeVisible();
   await expect(page.getByRole("button", { name: "Preview layout", exact: true })).toBeDisabled();
   await page.fill("#drawer-height", "50"); await page.locator("#drawer-height").press("Tab");
   await expect(page.locator(".drawer-bin")).toHaveCount(2);
@@ -224,7 +225,7 @@ test("New drawer clears draft and preview in one action, supports undo and leave
   for (const axis of ["width", "depth", "height"]) await expect(page.locator(`#drawer-${axis}`)).toHaveValue("");
   await expect(page.locator(".drawer-bin")).toHaveCount(0);
   await expect(page.locator(".drawer-3d canvas")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Preview layout", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Preview layout", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Undo layout", exact: true }).click();
   await expect(page.locator(".drawer-bin")).toHaveCount(binCount);
   await expect(page.locator("#drawer-width")).toHaveValue("140");
@@ -325,6 +326,8 @@ test("Gridfinity Settings persist bin limits and enable a measured 4x5 bin witho
 test("drawer disclosures use pointer cursors and keyboard toggles; reduced motion disables press scaling", async ({ page }, info) => {
   await openPlanner(page);
   const summary = page.locator(".drawer-measurements > summary");
+  await expect(summary).toBeHidden();
+  await dimensions(page, 168, 168, 40);
   expect(await summary.evaluate(el => getComputedStyle(el).cursor)).toBe("pointer");
   expect(await summary.evaluate(el => getComputedStyle(el).listStyleType)).toBe("none");
   await summary.focus(); await page.keyboard.press("Enter");
@@ -333,7 +336,7 @@ test("drawer disclosures use pointer cursors and keyboard toggles; reduced motio
   expect(await summary.evaluate(el => el.parentElement.open)).toBe(true);
   expect(await summary.evaluate(el => getComputedStyle(el).outlineStyle)).toBe("solid");
   await page.emulateMedia({ reducedMotion: "no-preference" });
-  const button = page.getByRole("button", { name: "New drawer", exact: true });
+  const button = page.getByRole("button", { name: "Add bin", exact: true });
   await button.hover(); await page.mouse.down();
   await expect.poll(() => button.evaluate(el => getComputedStyle(el).scale)).toBe("0.96");
   await page.mouse.up();
@@ -537,7 +540,7 @@ test("printer settings size baseplate tiles for the selected nozzle and preserve
   await page.getByRole("button", { name: /^Main nozzle ·/ }).click();
   await expect(page.locator("#ai-template-print-width")).toHaveValue("256");
   await expect(page.locator("#ai-template-print-height")).toHaveValue("260");
-  const guide = page.locator(".ai-dimension-guide svg");
+  const guide = page.getByRole("form", { name: "Gridfinity settings" }).getByRole("img", { name: /Your printer’s build area/ });
   await expect(guide).toHaveAttribute("aria-label", /open printer frame and build plate, 256 mm wide, 256 mm deep, 260 mm tall/);
   await expect(guide.locator(".ai-printer-frame line")).toHaveCount(4);
   await expect(guide.locator(".ai-printer-build-plate polygon:not([stroke-dasharray])")).toHaveCount(3);

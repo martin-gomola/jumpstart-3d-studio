@@ -10,7 +10,7 @@ import { PART_LIMITS } from "./part-planner.js";
 import { normalizePrintArea } from "../../shared/print-area.js";
 import { drawerStatus } from "./drawer-planner.js";
 import { numberValid } from "./field-text.js";
-import { Labelled, NumberField, TextField, MagnetControls, WallControls, WorkspaceViewSwitch, usePreviewView } from "./controls.jsx";
+import { DimensionGuide, Labelled, NumberField, TextField, MagnetControls, WallControls, WorkspaceViewSwitch, usePreviewView } from "./controls.jsx";
 import { BinDimensions, FingerScoopControl, PocketForm, CompartmentFields, ThicknessFields, THICKNESS_LIMITS } from "./part-options.jsx";
 import { COMPARTMENT_LIMITS, MAX_POCKETS, newPocketDraft, nextPocketIndex, pocketDraftValid, pocketFromDraft, draftFromPocket, referencePatch } from "./pocket-draft.js";
 
@@ -26,6 +26,8 @@ export function DrawerPlanner({ planner, hidden, createPreviewView, references =
   const state = useSyncExternalStore(planner.subscribe, planner.getState);
   const { draft, busy, selectedId, view, preview } = state;
   const status = drawerStatus(draft), { ready, error } = status, metrics = status.metrics;
+  const hasGrid = ready || draft.bins.length > 0 && metrics.columns > 0 && metrics.rows > 0;
+  const measuring = !hasGrid && view === "layout";
   const bin = draft.bins.find(entry => entry.id === selectedId);
   const [compartmentBinId, setCompartmentBinId] = useState(null);
   const editingCompartments = ready && view === "layout" && bin?.kind === "bin" && bin.id === compartmentBinId;
@@ -33,7 +35,7 @@ export function DrawerPlanner({ planner, hidden, createPreviewView, references =
   const [baseMagnetsValid, setBaseMagnetsValid] = useState(true);
   const [gesture, setGesture] = useState(null), [ghost, setGhost] = useState(null);
   const rootRef = useRef(null), settingsRef = useRef(null), layoutRef = useRef(null), boardRef = useRef(null), widthRef = useRef(null), undoRef = useRef(null), redoRef = useRef(null);
-  const previewButtonRef = useRef(null), measurePreviewRef = useRef(null), addBinRef = useRef(null), reviewTitleRef = useRef(null);
+  const previewButtonRef = useRef(null), addBinRef = useRef(null), reviewTitleRef = useRef(null);
   const compartmentButtonRef = useRef(null), compartmentTitleRef = useRef(null);
 
   function showCompartments(open) {
@@ -78,7 +80,9 @@ export function DrawerPlanner({ planner, hidden, createPreviewView, references =
 
   const measureSummary = ready ? `${draft.name} · ${draft.width} × ${draft.depth} × ${draft.height} mm` : "Drawer measurements";
   const swapDisabled = busy || !!gesture || ![draft.width, draft.depth].every(value => Number.isFinite(value) && value >= 42 && value <= 881.99);
-  const measureDetails = <details key="measure" className="drawer-measurements" open={state.measureOpen} onToggle={event => { if (event.currentTarget.open !== planner.getState().measureOpen) planner.setMeasureOpen(event.currentTarget.open); }}>
+  const measureDetails = <details key="measure" className="drawer-measurements" open={measuring || state.measureOpen} onToggle={event => {
+    if (!measuring && event.currentTarget.open !== planner.getState().measureOpen) planner.setMeasureOpen(event.currentTarget.open);
+  }}>
     <summary className="ai-with-pictogram"><Labelled icon="dim">{measureSummary}</Labelled></summary>
     <div className="drawer-measure-fields">
       <div className="ai-template-fields">
@@ -134,14 +138,12 @@ export function DrawerPlanner({ planner, hidden, createPreviewView, references =
   const message = <p key="message" id="drawer-message" className="ai-template-message" role="status" aria-live="polite" data-error={state.message.error ? "true" : undefined}>{state.message.text}</p>;
 
   const previewDisabled = busy || !!error || !baseMagnetsValid || !!draft.cornerSpacers && !spacersValid || state.editing;
-  const step = view === "preview" ? 2 : ready ? 1 : 0;
   const previewAction = ref => <button ref={ref} type="button" className={`${!state.cached && !state.continueVisible ? "ai-template-primary " : ""}ai-with-pictogram`} disabled={previewDisabled} title={error || ""} onClick={planner.preview}>
     <Labelled icon="eye">{busy ? "Building preview…" : "Preview layout"}</Labelled>
   </button>;
   const measurements = <section key="measure-card" className="drawer-measure-card">
     {measureDetails}
-    {!ready && fit}
-    <div className="drawer-measure-submit" hidden={ready}>{previewAction(measurePreviewRef)}</div>
+    {measuring && <button type="button" className="drawer-example" onClick={planner.example}>Try a 336 × 252 mm example</button>}
   </section>;
   const outerFit = ready ? fit : null;
   const sections = bin ? [measurements, inspector, saved, outerFit, spacerGroup, construction, message] : [saved, measurements, outerFit, spacerGroup, inspector, construction, message];
@@ -196,32 +198,33 @@ export function DrawerPlanner({ planner, hidden, createPreviewView, references =
     <div className="ai-template-settings">
       <div ref={settingsRef} className="ai-controls drawer-settings">
         <div className="drawer-view-toolbar">
-          <h3>Your drawer</h3>
-          <button type="button" className="ai-with-pictogram" disabled={busy} title="Clear the draft and enter new drawer measurements. Undo layout restores the previous draft."
+          <h3>{measuring ? "Measure your drawer" : "Your drawer"}</h3>
+          <button type="button" className="ai-with-pictogram" hidden={measuring && !draft.width && !draft.depth && !draft.height}
+            disabled={busy} title="Clear the draft and enter new drawer measurements. Undo layout restores the previous draft."
             onClick={() => { setGesture(null); setGhost(null); setCompartmentBinId(null); if (flushSync(() => planner.newDrawer())) widthRef.current.focus(); }}>
             <Labelled icon="plus">New drawer</Labelled>
           </button>
         </div>
         {sections}
       </div>
-      <div className="ai-template-submit" hidden={!ready && view !== "preview"}>
-        {ready && previewAction(previewButtonRef)}
+      <div className="ai-template-submit" hidden={!hasGrid && view !== "preview"}>
+        {hasGrid && previewAction(previewButtonRef)}
         {view === "preview" && preview && <div className="ai-preview-footer">
           {preview.rotated > 0 && <p className="ai-template-note">{`${preview.rotated} part(s) need a 90° turn on the print bed. Drawer assembly positions are unchanged.`}</p>}
           <p className="ai-template-note">{`${preview.parts} editable parts. Printed fit remains unverified.`}</p>
           <div className="ai-template-actions">
             <button type="button" className="ai-template-primary" disabled={busy || !state.cached} onClick={planner.apply}>{preview.replaceExisting ? "Update layout in document" : "Add layout to document"}</button>
-            <button type="button" disabled={busy} onClick={() => { flushSync(() => planner.cancelPreview()); (ready ? previewButtonRef : measurePreviewRef).current.focus(); }}>Cancel preview</button>
+            <button type="button" disabled={busy} onClick={() => { flushSync(() => planner.cancelPreview()); (ready ? previewButtonRef : widthRef).current?.focus(); }}>Cancel preview</button>
             <button type="button" className="ai-template-primary" hidden={!state.continueVisible} onClick={() => document.getElementById("ai-setup-close").click()}>Continue in editor</button>
           </div>
         </div>}
       </div>
     </div>
   );
-  return <div ref={rootRef} className="ai-drawer-mode gridfinity-workbench" data-empty={String(!ready)} hidden={hidden} aria-busy={String(busy)} onKeyDown={keydown}>
+  return <div ref={rootRef} className="ai-drawer-mode gridfinity-workbench" data-measuring={String(measuring)} hidden={hidden} aria-busy={String(busy)} onKeyDown={keydown}>
       <div className="drawer-view-toolbar drawer-review-toolbar" hidden={!ready && !state.undo.length && !state.redo.length}>
-        <WorkspaceViewSwitch label="Drawer view" value={view === "layout" ? "design" : "preview"}
-          onChange={next => planner.setView(next === "design" ? "layout" : "preview")} previewDisabled={!preview || busy} />
+        {(!measuring || preview) && <WorkspaceViewSwitch label="Drawer view" value={view === "layout" ? "design" : "preview"}
+          onChange={next => planner.setView(next === "design" ? "layout" : "preview")} previewDisabled={!preview || busy} />}
         <div className="ai-template-actions drawer-bin-actions" hidden={!ready || editingCompartments}>
           <button ref={addBinRef} type="button" className="ai-with-pictogram" disabled={busy || !ready || draft.bins.length >= 16} onClick={planner.addBin}><Labelled icon="add">Add bin</Labelled></button>
           <button type="button" className="ai-with-pictogram" disabled={busy || !ready} onClick={planner.fill}><Labelled icon="pattern">Fill gaps</Labelled></button>
@@ -232,10 +235,7 @@ export function DrawerPlanner({ planner, hidden, createPreviewView, references =
         </div>
       </div>
     <div className="gridfinity-workbench-columns">
-    <div className="ai-template-review drawer-review" data-empty={String(!ready)}>
-      <ol className="ai-flow" aria-label="Make a drawer organizer">
-        {["Measure", "Arrange", "Review"].map((text, index) => <li key={text} aria-current={index === step ? "step" : undefined}>{text}</li>)}
-      </ol>
+    <div className="ai-template-review drawer-review">
       {editingCompartments && <section className="drawer-layout-view gridfinity-compartment-stage" aria-label="Compartment design">
         <div className="drawer-view-toolbar">
           <h3 ref={compartmentTitleRef} tabIndex={-1}>Compartment layout</h3>
@@ -246,20 +246,17 @@ export function DrawerPlanner({ planner, hidden, createPreviewView, references =
       </section>}
       <div ref={layoutRef} className="drawer-layout-view" hidden={view !== "layout" || editingCompartments}>
         <div className="drawer-board-area">
-          <div className="drawer-empty" hidden={ready}>
-            <section className="drawer-measure-guide" aria-label="Start with the inside measurements">
-              <div className="drawer-measure-art"><img src="drawer-measurement.png" alt="Open drawer showing its inner floor and walls" width="1448" height="1086" loading="lazy" /></div>
-              <h3>Start with the inside measurements</h3>
-              <p className="ai-template-note">Measure the clear space inside your drawer.<br />Leave enough height for it to close.</p>
-            </section>
-            <button type="button" className="drawer-example" hidden={ready} onClick={planner.example}>Try a 336 × 252 mm example</button>
+          <div className="drawer-empty" hidden={!measuring}>
+            <DimensionGuide kind="drawer" title="Where to measure"
+              width={Number(texts.width)} depth={Number(texts.depth)} height={Number(texts.height)}
+              note="Measure between the inside walls, then from the floor to the lowest obstruction when the drawer is closed." />
           </div>
-          <div ref={boardRef} id="drawer-board" className="drawer-board" role="group" aria-label="Drawer layout. Drag empty cells to draw a bin; drag a bin to move it." hidden={!ready}
-            style={ready ? { "--drawer-columns": metrics.columns, "--drawer-rows": metrics.rows, aspectRatio: `${metrics.columns} / ${metrics.rows}` } : undefined} {...board}>
-            {ready && draft.bins.map((entry, index) => <BinButton key={entry.id} bin={entry} index={index} selected={selectedId === entry.id} invalid={!!placementError(draft, entry, entry.id)} busy={busy} style={position(entry)} onKeyDown={event => binKeyDown(entry, event)} />)}
+          <div ref={boardRef} id="drawer-board" className="drawer-board" role="group" aria-label="Drawer layout. Drag empty cells to draw a bin; drag a bin to move it." hidden={!hasGrid}
+            style={hasGrid ? { "--drawer-columns": metrics.columns, "--drawer-rows": metrics.rows, aspectRatio: `${metrics.columns} / ${metrics.rows}` } : undefined} {...board}>
+            {hasGrid && draft.bins.map((entry, index) => <BinButton key={entry.id} bin={entry} index={index} selected={selectedId === entry.id} invalid={!!placementError(draft, entry, entry.id)} busy={busy || !ready} style={position(entry)} onKeyDown={event => binKeyDown(entry, event)} />)}
             <div className="drawer-ghost" hidden={!ghost} aria-hidden="true" data-invalid={ghost ? String(ghost.invalid) : undefined} style={ghost ? position(ghost.rect) : undefined}>{ghost?.text}</div>
           </div>
-          <p className="drawer-front" hidden={!ready}>Front of drawer</p>
+          <p className="drawer-front" hidden={!hasGrid}>Front of drawer</p>
         </div>
         <p id="drawer-summary" className="ai-template-note" aria-live="polite">{status.summary}</p>
         <p className="ai-template-note" hidden={!ready}>Drag to draw or move a bin. Arrow keys move the selected bin; Shift + arrows resize it.</p>

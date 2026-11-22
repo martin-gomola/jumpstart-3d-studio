@@ -15,7 +15,7 @@ function fixture(specs) {
 }
 
 test("finger scoop forms one connected bin with a curved rise and unchanged outside dimensions", async ({ page }, info) => {
-  const spec = { kind: "bin", columns: 2, rows: 2, heightUnits: 6, lip: true };
+  const spec = { kind: "bin", columns: 2, rows: 2, heightUnits: 3, lip: true };
   const doc = fixture([spec, { ...spec, fingerScoop: "front", position: [120, 0, 0] },
     { ...spec, fingerScoop: "front", fingerScoopSlope: 2, position: [240, 0, 0] }]);
   const errors = watchErrors(page);
@@ -27,20 +27,21 @@ test("finger scoop forms one connected bin with a curved rise and unchanged outs
   }));
   expect(parts[1].bbox).toEqual(parts[0].bbox);
   expect(parts[2].bbox).toEqual(parts[0].bbox);
-  const samples = [-38, -33, -28, -20].map(y => ({ axis: "Z", point: [0, y, 0] }));
+  const samples = [-39, -37, -34, -32].map(y => ({ axis: "Z", point: [0, y, 0] }));
   const checked = inspectGeometry(parts[1], { mesh: true, samples });
   expect(checked.meshValidation).toMatchObject({ valid: true, disconnectedComponents: 1 });
   const tops = checked.samples.map(sample => sample.intervals[0][1]);
   expect(tops[0]).toBeGreaterThan(tops[1]);
   expect(tops[1]).toBeGreaterThan(tops[2]);
-  expect(tops[2]).toBeGreaterThan(tops[3]);
+  expect(tops[2]).toBeCloseTo(9, 2);
   expect(tops[3]).toBeCloseTo(9, 2);
-  const edgeSample = { axis: "Z", point: [39, -38, 0] };
+  const edgeSample = { axis: "Z", point: [39, -39, 0] };
   const standardEdge = inspectGeometry(parts[1], { samples: [edgeSample] }).samples[0].intervals[0][1];
-  const steep = inspectGeometry(parts[2], { mesh: true, samples: [edgeSample] });
+  const steep = inspectGeometry(parts[2], { mesh: true, samples: [edgeSample, ...samples] });
   expect(steep.meshValidation).toMatchObject({ valid: true, disconnectedComponents: 1 });
   expect(standardEdge).toBeCloseTo(tops[0], 1);
-  expect(steep.samples[0].intervals[0][1] - 9).toBeCloseTo((standardEdge - 9) * 1.5, 1);
+  expect(steep.samples[0].intervals[0][1] - 9).toBeGreaterThan((standardEdge - 9) * 2);
+  expect(steep.samples[3].intervals[0][1]).toBeGreaterThan(9.3);
   expect(errors).toEqual([]);
 });
 
@@ -101,7 +102,7 @@ test("asymmetric rounded dividers clear the upper bin feet at nominal stacking h
   const samples = [ [dividerX, 0, 0], [dividerX + 0.8, 0, 0], [dividerX + 0.8, 40.45, 0] ]
     .map(point => ({ axis: "Z", point }));
   const tops = inspectGeometry(meshes[0], { samples }).samples.map(sample => sample.intervals[0][1]);
-  expect(tops[0]).toBeCloseTo(16.99, 2);
+  expect(tops[0]).toBeCloseTo(18.49, 2);
   expect(tops[1]).toBeCloseTo(9, 2);
   expect(tops[2]).toBeCloseTo(16.99, 2);
   const [a, b] = doc.bodies.map(body => ({ node: resolveNode(body.node, doc), m: body.m }));

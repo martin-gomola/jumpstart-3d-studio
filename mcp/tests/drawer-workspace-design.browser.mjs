@@ -10,9 +10,10 @@ test('drawer workspace guides measurements, keeps actions nearby and adapts thro
   await expect(page.locator('.drawer-review-toolbar')).toBeHidden();
   await expect(drawer.getByText('Drag to draw or move a bin.', { exact: false })).toBeHidden();
   const preview = drawer.getByRole('button', { name: 'Preview layout', exact: true });
-  await expect(preview).toBeDisabled();
-  const form = await page.locator('.drawer-measurements').boundingBox(), action = await preview.boundingBox();
-  expect(action.y - form.y - form.height).toBeLessThan(100);
+  await expect(preview).toHaveCount(0);
+  const example = page.getByRole('button', { name: 'Try a 336 × 252 mm example' });
+  const guide = drawer.getByRole('img', { name: /^Where to measure/ });
+  await expect(guide).toBeVisible();
   const width = await page.locator('#drawer-width').boundingBox(), depth = await page.locator('#drawer-depth').boundingBox();
   expect(Math.abs(width.y - depth.y)).toBeLessThan(1);
   for (const id of ['height', 'name']) {
@@ -20,6 +21,9 @@ test('drawer workspace guides measurements, keeps actions nearby and adapts thro
     expect(Math.abs(bounds.x - width.x)).toBeLessThan(1);
     expect(Math.abs(bounds.x + bounds.width - depth.x - depth.width)).toBeLessThan(1);
   }
+  await page.locator('#drawer-width').fill('336');
+  await expect(guide).toHaveAccessibleName(/336 mm wide/);
+  await page.locator('#drawer-width').fill('');
   for (const [name, w, h, theme, zoom] of [
     ['reference', 1586, 992, 'light', false], ['desktop', 1920, 1000, 'light', false], ['short', 1280, 600, 'light', false],
     ['tablet', 768, 900, 'light', false], ['phone', 390, 844, 'light', false],
@@ -42,35 +46,31 @@ test('drawer workspace guides measurements, keeps actions nearby and adapts thro
       const lines = await page.locator('.ai-workspace-tabs .ai-control-label, .ai-setup-close .ai-control-label').evaluateAll(labels => labels.map(el => { const r = document.createRange(); r.selectNodeContents(el); return r.getClientRects().length; }));
       expect(lines.every(count => count === 1)).toBe(true);
     }
-    if (name === 'dark') await expect(preview).toBeInViewport({ ratio: .99 });
+    if (name === 'dark') await expect(example).toBeInViewport({ ratio: .99 });
     if (zoom) {
       const formBox = await drawer.locator('.ai-template-settings').boundingBox(), reviewBox = await page.locator('.drawer-review').boundingBox();
-      expect(formBox.y).toBeGreaterThanOrEqual(reviewBox.y + reviewBox.height);
+      expect(reviewBox.y).toBeGreaterThanOrEqual(formBox.y + formBox.height);
       for (const id of ['width', 'depth', 'height', 'name']) {
         await page.locator(`#drawer-${id}`).focus(); await expect(page.locator(`#drawer-${id}`)).toBeInViewport({ ratio: .99 });
       }
       await drawer.evaluate(el => { el.scrollTop = 0; });
       await page.locator('#ai-templates-panel').evaluate(el => { el.scrollTop = 0; });
     }
-    await expect.poll(() => page.locator('.drawer-measure-art img').evaluate(el => el.complete && el.naturalWidth > 0)).toBe(true);
+    await expect(guide).toBeVisible();
     if (name === 'short') {
-      await preview.scrollIntoViewIfNeeded(); await expect(preview).toBeInViewport({ ratio: 1 });
-      const example = page.getByRole('button', { name: 'Try a 336 × 252 mm example' });
       await example.scrollIntoViewIfNeeded(); await expect(example).toBeInViewport({ ratio: 1 });
       await page.locator('#drawer-name').focus();
-      const input = await page.locator('#drawer-name').boundingBox(), button = await preview.boundingBox();
+      const input = await page.locator('#drawer-name').boundingBox(), button = await example.boundingBox();
       expect(input.y + input.height).toBeLessThanOrEqual(button.y + 1);
     }
     if (name === 'reference') {
       const left = await drawer.locator('.ai-template-settings').boundingBox(), right = await page.locator('.drawer-review').boundingBox();
-      expect(left.width).toBe(448); expect(Math.abs(left.y - right.y)).toBeLessThan(1);
+      expect(Math.abs(left.width - right.width)).toBeLessThan(1); expect(Math.abs(left.y - right.y)).toBeLessThan(1);
       expect(left.x + left.width).toBeLessThan(right.x);
       expect(Math.abs(left.y + left.height - right.y - right.height)).toBeLessThan(1);
-      const art = await page.locator('.drawer-measure-art').boundingBox();
-      expect(art.width).toBe(508); expect(art.y - right.y).toBeLessThan(160);
+      expect((await guide.boundingBox()).width).toBeLessThanOrEqual(right.width);
       expect(Number.parseFloat(await page.locator('#ai-gridfinity-title').evaluate(el => getComputedStyle(el).fontSize))).toBeLessThan(48);
-      expect(await page.locator('.ai-flow li').first().evaluate(el => getComputedStyle(el).flexDirection)).toBe('column');
-      await expect(drawer.locator('.drawer-measure-card').getByRole('button', { name: 'Preview layout', exact: true })).toBeVisible();
+      await expect(example).toBeVisible();
       expect(await page.locator('.ai-workspace-tabs button[aria-selected="true"]').evaluate(el => getComputedStyle(el).borderBottomWidth)).toBe('0px');
     }
     await page.screenshot({ path: `/tmp/jumpstart-drawer-workspace-${name}.png` });
@@ -85,13 +85,11 @@ test('drawer workspace guides measurements, keeps actions nearby and adapts thro
   await page.locator('.drawer-bin').focus(); await page.keyboard.press('ArrowRight');
   await page.getByRole('button', { name: 'Undo layout', exact: true }).click();
   await page.locator('.drawer-layout-view').evaluate(el => { el.scrollTop = el.scrollHeight; });
-  await expect(page.locator('.ai-flow li').first()).toBeInViewport({ ratio: .99 });
-  const stepBox = await page.locator('.ai-flow li').first().boundingBox(), reviewBox = await page.locator('.drawer-review').boundingBox();
-  expect(stepBox.y).toBeGreaterThanOrEqual(reviewBox.y);
-  const flowBox = await page.locator('.ai-flow').boundingBox(), toolbarBox = await page.locator('.drawer-review-toolbar').boundingBox();
-  expect(flowBox.y).toBeGreaterThanOrEqual(toolbarBox.y + toolbarBox.height);
+  await expect(page.locator('.drawer-review-toolbar')).toBeInViewport({ ratio: .99 });
+  const toolbarBox = await page.locator('.drawer-review-toolbar').boundingBox();
   const layoutBox = await page.locator('.drawer-layout-view').boundingBox();
   expect(layoutBox.y).toBeGreaterThanOrEqual(toolbarBox.y + toolbarBox.height);
+  expect((await page.locator('#drawer-board').boundingBox()).height).toBeGreaterThan(420);
   await page.screenshot({ path: '/tmp/jumpstart-drawer-workspace-arranged.png' });
   if (!(await page.locator('.drawer-measurements').evaluate(el => el.open))) await page.locator('.drawer-measurements summary').click();
   await page.locator('#drawer-height').fill('10'); await page.locator('#drawer-height').press('Tab');

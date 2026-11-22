@@ -218,8 +218,10 @@ export function buildGridfinity(operation, { document, idFactory, nextSeq, clipS
     const solids = [...repeated(foot), child(outer)];
     if (op.kind === "bin") {
       const h = topZ - floorZ;
-      // Leave clearance below the rim's receiving profile, with a short divider in shallow bins.
-      const dividerHeight = op.lip && op.openSides.length < 4 ? Math.max(0.5, lipBottom - 0.2 - floorZ) : h;
+      const stackable = op.lip && op.openSides.length < 4;
+      // Stop the divider below the upper bin's feet, including on shallow bins.
+      const dividerHeight = stackable ? Math.max(0.5, h - 2.5) : h;
+      const jointHeight = Math.max(0.5, lipBottom - 0.2 - floorZ);
       const divider = (acrossX, across, lo, hi, startSide, endSide, radius) => {
         const startRadius = op.openSides.includes(startSide) ? 0 : radius;
         const endRadius = op.openSides.includes(endSide) ? 0 : radius;
@@ -245,8 +247,26 @@ export function buildGridfinity(operation, { document, idFactory, nextSeq, clipS
         });
         corners.forEach(({ last }, index) => sketch.ents.push({ id: idFactory("e"), t: "line", a: last, b: corners[(index + 1) % 4].first }));
         document.sketches.push(sketch);
+        const mods = [];
+        if (stackable && dividerHeight > jointHeight) {
+          // Keep the taller span, but start the rounded wall joints below the rim.
+          const pad = op.wall / 2 + radius + 0.02, land = 2, taper = 2;
+          const outline = [[-0.02, -0.02], [run + 0.02, -0.02],
+            ...(endRadius ? [[run + 0.02, jointHeight], [run - land, jointHeight], [run - land - taper, dividerHeight]]
+              : [[run + 0.02, dividerHeight]]),
+            ...(startRadius ? [[land + taper, dividerHeight], [land, jointHeight], [-0.02, jointHeight]]
+              : [[-0.02, dividerHeight]])];
+          const side = { id: idFactory("s"), name: "Divider height at stacking rim", seq: seq(), hidden: true,
+            plane: { o: acrossX ? [-pad, a, 0] : [a, pad, 0], x: acrossX ? [0,1,0] : [1,0,0], n: acrossX ? [1,0,0] : [0,-1,0] },
+            pts: outline.map(([x, y]) => ({ id: idFactory("p"), x, y })), ents: [] };
+          side.ents = side.pts.map(({ id }, index) => ({ id: idFactory("e"), t: "line", a: id, b: side.pts[(index + 1) % side.pts.length].id }));
+          document.sketches.push(side);
+          const tool = { t: "extrude", sketch: side.id, profiles: [{ key: side.ents.map(entity => entity.id).sort().join(","), pt: [run / 2, jointHeight / 2] }],
+            dist: 2 * pad, mode: "one", dist2: 0, mods: [] };
+          mods.push({ id: idFactory("f"), seq: seq(), t: "bool", op: "intersect", tool, m: IDENTITY.slice() });
+        }
         return child({ t: "extrude", sketch: sketch.id, profiles: [{ key: sketch.ents.map(entity => entity.id).sort().join(","), pt: [0,0] }],
-          dist: dividerHeight, mode: "one", dist2: 0, mods: [] }, x, y, z);
+          dist: dividerHeight, mode: "one", dist2: 0, mods }, x, y, z);
       };
       const dividerPositions = op.dividerPositions ?? evenDividerPositions(op.dividers);
       const jointRadius = (positions, index, span) => {
@@ -262,34 +282,33 @@ export function buildGridfinity(operation, { document, idFactory, nextSeq, clipS
         const cuts = acrossX ? dividerPositions.y : dividerPositions.x;
         const near = side === "front" || side === "left";
         const clear = (span - 2 * op.wall) * (near ? cuts[0] ?? 1 : 1 - (cuts.at(-1) ?? 0)) - (cuts.length ? op.wall / 2 : 0);
-        const rise = op.fingerScoopSlope === 2 ? 1.5 : 1;
-        const radius = Math.min(16, h * 0.75 / rise, dividerHeight / rise, clear / 2);
+        const steep = op.fingerScoopSlope === 2;
+        const room = stackable ? Math.max(0.5, lipBottom - 0.2 - floorZ) : h * 0.75;
+        const reach = Math.min(steep ? 20 : 10, room * (steep ? 1.25 : 0.8), clear / 2);
+        const rise = Math.min(room * (steep ? 1 : 0.45), reach * (steep ? 1.5 : 1));
         const run = (acrossX ? width : depth) - 2 * op.wall + 0.04;
         const [nx, ny] = { front: [1, 0], right: [0, 1], back: [-1, 0], left: [0, -1] }[side];
         const inward = op.wall - span / 2;
         const sketch = {
           id: idFactory("s"), name: "Finger scoop profile", seq: seq(), hidden: true,
           plane: { o: [-nx * run / 2 - ny * inward, -ny * run / 2 + nx * inward, 7 + op.floor], x: [-ny, nx, 0], n: [nx, ny, 0] },
-          pts: [[0, radius * rise], [radius, 0], [radius, -0.02], [-0.02, -0.02], [-0.02, radius * rise], [radius, radius]]
+          pts: [[0, rise], [reach, 0], [reach, -0.02], [-0.02, -0.02], [-0.02, rise]]
             .map(([x, y]) => ({ id: idFactory("p"), x, y })),
           ents: [],
         };
         const point = index => sketch.pts[index].id;
-        if (rise === 1) sketch.ents.push({ id: idFactory("e"), t: "arc", a: point(0), b: point(1), c: point(5) });
-        else {
-          const curve = Array.from({ length: 8 }, (_, i) => {
-            const angle = (i + 1) * Math.PI / 18;
-            const id = idFactory("p");
-            sketch.pts.push({ id, x: radius * (1 - Math.cos(angle)), y: radius * rise * (1 - Math.sin(angle)) });
-            return id;
-          });
-          sketch.ents.push({ id: idFactory("e"), t: "spline", pts: [point(0), ...curve, point(1)], closed: false });
-        }
+        const curve = Array.from({ length: 8 }, (_, i) => {
+          const angle = (i + 1) * Math.PI / 18;
+          const id = idFactory("p");
+          sketch.pts.push({ id, x: reach * (1 - Math.cos(angle)), y: rise * (1 - Math.sin(angle)) });
+          return id;
+        });
+        sketch.ents.push({ id: idFactory("e"), t: "spline", pts: [point(0), ...curve, point(1)], closed: false });
         for (let i = 1; i < 5; i++) sketch.ents.push({ id: idFactory("e"), t: "line", a: point(i), b: point((i + 1) % 5) });
         if (findRegions(resolveSketch(sketch)).length !== 1) fail("Finger scoop profile did not form one closed region");
         document.sketches.push(sketch);
         const mods = [{ id: idFactory("f"), seq: seq(), t: "bool", op: "intersect", tool: scoopEnvelope, m: IDENTITY.slice() }];
-        solids.push(child({ t: "extrude", sketch: sketch.id, profiles: [{ key: sketch.ents.map(entity => entity.id).sort().join(","), pt: [radius / 10, radius / 10] }],
+        solids.push(child({ t: "extrude", sketch: sketch.id, profiles: [{ key: sketch.ents.map(entity => entity.id).sort().join(","), pt: [reach / 10, rise / 10] }],
           dist: run, mode: "one", dist2: 0, mods }));
       }
       for (const [index, position] of dividerPositions.x.entries()) {

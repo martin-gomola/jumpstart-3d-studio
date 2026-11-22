@@ -29,7 +29,10 @@ test("design a bin live and add it to an existing Gridfinity baseplate", async (
   const canvas = panel.locator("canvas");
   await expect(canvas).toBeVisible({ timeout: 30_000 });
   const liveCanvas = await canvas.elementHandle();
-  await expect(add).toBeHidden();
+  await expect(add).toBeEnabled();
+  await expect(panel.getByRole("button", { name: "3D preview", exact: true })).toHaveCount(0);
+  await panel.getByLabel("Compartments across width").press("Enter");
+  expect(await page.evaluate(() => window.__store.doc.bodies.length)).toBe(1);
   await panel.getByRole("button", { name: "Decrease depth", exact: true }).click();
   const depth = panel.locator(".gridfinity-footprint .drawer-stepper").filter({ hasText: "Depth" });
   await expect(depth).toContainText("2 cells");
@@ -81,9 +84,7 @@ test("design a bin live and add it to an existing Gridfinity baseplate", async (
   await panel.getByRole("checkbox", { name: "Magnet pockets", exact: true }).check();
   await panel.getByLabel("Divider 1 from left (mm)").fill("29");
   await panel.getByLabel("Divider 1 from left (mm)").press("Tab");
-  const previewMode = panel.getByRole("button", { name: "3D preview", exact: true });
-  await expect(previewMode).toBeEnabled({ timeout: 30_000 });
-  await previewMode.click();
+  await expect(add).toBeEnabled({ timeout: 30_000 });
   await expect(panel.locator("canvas")).toBeVisible();
   await panel.getByRole("button", { name: "Top view" }).click();
   await panel.getByText("Use an existing baseplate", { exact: true }).click();
@@ -97,7 +98,7 @@ test("design a bin live and add it to an existing Gridfinity baseplate", async (
   await expect(add).toBeEnabled({ timeout: 30_000 });
   await expect(panel.locator("canvas")).toBeVisible();
   const canvasBox = await panel.locator("canvas").boundingBox();
-  const settingsBox = await panel.getByRole("region", { name: "Bin review" }).boundingBox();
+  const settingsBox = await panel.getByRole("region", { name: "Bin design settings" }).boundingBox();
   expect(canvasBox.height).toBeGreaterThanOrEqual(400);
   expect(canvasBox.x).toBeGreaterThan(settingsBox.x + settingsBox.width);
   await expect.poll(() => page.evaluate(() => window.__store.doc.bodies.length)).toBe(1);
