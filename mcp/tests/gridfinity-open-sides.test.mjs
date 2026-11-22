@@ -28,10 +28,9 @@ test("wall cuts start above the protected base and floor and clear the full rim"
   const document = doc(); let counter = 0;
   const { node, recipe } = buildGridfinity(bin({ columns: 1, rows: 1, lip: true, openSides: ["right"] }), { document, idFactory: prefix => `${prefix}-${++counter}` });
   const cut = node.mods.find(mod => mod.src === "openSides");
-  assert.equal(cut.op, "cut"); assert.equal(cut.tool.children.length, 1);
-  const tool = cut.tool.children[0];
-  assert.equal(tool.m[14], 9); assert.ok(tool.m[14] >= recipe.protectedBaseHeight + recipe.floor);
-  assert.ok(tool.m[14] + tool.node.p.h > recipe.totalHeight);
+  assert.equal(cut.op, "cut");
+  assert.ok(cut.tool.children.every(tool => tool.m[14] === recipe.protectedBaseHeight + recipe.floor));
+  assert.ok(cut.tool.children.some(tool => tool.m[14] + tool.node.p.h > recipe.totalHeight));
   assert.deepEqual(recipe.openSides, ["right"]);
   assert.equal(recipe.totalHeight, 25.4);
   assert.equal(binTotalHeight({ heightUnits: 3, floor: 2, lip: true, openSides: BIN_SIDES }), 9);

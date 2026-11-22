@@ -34,6 +34,8 @@ export function templatePlan(state) {
   if (state.kind === "bin") {
     grid.openSides = state.openSides || [];
     grid.closeGaps = state.closeGaps === true;
+    if (state.fingerScoop) grid.fingerScoop = state.fingerScoop;
+    if (state.fingerScoopSlope) grid.fingerScoopSlope = state.fingerScoopSlope;
     grid.lip = state.lip;
     const dividers = { x: state.compartmentsX - 1, y: state.compartmentsY - 1 };
     // Custom positions are a fixed list with one entry per divider.
@@ -72,7 +74,7 @@ export function templatePlan(state) {
 export function partState(draft) {
   const numbers = fields => Object.fromEntries(Object.entries(fields).map(([key, text]) => [key, Number(text)]));
   return {
-    kind: draft.kind, openSides: draft.openSides, closeGaps: draft.closeGaps, magnets: draft.magnets, lip: draft.lip, dividerPositions: draft.dividerPositions, ...numbers(draft.fields),
+    kind: draft.kind, fingerScoop: draft.fingerScoop, fingerScoopSlope: draft.fingerScoopSlope, openSides: draft.openSides, closeGaps: draft.closeGaps, magnets: draft.magnets, lip: draft.lip, dividerPositions: draft.dividerPositions, ...numbers(draft.fields),
     pockets: draft.pockets.map(pocket => ({ shape: pocket.shape, referenceBodyId: pocket.referenceBodyId, evidenceKind: pocket.evidenceKind, sourceUnits: pocket.sourceUnits,
       ...numbers(pocket.fields), merge: pocket.merge, product: pocket.product.trim(), url: pocket.url.trim() })),
   };
@@ -136,8 +138,10 @@ export function createPartPlanner({ notify = run => run() } = {}) {
       ...(name.startsWith("compartments") && text !== state.draft.fields[name] ? { dividerPositions: undefined } : {}),
     })),
     setDividerPositions: act(dividerPositions => edit({ dividerPositions })),
+    setFingerScoop: act((fingerScoop, fingerScoopSlope) => edit({ fingerScoop, fingerScoopSlope })),
     setLip: act(lip => edit({ lip })),
-    setWalls: act((openSides, closeGaps) => edit({ openSides, closeGaps })),
+    setWalls: act((openSides, closeGaps) => edit({ openSides, closeGaps,
+      ...(openSides.includes(state.draft.fingerScoop) ? { fingerScoop: undefined, fingerScoopSlope: undefined } : {}) })),
     setCloseGaps: act(closeGaps => edit({ closeGaps })),
     setMagnets: act(magnets => edit({ magnets })),
     edited: act(() => say()),

@@ -1,4 +1,4 @@
-import { normalizeOpenSides, normalizeCloseGaps, rotateOpenSides } from "./gridfinity-walls.js";
+import { normalizeFingerScoop, normalizeFingerScoopSlope, normalizeOpenSides, normalizeCloseGaps, rotateOpenSides } from "./gridfinity-walls.js";
 import { partEnvelope, partPrintFit, usableDepthError } from "./gridfinity-envelope.js";
 import { normalizePrintArea, baseplateTileLimits, checkPrintFit } from "./print-area.js";
 import { normalizeCornerSpacers, cornerSpacerParts } from "./drawer-spacers.js";
@@ -75,6 +75,7 @@ export function rotateDrawerLayout(drawer) {
   next.binLimits = { columns: limits.rows, rows: limits.columns };
   next.bins = next.bins.map(bin => ({ ...bin, x: bin.y, y: columns - bin.x - bin.columns,
     columns: bin.rows, rows: bin.columns, dividers: { x: bin.dividers?.y ?? 0, y: bin.dividers?.x ?? 0 }, openSides: rotateOpenSides(bin.openSides),
+    ...(bin.fingerScoop ? { fingerScoop: rotateOpenSides([bin.fingerScoop])[0] } : {}),
     ...(bin.dividerPositions ? { dividerPositions: rotateDividerPositions(bin.dividerPositions) } : {}),
     ...(bin.pockets ? { pockets: rotateBinPockets(bin.pockets) } : {}) }));
   if (next.bins.length) normalizeDrawerLayout(next);
@@ -114,12 +115,16 @@ export function normalizeDrawerLayout(raw) {
   if (!raw.bins.length && !result.includeBaseplate) fail("Enable matching baseplates or add a bin before previewing.");
   const ids = new Set();
   for (const [i, entry] of raw.bins.entries()) {
-    object(entry, ["id", "label", "x", "y", "columns", "rows", "heightUnits", "kind", "dividers", "dividerPositions", "lip", "magnets", "openSides", "closeGaps", "floor", "wall", "pockets"], `bin ${i + 1}`);
+    object(entry, ["id", "label", "x", "y", "columns", "rows", "heightUnits", "kind", "dividers", "dividerPositions", "lip", "magnets", "openSides", "closeGaps", "fingerScoop", "fingerScoopSlope", "floor", "wall", "pockets"], `bin ${i + 1}`);
     const bin = { id: text(entry.id, `bin ${i + 1} id`), label: text(entry.label, `bin ${i + 1} label`, `Bin ${i + 1}`),
       x: number(entry.x, 0, 19, "column", true), y: number(entry.y, 0, 19, "row", true),
       columns: number(entry.columns, 1, GRIDFINITY_LIMITS.columns, "bin width", true), rows: number(entry.rows, 1, GRIDFINITY_LIMITS.rows, "bin depth", true),
       heightUnits: number(entry.heightUnits ?? 3, 2, 12, "bin height", true), kind: entry.kind ?? "bin", openSides: normalizeOpenSides(entry.openSides, `${entry.label || entry.id} openSides`), lip: entry.lip === true, magnets: normalizeMagnetPockets(entry.magnets, `${entry.label || entry.id} magnets`) };
     bin.closeGaps = normalizeCloseGaps(entry.closeGaps, bin.openSides, bin.kind);
+    const fingerScoop = normalizeFingerScoop(entry.fingerScoop, bin.kind, bin.openSides);
+    if (fingerScoop) bin.fingerScoop = fingerScoop;
+    const slope = normalizeFingerScoopSlope(entry.fingerScoopSlope, fingerScoop);
+    if (slope) bin.fingerScoopSlope = slope;
     if (ids.has(bin.id)) fail("bin ids must be unique"); ids.add(bin.id);
     if (!["bin", "insert"].includes(bin.kind)) fail("parts must be bins or insert blanks");
     if (bin.kind !== "bin" && bin.openSides.length) fail("insert blanks do not support open sides");
@@ -153,6 +158,7 @@ export function drawerParts(raw) {
     position: [(x + columns / 2) * 42 - m.gridWidth / 2, (y + rows / 2) * 42 - m.gridDepth / 2, kind === "baseplate" ? 0 : drawerBinBaseZ(drawer)], ...extra });
   for (const bin of drawer.bins) parts.push(part(bin.id, bin.kind, bin.x, bin.y, bin.columns, bin.rows,
     { name: bin.label, heightUnits: bin.heightUnits, floor: binFloor(drawer, bin), wall: binWall(drawer, bin), lip: bin.lip, openSides: bin.openSides, closeGaps: bin.closeGaps, dividers: bin.dividers, magnets: bin.magnets,
+      ...(bin.fingerScoop ? { fingerScoop: bin.fingerScoop, ...(bin.fingerScoopSlope ? { fingerScoopSlope: bin.fingerScoopSlope } : {}) } : {}),
       ...(bin.dividerPositions ? { dividerPositions: bin.dividerPositions } : {}),
       ...(bin.pockets ? { pockets: bin.pockets.map(pocket => binPocketOperation(drawer, bin, pocket)) } : {}) }));
   const tileLimit = drawer.includeBaseplate ? baseplateTileLimits(drawer.printArea, m) : { columns: 4, rows: 4 };

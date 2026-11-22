@@ -108,11 +108,12 @@ test("Gridfinity dialog bins keep open sides, flush joins and the stackable rim"
   await close.check();
   await page.getByRole("button", { name: "Open back side", exact: true }).click();
   const dialog = page.locator("#cmd");
+  await dialog.getByRole("button", { name: "1 Standard", exact: true }).click();
   await dialog.getByLabel("Compartments across width").fill("2");
   const divider = dialog.getByLabel("Divider 1 from left (mm)");
   await divider.fill("29"); await divider.press("Tab");
   const [bin] = await create(page);
-  expect(bin.recipe).toMatchObject({ kind: "bin", openSides: ["right", "back"], closeGaps: true, lip: true });
+  expect(bin.recipe).toMatchObject({ kind: "bin", openSides: ["right", "back"], closeGaps: true, lip: true, fingerScoop: "front" });
   expect(bin.size.x).toBeCloseTo(2 * 42 - 0.25, 3);
   expect(bin.size.z).toBeCloseTo(25.4, 3);
   expect(bin.recipe.dividerPositions.x[0]).toBeCloseTo(29 / 81.1, 8);

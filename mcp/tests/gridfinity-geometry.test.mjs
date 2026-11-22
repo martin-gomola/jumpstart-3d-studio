@@ -21,6 +21,8 @@ test("Gridfinity normalizer has bounded explicit dimensions and rejects unused g
     assert.throws(()=>normalizeGridfinity(raw(overrides)),JSON.stringify(overrides));
   }
   assert.throws(()=>normalizeGridfinity({id:"grid"}),/type/);
+  assert.throws(() => normalizeGridfinity(raw({ kind: "bin", fingerScoop: "front", openSides: ["front"] })), /closed wall/);
+  assert.throws(() => normalizeGridfinity(raw({ kind: "insert", fingerScoop: "front" })), /storage bin/);
 });
 
 test("custom divider positions use measured inside distances and legacy counts stay evenly split", () => {

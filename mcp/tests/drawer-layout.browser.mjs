@@ -444,7 +444,7 @@ test("an empty drawer can preview and add only baseplates and spacers, then save
   expect(reopened.drawerLayouts[0].definition.bins).toEqual([]);
   await tool("jumpstart_undo", { editorId, expectedRevision: reopened.revision });
   expect((await tool("jumpstart_get_document", { editorId })).bodies).toHaveLength(0);
-  await page.getByRole("button", { name: "Layout", exact: true }).click();
+  await page.getByRole("button", { name: "Design", exact: true }).click();
   await page.getByText("Advanced construction", { exact: true }).click();
   await page.locator("#drawer-baseplate").uncheck();
   await expect(page.getByRole("button", { name: "Preview layout", exact: true })).toBeDisabled();
@@ -513,7 +513,7 @@ test("top spring clips join split tiles and persist through apply, save and reop
   const reopened = await tool("jumpstart_get_document", { editorId });
   expect(reopened.bodies.filter(body => body.baseplateClip)).toHaveLength(6);
   expect(reopened.drawerLayouts[0].editable).toBe(true);
-  await page.getByRole("button", { name: "Layout", exact: true }).click();
+  await page.getByRole("button", { name: "Design", exact: true }).click();
   await page.locator("#drawer-baseplate").uncheck();
   await expect(page.locator("#drawer-baseplate-clips")).toBeDisabled();
   await expect(page.locator("#drawer-baseplate-clips")).not.toBeChecked();
@@ -578,7 +578,7 @@ test("printer settings size baseplate tiles for the selected nozzle and preserve
   await dimensions(page, 252, 210, 60);
   await page.getByRole("button", { name: "Preview layout", exact: true }).click();
   await expect(page.locator("#drawer-message")).toContainText("Preview ready", { timeout: 90_000 });
-  await expect(page.locator(".drawer-3d")).toContainText("90° turn");
+  await expect(page.locator(".ai-drawer-mode .ai-template-settings").getByText(/90° turn/)).toBeVisible();
   await page.getByRole("button", { name: "Add layout to document", exact: true }).click();
   await expect(page.locator("#drawer-message")).toContainText("Layout added");
   const second = await tool("jumpstart_get_document", { editorId });
@@ -599,13 +599,14 @@ test("compartment dividers default evenly and can be adjusted by keyboard, dista
   const errors = watchErrors(page), editorId = await openPlanner(page);
   await dimensions(page, 168, 168, 40);
   await page.getByRole("button", { name: "Add bin", exact: true }).click();
-  await page.getByText("More heights", { exact: true }).click();
+  await page.locator(".drawer-inspector").getByText("More heights", { exact: true }).click();
   const height = page.locator(".drawer-inspector").getByLabel("Body height (7 mm steps)", { exact: true });
   await height.fill("4"); await height.press("Tab");
   await expect(page.getByRole("button", { name: "28 mm", exact: true })).toHaveAttribute("aria-pressed", "true");
-  await page.locator(".drawer-compartment-options summary").click();
   const count = page.locator("#drawer-bin-compartments-x");
   await count.fill("2"); await count.press("Tab");
+  await page.getByRole("button", { name: "Edit compartment layout" }).click();
+  await expect(page.locator("#drawer-board")).toBeHidden();
   const slider = page.getByRole("slider", { name: "Across width divider 1" });
   await expect(slider).toBeVisible();
   const initial = Number(await slider.getAttribute("aria-valuenow"));
@@ -615,37 +616,42 @@ test("compartment dividers default evenly and can be adjusted by keyboard, dista
   await expect(slider).toHaveAttribute("aria-valuenow", "25.0");
   await slider.focus(); await page.keyboard.press("ArrowRight");
   await expect(slider).toHaveAttribute("aria-valuenow", "26.0");
-  const diagram = page.locator(".drawer-divider-diagram"), box = await diagram.boundingBox();
+  const diagram = page.getByRole("region", { name: "Compartment design" }).locator(".drawer-divider-diagram");
+  const box = await diagram.boundingBox();
   const point = fraction => ({ x: box.x + (80 + fraction * 840) / 1000 * box.width, y: box.y + box.height / 2 });
   const from = point(26 / (2 * 42 - 0.5 - 2.4)), to = point(0.66);
   await page.mouse.move(from.x, from.y); await page.mouse.down();
   await page.mouse.move(to.x, to.y, { steps: 6 }); await page.mouse.up();
   const dragged = Number(await slider.getAttribute("aria-valuenow"));
   expect(Math.abs(dragged - 0.66 * (2 * 42 - 0.5 - 2.4))).toBeLessThan(0.2);
+  await page.getByRole("button", { name: "1 Standard", exact: true }).click();
   await page.locator(".drawer-inspector").getByRole("button", { name: "Rotate", exact: true }).click();
   const rotated = page.getByRole("slider", { name: "Along depth divider 1" });
   await expect(rotated).toBeVisible();
   expect(Math.abs(Number(await rotated.getAttribute("aria-valuenow")) - 0.34 * (2 * 42 - 0.5 - 2.4))).toBeLessThan(0.2);
-  await page.locator(".drawer-divider-diagram").evaluate(diagram => diagram.scrollIntoView({ block: "start" }));
-  const diagramBox = await page.locator(".drawer-divider-diagram").boundingBox();
-  const stickyBox = await page.locator(".drawer-inspector-header").boundingBox();
-  expect(diagramBox.y).toBeGreaterThanOrEqual(stickyBox.y + stickyBox.height);
+  await diagram.scrollIntoViewIfNeeded();
+  const diagramBox = await diagram.boundingBox();
+  const settingsBox = await page.locator(".ai-drawer-mode .ai-template-settings").boundingBox();
+  expect(settingsBox.x + settingsBox.width).toBeLessThan(diagramBox.x);
   await page.screenshot({ path: info.outputPath("compartment-editor.png") });
   await page.evaluate(() => { document.documentElement.dataset.ui = "dark"; });
   await page.screenshot({ path: info.outputPath("compartment-editor-dark.png") });
   await page.evaluate(() => { document.documentElement.dataset.ui = "light"; });
   await page.setViewportSize({ width: 320, height: 720 });
-  const mobile = await page.locator(".drawer-divider-editor").evaluate(editor => ({
+  const mobile = await page.getByRole("region", { name: "Compartment design" }).locator(".drawer-divider-editor").evaluate(editor => ({
     width: editor.clientWidth, scrollWidth: editor.scrollWidth,
     outside: [...editor.querySelectorAll("svg,label,input")].filter(element => element.getBoundingClientRect().right > innerWidth + 1).length,
   }));
   expect(mobile.scrollWidth).toBeLessThanOrEqual(mobile.width);
   expect(mobile.outside).toBe(0);
+  await page.getByRole("button", { name: "Back to drawer grid" }).click();
+  await expect(page.locator("#drawer-board")).toBeVisible();
   await page.getByRole("button", { name: "Preview layout", exact: true }).click();
   await expect(page.locator("#drawer-message")).toContainText("Preview ready", { timeout: 90_000 });
   await page.getByRole("button", { name: "Add layout to document", exact: true }).click();
   const saved = await tool("jumpstart_get_document", { editorId, includeGeometry: true });
   expect(saved.drawerLayouts[0].definition.bins[0].dividerPositions.y[0]).toBeCloseTo(0.34, 2);
+  expect(saved.drawerLayouts[0].definition.bins[0].fingerScoop).toBe("left");
   expect(errors).toEqual([]);
 });
 
@@ -665,13 +671,11 @@ test("matching open sides support separately printed long-item bins through prev
   await page.getByRole("button", { name: "Drawer layout", exact: true }).click();
   await page.getByRole("button", { name: "Add bin", exact: true }).click();
   for (let count = 0; count < 3; count++) await page.getByRole("button", { name: "Increase width", exact: true }).click();
-  await page.locator(".drawer-compartment-options summary").click();
   const compartments = page.locator("#drawer-bin-compartments-x");
   await compartments.fill("2"); await compartments.press("Tab");
-  await expect(page.locator(".drawer-compartment-options summary")).toContainText("Compartments: 2 × 1");
+  await expect(compartments).toHaveValue("2");
   await expect(page.locator("#drawer-bin-compartments-y")).toBeFocused();
   await compartments.fill("1"); await compartments.press("Tab");
-  await page.locator(".drawer-compartment-options summary").click();
   await page.locator(".drawer-wall-options summary").click();
   await page.getByRole("button", { name: "Open right side", exact: true }).click();
   await expect(page.getByRole("button", { name: "Open right side", exact: true })).toHaveAttribute("aria-pressed", "true");
@@ -764,7 +768,7 @@ test("selected drawer bins expose stackable rims, preserve them through save and
   await expect(page.locator("#drawer-bin-stacking-note")).toContainText("Total bin height: 25.4 mm");
   await page.locator(".drawer-wall-options summary").click();
   await page.getByRole("button", { name: "Open back side", exact: true }).focus();
-  for (let step = 0; step < 5; step++) await page.keyboard.press("Shift+Tab");
+  for (let step = 0; step < 8; step++) await page.keyboard.press("Shift+Tab");
   await expect(stacking).toBeFocused();
   const checkboxBounds = await stacking.boundingBox(), headerBounds = await page.locator(".drawer-inspector-header").boundingBox();
   expect(checkboxBounds.y).toBeGreaterThanOrEqual(headerBounds.y + headerBounds.height);
@@ -788,7 +792,7 @@ test("selected drawer bins expose stackable rims, preserve them through save and
   await tool("jumpstart_save_document", { editorId, expectedRevision: applied.revision });
   await tool("jumpstart_reopen_document", { editorId, expectedRevision: applied.revision, documentId: applied.document.id });
   expect((await get()).drawerLayouts[0].definition.bins[0].lip).toBe(true);
-  await page.getByRole("button", { name: "Layout", exact: true }).click();
+  await page.getByRole("button", { name: "Design", exact: true }).click();
   await page.locator('.drawer-bin[data-bin-id="bin-1"]').click();
   await page.locator(".drawer-measurements summary").click();
   await stacking.uncheck();
@@ -867,7 +871,7 @@ test("drawer insert bins take measured pockets and their own wall thickness thro
   expect(insert.pockets).toMatchObject([{ id: "pocket-1", minimumWall: 2, minimumFloor: 2 }]);
   await tool("jumpstart_save_document", { editorId, expectedRevision: applied.revision });
   await tool("jumpstart_reopen_document", { editorId, expectedRevision: applied.revision, documentId: applied.document.id });
-  await page.getByRole("button", { name: "Layout", exact: true }).click();
+  await page.getByRole("button", { name: "Design", exact: true }).click();
   await page.locator('.drawer-bin[data-bin-id="bin-1"]').click();
   await expect(page.locator("#drawer-pocket-1-width")).toHaveValue("30");
   await expect(page.locator("#drawer-bin-wall")).toHaveValue("2");

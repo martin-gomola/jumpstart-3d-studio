@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { matrixForTransform } from "../plans/plan-geometry.js";
+import { binFootprint } from "../../shared/gridfinity-walls.js";
 import { numberValid } from "./field-text.js";
-import { MagnetControls, NumberField, usePreviewView, WallControls } from "./controls.jsx";
-import { CompartmentFields, PartDividerPositions, ThicknessFields } from "./part-options.jsx";
+import { MagnetControls, NumberField, usePreviewView, WallControls, WorkspaceViewSwitch } from "./controls.jsx";
+import { BinDimensions, CompartmentFields, FingerScoopControl, PartDividerPositions, ThicknessFields } from "./part-options.jsx";
 import { createPartPlanner, PART_LIMITS, partFit, partReady, partState, partSummary, templatePlan } from "./part-planner.js";
 
 function supportedBaseplates(document) {
@@ -51,19 +52,21 @@ export function BinWorkspace({ active, hidden, printArea, request, subscribe, ge
   const document = useSyncExternalStore(subscribe, getDocument);
   const baseplates = useMemo(() => active ? supportedBaseplates(document) : [], [active, document]);
   const [selection, setSelection] = useState(null);
+  const [view, setView] = useState("design");
   const [cell, setCell] = useState({ column: "1", row: "1" });
   const [result, setResult] = useState(null), [retry, setRetry] = useState(0);
   const [applying, setApplying] = useState(false), [notice, setNotice] = useState(null);
   const pending = useRef(null), camera = useRef({}), applyLock = useRef(false);
   const baseplateId = selection?.documentId === document.id ? selection.id : "";
   const baseplate = baseplates.find(entry => entry.id === baseplateId);
+  const bin = partState(draft);
+  const summary = partSummary(draft);
   const fit = partFit(draft, magnets.valid, printArea);
   let formError = "", plan;
   if (!magnets.valid) formError = "Enter valid magnet pocket dimensions.";
   else if (!partReady(draft)) formError = "Enter valid bin dimensions, thicknesses and compartment counts.";
   else if (baseplateId && !baseplate) formError = "That baseplate is unavailable. Choose another baseplate or No baseplate.";
   else {
-    const bin = partState(draft);
     plan = templatePlan(bin);
     if (baseplate) try { Object.assign(plan.operations[0], binPlacement(baseplate, bin, cell.column, cell.row)); }
     catch (error) { formError = error.message; plan = null; }
@@ -101,7 +104,7 @@ export function BinWorkspace({ active, hidden, printArea, request, subscribe, ge
 
   async function add(event) {
     event.preventDefault();
-    if (!active || !current || !result.preview || error || applyLock.current || getDocument() !== document) return;
+    if (view !== "preview" || !active || !current || !result.preview || error || applyLock.current || getDocument() !== document) return;
     applyLock.current = true;
     setApplying(true); setNotice(null);
     try {
@@ -118,77 +121,94 @@ export function BinWorkspace({ active, hidden, printArea, request, subscribe, ge
 
   const chooseBaseplate = id => { setSelection({ documentId: document.id, id }); setCell({ column: "1", row: "1" }); setNotice(null); };
   const setField = (key, value) => { planner.setField(key, value); setNotice(null); };
-  const dimension = (key, label) => <NumberField id={`standalone-bin-${key}`} label={label} text={draft.fields[key]} limits={PART_LIMITS[key]}
-    describedBy="standalone-bin-status" invalid={!numberValid(draft.fields[key], PART_LIMITS[key]) || undefined} disabled={applying}
-    onText={text => setField(key, text)} />;
+  const fitsPrinter = (key, value) => !partFit({ ...draft, fields: { ...draft.fields, [key]: String(value) } }, magnets.valid, printArea).error;
   const location = (key, label, max) => <NumberField id={`standalone-bin-${key}`} label={label} text={cell[key]} limits={{ min: 1, max, step: 1 }}
     describedBy="standalone-bin-status" disabled={applying} onText={text => { setCell(old => ({ ...old, [key]: text })); setNotice(null); }} />;
 
-  return <form className="ai-template-form standalone-bin" hidden={hidden} aria-label="Standalone bin" onSubmit={add} noValidate>
-    <section className="ai-template-review" aria-label="Bin preview and baseplate">
-      <h3>Live 3D preview</h3>
-      <div className="ai-template-preview">
-        {active && result?.preview && result.document === document && <LiveBin key={result.preview.previewId} preview={result.preview} createPreviewView={createPreviewView}
-          camera={camera.current} baseplateId={result.baseplateId} />}
+  const status = applying ? "Adding bin…" : error || (notice?.document === document ? notice.text : fit.rotated ? "Turn the bin 90° on the print bed to fit." : view === "design" && building ? "Updating 3D preview…" : "");
+  const baseplateChoice = <details className="ai-template-group">
+    <summary>{baseplate ? `Baseplate: ${baseplate.name}` : "Use an existing baseplate"}</summary>
+    {baseplates.length ? <>
+      <div className="ai-template-shapes" role="group" aria-label="Existing baseplates">
+        <button type="button" aria-pressed={!baseplateId} disabled={applying} onClick={() => chooseBaseplate("")}>No baseplate</button>
+        {baseplates.map(entry => <button key={entry.id} type="button" disabled={applying} aria-pressed={entry.id === baseplateId}
+          onClick={() => chooseBaseplate(entry.id)}>{entry.name} · {entry.grid.columns} × {entry.grid.rows}</button>)}
       </div>
-      {(building || !current && result?.preview && result.document === document) && <p className="ai-template-note" role="status">
-        {building ? (result?.preview && result.document === document ? "Updating 3D preview…" : "Building 3D preview…") : "Showing the last valid preview."}
-      </p>}
-      <details className="ai-template-group">
-        <summary>{baseplate ? `Baseplate: ${baseplate.name}` : "Use an existing baseplate"}</summary>
-        {baseplates.length ? <>
-          <div className="ai-template-shapes" role="group" aria-label="Existing baseplates">
-            <button type="button" aria-pressed={!baseplateId} disabled={applying} onClick={() => chooseBaseplate("")}>No baseplate</button>
-            {baseplates.map(entry => <button key={entry.id} type="button" disabled={applying} aria-pressed={entry.id === baseplateId}
-              onClick={() => chooseBaseplate(entry.id)}>{entry.name} · {entry.grid.columns} × {entry.grid.rows}</button>)}
-          </div>
-          {baseplate && <div className="ai-template-fields">
-            {location("column", "Column from left", baseplate.grid.columns)}{location("row", "Row from front", baseplate.grid.rows)}
-          </div>}
-        </> : <p className="ai-template-note">Add or open a native upright Gridfinity baseplate to place this bin on its grid.</p>}
-        {baseplateId && !baseplates.length && <button type="button" disabled={applying} onClick={() => chooseBaseplate("")}>No baseplate</button>}
-      </details>
-    </section>
-    <section className="ai-template-settings" aria-label="Bin settings">
-      <div className="ai-controls">
-        <fieldset><legend>Dimensions</legend>
-          <div className="ai-template-fields">
-            {dimension("columns", "Width (cells)")}{dimension("rows", "Depth (cells)")}
-          </div>
-          {dimension("heightUnits", "Body height (7 mm steps)")}
-          <p className="ai-template-note">{partSummary(draft).dimensions}</p>
-          <label className="ai-template-field"><input type="checkbox" checked={draft.lip} disabled={applying}
-            onChange={event => { planner.setLip(event.target.checked); setNotice(null); }} />Stackable rim</label>
-        </fieldset>
-        <fieldset><legend>Compartments</legend>
-          <CompartmentFields id="standalone-bin-compartments" texts={{ x: draft.fields.compartmentsX, y: draft.fields.compartmentsY }}
-            disabled={applying} describedBy="standalone-bin-status"
-            invalid={axis => !numberValid(draft.fields[`compartments${axis.toUpperCase()}`], PART_LIMITS.compartmentsX) || undefined}
-            onText={(axis, text) => setField(`compartments${axis.toUpperCase()}`, text)} />
-          <details className="ai-template-group" hidden={![draft.fields.compartmentsX, draft.fields.compartmentsY].some(value => Number(value) > 1)}>
-            <summary>Divider positions</summary>
-            <PartDividerPositions id="standalone-bin-divider" message="standalone-bin-status" draft={draft}
-              disabled={applying} onCommit={value => { planner.setDividerPositions(value); setNotice(null); }} />
+      {baseplate && <div className="ai-template-fields">
+        {location("column", "Column from left", baseplate.grid.columns)}{location("row", "Row from front", baseplate.grid.rows)}
+      </div>}
+    </> : <p className="ai-template-note">Add or open a native upright Gridfinity baseplate to place this bin on its grid.</p>}
+    {baseplateId && !baseplates.length && <button type="button" disabled={applying} onClick={() => chooseBaseplate("")}>No baseplate</button>}
+  </details>;
+  const settings = <div className="ai-controls" hidden={view !== "design"}>
+    <fieldset><legend>Dimensions</legend>
+      <BinDimensions bin={bin} envelope={binFootprint(bin)} limits={{ columns: PART_LIMITS.columns.max, rows: PART_LIMITS.rows.max }}
+        disabled={applying} canIncrease={fitsPrinter} canUseHeight={units => fitsPrinter("heightUnits", units)}
+        onChange={(key, value) => setField(key, String(value))}
+        heightField={<NumberField id="standalone-bin-heightUnits" label="Body height (7 mm steps)" text={draft.fields.heightUnits}
+          limits={PART_LIMITS.heightUnits} describedBy="standalone-bin-status" disabled={applying}
+          invalid={!numberValid(draft.fields.heightUnits, PART_LIMITS.heightUnits) || undefined} onText={text => setField("heightUnits", text)} />} />
+      <p className="ai-template-note">{summary.dimensions}</p>
+      <label className="ai-template-field"><input type="checkbox" checked={draft.lip} disabled={applying}
+        onChange={event => { planner.setLip(event.target.checked); setNotice(null); }} />Stackable rim</label>
+    </fieldset>
+    <fieldset className="gridfinity-compartment-fields"><legend>Compartments</legend>
+      <CompartmentFields id="standalone-bin-compartments" texts={{ x: draft.fields.compartmentsX, y: draft.fields.compartmentsY }}
+        disabled={applying} describedBy="standalone-bin-status"
+        invalid={axis => !numberValid(draft.fields[`compartments${axis.toUpperCase()}`], PART_LIMITS.compartmentsX) || undefined}
+        onText={(axis, text) => setField(`compartments${axis.toUpperCase()}`, text)} />
+    </fieldset>
+    <WallControls id="standalone-bin-close-gaps" heading="Open sides" value={draft.openSides} closeGaps={draft.closeGaps} disabled={applying}
+      onChange={(sides, closeGaps) => { planner.setWalls(sides, closeGaps); setNotice(null); }}
+      onCloseGaps={value => { planner.setCloseGaps(value); setNotice(null); }} />
+    <FingerScoopControl value={draft.fingerScoop} slope={draft.fingerScoopSlope} openSides={draft.openSides} disabled={applying}
+      onChange={(side, slope) => { planner.setFingerScoop(side, slope); setNotice(null); }} />
+    <details className="ai-template-group">
+      <summary>Construction &amp; magnets</summary>
+      <ThicknessFields id="standalone-bin" texts={draft.fields} disabled={applying} describedBy="standalone-bin-status" onText={setField}
+        invalid={name => !numberValid(draft.fields[name], PART_LIMITS[name]) || undefined} />
+      <MagnetControls id="standalone-bin-magnets" value={state.draft.magnets} disabled={applying}
+        onChange={planner.setMagnets} onValid={(valid, value) => { setMagnets({ valid, value }); setNotice(null); }} />
+    </details>
+  </div>;
+  const dividerEditor = <PartDividerPositions id="standalone-bin-divider" message="standalone-bin-status" draft={draft} disabled={applying}
+    showEmptyPlan onCommit={value => { planner.setDividerPositions(value); setNotice(null); }} />;
+
+  return <form className="ai-template-form standalone-bin gridfinity-workbench" data-view={view} hidden={hidden} aria-label="Standalone bin" onSubmit={add} noValidate>
+    <div className="gridfinity-workbench-columns">
+      <section className="ai-template-review standalone-bin-stage gridfinity-compartment-stage" aria-label={view === "design" ? "Compartment design" : "3D bin preview"}>
+        <div className="drawer-view-toolbar">
+          <WorkspaceViewSwitch label="Bin view" value={view} onChange={setView} previewDisabled={!current || !result?.preview || !!error || applying} />
+          {view === "design" && <h3>Compartment layout</h3>}
+        </div>
+        <div hidden={view !== "design"}>{dividerEditor}</div>
+        <div className="ai-template-preview" hidden={view !== "preview"}>
+          {active && view === "preview" && result?.preview && result.document === document && <LiveBin key={result.preview.previewId} preview={result.preview} createPreviewView={createPreviewView}
+            camera={camera.current} baseplateId={result.baseplateId} />}
+        </div>
+        {view === "preview" && (building || !current && result?.preview && result.document === document) && <p className="ai-template-note" role="status">
+          {building ? "Updating 3D preview…" : "Showing the last valid preview."}
+        </p>}
+      </section>
+      <section className="ai-template-settings" aria-label={view === "design" ? "Bin design settings" : "Bin review"}>
+        {settings}
+        {view === "preview" && <div className="standalone-bin-summary ai-controls">
+          <p>{summary.dimensions}</p>
+          <details className="ai-template-group">
+          <summary>Bin details</summary>
+          <dl><div><dt>Compartments</dt><dd>{`${draft.fields.compartmentsX} × ${draft.fields.compartmentsY}`}</dd></div>
+            <div><dt>Open sides</dt><dd>{draft.openSides.length ? draft.openSides.join(", ") : "None"}</dd></div>
+            <div><dt>Stackable rim</dt><dd>{draft.lip ? "Yes" : "No"}</dd></div>
+            {draft.fingerScoop && <div><dt>Finger scoop</dt><dd>{draft.fingerScoop} · {draft.fingerScoopSlope ?? 1}</dd></div>}</dl>
           </details>
-        </fieldset>
-        <WallControls id="standalone-bin-close-gaps" heading="Open sides" value={draft.openSides} closeGaps={draft.closeGaps} disabled={applying}
-          onChange={(sides, closeGaps) => { planner.setWalls(sides, closeGaps); setNotice(null); }}
-          onCloseGaps={value => { planner.setCloseGaps(value); setNotice(null); }} />
-        <details className="ai-template-group">
-          <summary>Construction &amp; magnets</summary>
-          <ThicknessFields id="standalone-bin" texts={draft.fields} disabled={applying} describedBy="standalone-bin-status" onText={setField}
-            invalid={name => !numberValid(draft.fields[name], PART_LIMITS[name]) || undefined} />
-          <MagnetControls id="standalone-bin-magnets" value={state.draft.magnets} disabled={applying}
-            onChange={planner.setMagnets} onValid={(valid, value) => { setMagnets({ valid, value }); setNotice(null); }} />
-        </details>
-      </div>
-      <div className="ai-template-submit">
-        <p id="standalone-bin-status" className="ai-template-message" role="status" data-error={error ? "true" : undefined}>
-          {applying ? "Adding bin…" : error || (notice?.document === document ? notice.text : fit.rotated ? "Turn the bin 90° on the print bed to fit." : "")}
-        </p>
-        {current && result.error && <button type="button" onClick={() => setRetry(value => value + 1)}>Retry preview</button>}
-        <button type="submit" className="ai-template-primary" disabled={!current || !result.preview || !!error || applying}>Add bin to document</button>
-      </div>
-    </section>
+          {baseplateChoice}
+        </div>}
+        <div className="ai-template-submit">
+          {current && result.error && <button type="button" onClick={() => setRetry(value => value + 1)}>Retry preview</button>}
+          <p id="standalone-bin-status" className="ai-template-message" role="status" data-error={error ? "true" : undefined}>{status}</p>
+          <button type="submit" className="ai-template-primary" hidden={view !== "preview"} disabled={!current || !result?.preview || !!error || applying}>Add bin to document</button>
+        </div>
+      </section>
+    </div>
   </form>;
 }

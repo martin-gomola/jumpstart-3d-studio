@@ -55,6 +55,13 @@ fractions across the clear inside width/depth from the left/front inside wall;
 omit them for equal spacing. Keep every clear compartment at least 2 mm wide.
 Check current capability limits before requesting a large layout.
 The nominal top height and any additional stacking lip are separate dimensions.
+With a stacking lip, the generator lowers the dividers and scoop below the
+receiving profile where cavity depth allows. Dividers have rounded joints at
+closed outer walls. Check a stack with deliberately uneven divider positions
+using a native pair overlap measurement at the intended seating height.
+Set `fingerScoop` to the closed wall that receives the full-width ramp. The
+default slope is 1; set `fingerScoopSlope: 2` for the steeper profile. Omit both
+fields to disable the scoop.
 Plain baseplates are 5 mm tall; bin/insert width and depth are 42 times the cell count
 minus 0.5 mm, while a baseplate spans the full cell grid. The initial generator
 supports optional magnet pockets; screw pockets remain outside this generator.
@@ -107,6 +114,12 @@ conservative or unsupported checks, source assumptions and physical fit
 separately. Printed compatibility remains unverified until a physical fit test.
 
 ## Open sides for separately printed long-item bins
+
+Native storage bins round the inside wall-to-floor joint on retained outer
+walls. The nominal radius is 1 mm, reduced to half the clear cavity height for
+very shallow bins. Check the transition with a section near the wall; check an
+open join separately for a level floor. Keep Gridfinity feet and the outer
+footprint unchanged. Geometry alone does not establish printed strength.
 
 Use `openSides` on a `kind: "bin"` Gridfinity operation or drawer bin. It is an
 array of distinct `left`, `right`, `front`, and `back` values; omission leaves

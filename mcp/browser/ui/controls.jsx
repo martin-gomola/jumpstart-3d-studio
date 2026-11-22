@@ -13,6 +13,17 @@ export function Labelled({ icon, children }) {
   </>;
 }
 
+export function WorkspaceViewSwitch({ label, value, onChange, previewDisabled = false }) {
+  return <div className="ai-template-shapes" role="group" aria-label={label}>
+    <button type="button" className="ai-with-pictogram" aria-pressed={String(value === "design")} onClick={() => onChange("design")}>
+      <Labelled icon="grid">Design</Labelled>
+    </button>
+    <button type="button" className="ai-with-pictogram" aria-pressed={String(value === "preview")} disabled={previewDisabled} onClick={() => onChange("preview")}>
+      <Labelled icon="box">3D preview</Labelled>
+    </button>
+  </div>;
+}
+
 // React's onChange follows `input`; edits commit on the native `change` event, as before.
 function useNativeChange(ref, handler) {
   const latest = useRef(handler); latest.current = handler;

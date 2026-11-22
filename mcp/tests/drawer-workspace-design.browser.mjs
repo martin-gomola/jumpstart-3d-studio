@@ -45,7 +45,7 @@ test('drawer workspace guides measurements, keeps actions nearby and adapts thro
     if (name === 'dark') await expect(preview).toBeInViewport({ ratio: .99 });
     if (zoom) {
       const formBox = await drawer.locator('.ai-template-settings').boundingBox(), reviewBox = await page.locator('.drawer-review').boundingBox();
-      expect(reviewBox.y).toBeGreaterThanOrEqual(formBox.y + formBox.height);
+      expect(formBox.y).toBeGreaterThanOrEqual(reviewBox.y + reviewBox.height);
       for (const id of ['width', 'depth', 'height', 'name']) {
         await page.locator(`#drawer-${id}`).focus(); await expect(page.locator(`#drawer-${id}`)).toBeInViewport({ ratio: .99 });
       }
@@ -63,7 +63,8 @@ test('drawer workspace guides measurements, keeps actions nearby and adapts thro
     }
     if (name === 'reference') {
       const left = await drawer.locator('.ai-template-settings').boundingBox(), right = await page.locator('.drawer-review').boundingBox();
-      expect(left.width).toBe(512); expect(Math.abs(left.y - right.y)).toBeLessThan(1);
+      expect(left.width).toBe(448); expect(Math.abs(left.y - right.y)).toBeLessThan(1);
+      expect(left.x + left.width).toBeLessThan(right.x);
       expect(Math.abs(left.y + left.height - right.y - right.height)).toBeLessThan(1);
       const art = await page.locator('.drawer-measure-art').boundingBox();
       expect(art.width).toBe(508); expect(art.y - right.y).toBeLessThan(160);
@@ -88,7 +89,7 @@ test('drawer workspace guides measurements, keeps actions nearby and adapts thro
   const stepBox = await page.locator('.ai-flow li').first().boundingBox(), reviewBox = await page.locator('.drawer-review').boundingBox();
   expect(stepBox.y).toBeGreaterThanOrEqual(reviewBox.y);
   const flowBox = await page.locator('.ai-flow').boundingBox(), toolbarBox = await page.locator('.drawer-review-toolbar').boundingBox();
-  expect(toolbarBox.y).toBeGreaterThanOrEqual(flowBox.y + flowBox.height);
+  expect(flowBox.y).toBeGreaterThanOrEqual(toolbarBox.y + toolbarBox.height);
   const layoutBox = await page.locator('.drawer-layout-view').boundingBox();
   expect(layoutBox.y).toBeGreaterThanOrEqual(toolbarBox.y + toolbarBox.height);
   await page.screenshot({ path: '/tmp/jumpstart-drawer-workspace-arranged.png' });

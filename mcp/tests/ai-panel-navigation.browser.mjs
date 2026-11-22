@@ -10,8 +10,8 @@ test("wider controls and labeled pictograms remain aligned and operable across w
   await page.waitForFunction(() => window.__app?.kernel?.ready, null, { timeout: 90_000 });
   await page.waitForSelector("#loading", { state: "hidden" });
   await page.click("#ai-status");
-  const sidebar = page.locator(".ai-drawer-mode > .ai-template-settings");
-  expect((await sidebar.boundingBox()).width).toBe(512);
+  const sidebar = page.locator(".ai-drawer-mode .ai-template-settings");
+  expect((await sidebar.boundingBox()).width).toBe(448);
   for (const [id, amount] of [["width", "695"], ["depth", "230"], ["height", "60"]]) {
     await page.fill(`#drawer-${id}`, amount); await page.locator(`#drawer-${id}`).press("Tab");
   }

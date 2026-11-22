@@ -2,9 +2,11 @@
 
 The desktop AI workspace separates client connection setup from feature generators.
 Gridfinity serves makers arranging useful storage in a measured drawer or creating
-individual bins, baseplates and inserts. Its drawer flow is inside measurements,
-spatial arrangement, selected-bin settings, inspected 3D preview, and explicit
-Add to document.
+individual bins, baseplates and inserts. Drawer and standalone-bin creation share
+the same Design / 3D preview workbench. Design uses a task-specific 2D canvas: the
+drawer grid for placement, or the bin plan for compartment editing. The inspector
+keeps the same labels and order for shared bin settings. A current, inspected 3D
+preview precedes the explicit action that adds the result to the document.
 
 Use the existing editor theme variables and `mcp/tokens/ai-status.json`. Keep the
 CAD palette, typefaces, control states, and keyboard focus conventions. The
@@ -43,10 +45,17 @@ choosing a CAD mode closes the AI workspace.
   with Drawer layout as its workflow. Printer & settings is a
   secondary action. Future unrelated generators
   belong beside Gridfinity, not inside its drawer or part controls.
-- Standalone bin sits beside Drawer layout in Create. Keep dimensions, compartments and
-  open sides visible beside the live CAD preview. A native upright baseplate can provide
-  a placement grid in its own cell coordinates. Apply adds just the bin in one undoable edit.
-  The editor's Gridfinity part dialog also supports inserts and baseplates.
+- Keep Drawer layout, Standalone bin, and Printer & settings as the three Gridfinity
+  tasks. Drawer and bin creation share a Design / 3D preview switch, consistent
+  inspector grouping, status feedback, and reversible navigation. The design canvas
+  is a drawer placement grid or a bin's top-down compartment plan. Printer settings
+  remain a setup task without a design/preview switch.
+- Keep bin dimensions, compartment counts and positions, open sides, stacking rim,
+  wall/floor thickness and magnets in the same order and use the same field labels
+  wherever a bin is edited. A native upright baseplate can provide a placement grid
+  in its own cell coordinates. Add to document remains an explicit, single undoable
+  edit; adding a bin to a drawer draft remains a separate action. The editor's
+  Gridfinity part dialog also supports inserts and baseplates.
 - Keep bin geometry options available in all three entry points: dimensions, stackable rim,
   compartment counts and divider positions, open sides and flush joins, floor and wall
   thickness, and magnet pockets. Each entry point uses its own placement controls.
@@ -75,15 +84,25 @@ choosing a CAD mode closes the AI workspace.
   and show spare space per side. Example measurements must be explicitly chosen and labelled.
 - Draw and move bins directly on the grid, with keyboard and stepper alternatives.
   Reject overlap and out-of-bounds placement; keep the previous valid arrangement.
-- Reveal the selected bin's name, footprint, height and Stackable rim option initially. Keep
-  compartment choices in their disclosure, opening it for configured dividers. New divider
-  positions start evenly spaced; show a top-down editor with draggable, keyboard-operable
+- Reveal the selected bin's name, footprint, height and Stackable rim option initially.
+  Keep compartment counts in the settings panel. New divider positions start evenly
+  spaced; show a top-down editor with draggable, keyboard-operable
   handles and explicit millimetre fields measured from the left/front inside walls. Put
   construction settings under Advanced. Show physical millimetres alongside cells.
 - Selecting a bin collapses drawer measurements and reveals the inspector near the
-  top of the left column. Keep its bin name and Rotate/Duplicate/Remove actions
+  top of the settings column. Keep its bin name and Rotate/Duplicate/Remove actions
   sticky while scrolling. Do not move the layout or steal board keyboard focus,
   and do not reset inspector scrolling during field edits.
+- Both creation tasks show a narrow settings panel beside the work area. On wide
+  screens the panel is on the left. On narrow screens it follows the canvas. Keep the
+  Design / 3D preview switch close to the canvas and document actions in the settings panel.
+  Standalone preview puts bin details and optional baseplate placement beside the
+  model so opening either section does not shrink the canvas.
+  Edit compartment layout opens the selected drawer bin on the canvas with the
+  same drag handles, arrow keys and millimetre fields as Standalone bin.
+- Use the same width and depth steppers and body height presets for drawer bins
+  and standalone bins. Show footprint measurements in millimetres beside the
+  cell counts and keep exact height in 7 mm steps under More heights.
 - Collapse measured drawer dimensions into an editable summary after bins are
   added, so selected-bin controls stay near the grid instead of below setup fields.
 - Keep draft undo separate from native document undo. Planner navigation must not
@@ -133,6 +152,12 @@ remain text controls, rather than accumulating decorative icons.
   Preserve browser preferences, per-drawer limits and print-fit metadata.
 
 ## Open-sided bins for long items
+
+- Offer Finger scoop in all three bin editors with levels 0 (off), 1 (standard)
+  and 2 (steep). It adds a full-width rounded ramp along a chosen closed wall
+  to lift small items from the floor. It follows drawer bin rotation,
+  adapts to compartment depth and leaves the outside dimensions and feet intact.
+  Opening the wall that carries it clears the scoop. Show it in the 3D preview.
 
 - Offer left, right, front and back openings on bins. Keep the entire floor and
   protected Gridfinity base, and cut the matching stacking rim at the opening.

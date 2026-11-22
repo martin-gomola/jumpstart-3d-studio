@@ -10,6 +10,58 @@ const SHAPES = [["roundedRect", "Rounded"], ["circle", "Circle"], ["capsule", "C
 const EVIDENCE = [["estimate", "Estimate"], ["measured", "Measured"], ["manufacturer", "Published"], ["model", "Model"]];
 export const THICKNESS_LIMITS = { floor: { min: 0.8, max: 6 }, wall: { min: 0.8, max: 4 } };
 
+export function FingerScoopControl({ value, slope, openSides, disabled, onChange }) {
+  const walls = ["front", "back", "left", "right"];
+  const firstClosed = walls.find(side => !openSides.includes(side));
+  return <div className="ai-template-group">
+    <span>Finger scoop</span>
+    <div className="ai-template-shapes" role="group" aria-label="Finger scoop">
+      {["0 Off", "1 Standard", "2 Steep"].map((label, level) => <button key={level} type="button"
+        aria-pressed={level === (value ? slope ?? 1 : 0)} disabled={disabled || level > 0 && !firstClosed}
+        onClick={() => onChange(level ? value || firstClosed : undefined, level === 2 ? 2 : undefined)}>{label}</button>)}
+    </div>
+    {value && <div className="ai-template-shapes" role="group" aria-label="Finger scoop wall">
+      {walls.map(side => <button key={side} type="button" aria-pressed={side === value} disabled={disabled || openSides.includes(side)}
+        onClick={() => onChange(side, slope)}>{side[0].toUpperCase() + side.slice(1)}</button>)}
+    </div>}
+    <p className="ai-template-note">{firstClosed ? "Full-width ramp along a closed wall." : "Close a wall to add a finger scoop."}</p>
+  </div>;
+}
+
+export function BinDimensions({ bin, envelope, limits, disabled, canIncrease, canUseHeight, onChange, heightField }) {
+  const heights = [2, 3, 5, 7];
+  if (numberValid(String(bin.heightUnits), PART_LIMITS.heightUnits) && !heights.includes(bin.heightUnits)) {
+    heights.push(bin.heightUnits);
+    heights.sort((a, b) => a - b);
+  }
+  return <>
+    <div className="ai-template-fields gridfinity-footprint">
+      {[["columns", "Width", envelope.width], ["rows", "Depth", envelope.depth]].map(([key, label, mm]) => (
+        <div className="drawer-stepper" key={key}>
+          <span>{label}</span>
+          <div>
+            <button type="button" aria-label={`Decrease ${label.toLowerCase()}`} disabled={disabled || bin[key] <= 1}
+              onClick={() => onChange(key, bin[key] - 1)}>−</button>
+            <output>{`${bin[key]} cells`}</output>
+            <button type="button" aria-label={`Increase ${label.toLowerCase()}`} disabled={disabled || bin[key] >= limits[key] || !canIncrease(key, bin[key] + 1)}
+              onClick={() => onChange(key, bin[key] + 1)}>+</button>
+          </div>
+          <small>{`${mm} mm`}</small>
+        </div>
+      ))}
+    </div>
+    <span>Height</span>
+    <div className="ai-template-shapes" role="group" aria-label="Bin height">
+      {heights.map(units => <button key={units} type="button" disabled={disabled || !canUseHeight(units)}
+        aria-pressed={String(bin.heightUnits === units)} onClick={() => onChange("heightUnits", units)}>{`${units * 7} mm`}</button>)}
+    </div>
+    <details className="ai-template-group">
+      <summary>More heights</summary>
+      {heightField}
+    </details>
+  </>;
+}
+
 export function ThicknessFields({ id, texts, onText, onCommit, onEdit, invalid = () => undefined, disabled, describedBy }) {
   return <div className="ai-template-fields">
     {[["floor", "Floor thickness (mm)"], ["wall", "Wall thickness (mm)"]].map(([name, label]) => <NumberField key={name} id={`${id}-${name}`} label={label} text={texts[name]}
@@ -26,11 +78,11 @@ export function CompartmentFields({ id, texts, onText, onCommit, onEdit, invalid
   </div>;
 }
 
-export function PartDividerPositions({ id, message, draft, disabled, onCommit }) {
+export function PartDividerPositions({ id, message, draft, disabled, onCommit, showEmptyPlan = false }) {
   if (!["columns", "rows", "wall", "compartmentsX", "compartmentsY"].every(key => numberValid(draft.fields[key], PART_LIMITS[key]))) return null;
   const bin = partState(draft);
   const dividers = { x: bin.compartmentsX - 1, y: bin.compartmentsY - 1 };
-  return <DividerPositionEditor id={id} message={message} bin={{ ...bin, dividers }} wall={bin.wall} disabled={disabled} onCommit={onCommit} />;
+  return <DividerPositionEditor id={id} message={message} bin={{ ...bin, dividers }} wall={bin.wall} disabled={disabled} onCommit={onCommit} showEmptyPlan={showEmptyPlan} />;
 }
 
 // `onPatch(patch, commit)` commits discrete choices at once; typed text commits through `onCommit` when the field changes.

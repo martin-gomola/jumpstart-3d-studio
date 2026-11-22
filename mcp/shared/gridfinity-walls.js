@@ -1,5 +1,18 @@
 export const BIN_SIDES = Object.freeze(["left", "right", "front", "back"]);
 
+export function normalizeFingerScoopSlope(value, side) {
+  if (value === undefined) return undefined;
+  if (!side || value !== 1 && value !== 2) throw new Error("Finger scoop slope must be 1 or 2 on an enabled scoop.");
+  return value;
+}
+export function normalizeFingerScoop(side, kind, openSides) {
+  if (side === undefined) return undefined;
+  if (kind !== "bin" || !BIN_SIDES.includes(side) || openSides.includes(side)) {
+    throw new Error("Finger scoop requires a closed wall on a storage bin.");
+  }
+  return side;
+}
+
 export function normalizeOpenSides(value, label = "openSides") {
   if (value === undefined) return [];
   if (!Array.isArray(value) || value.length > BIN_SIDES.length || value.some(side => !BIN_SIDES.includes(side)) || new Set(value).size !== value.length) {

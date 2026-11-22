@@ -23,14 +23,25 @@ test("design a bin live and add it to an existing Gridfinity baseplate", async (
   await page.getByRole("button", { name: "Standalone bin", exact: true }).click();
   const panel = page.getByRole("form", { name: "Standalone bin" });
   const add = panel.getByRole("button", { name: "Add bin to document" });
-  await expect(panel.getByRole("group", { name: "Compartments" })).toBeVisible();
+  await expect(panel.getByRole("group", { name: "Compartments", exact: true })).toBeVisible();
   await expect(panel.getByRole("group", { name: "Open sides" })).toBeVisible();
-  await expect(add).toBeEnabled({ timeout: 30_000 });
-  await expect(panel.locator("canvas")).toBeVisible();
-  await panel.getByRole("button", { name: "Top view" }).click();
-  await panel.getByText("Use an existing baseplate", { exact: true }).click();
-  await panel.getByRole("button", { name: /4 × 3/ }).click();
-  await panel.getByLabel("Depth (cells)").fill("2");
+  await expect(panel.locator(".drawer-divider-diagram")).toBeVisible();
+  await panel.getByRole("button", { name: "Decrease depth", exact: true }).click();
+  const depth = panel.locator(".gridfinity-footprint .drawer-stepper").filter({ hasText: "Depth" });
+  await expect(depth).toContainText("2 cells");
+  await expect(depth).toContainText("83.5 mm");
+  await panel.getByRole("button", { name: "Increase depth", exact: true }).click();
+  await expect(depth).toContainText("3 cells");
+  await panel.getByRole("button", { name: "Decrease depth", exact: true }).click();
+  const heights = panel.getByRole("group", { name: "Bin height" });
+  await expect(heights.getByRole("button")).toHaveText(["14 mm", "21 mm", "35 mm", "49 mm"]);
+  await heights.getByRole("button", { name: "35 mm" }).click();
+  await expect(heights.getByRole("button", { name: "35 mm" })).toHaveAttribute("aria-pressed", "true");
+  await panel.getByText("More heights", { exact: true }).click();
+  const height = panel.getByLabel("Body height (7 mm steps)");
+  await height.fill("4");
+  await height.press("Tab");
+  await expect(heights.getByRole("button", { name: "28 mm" })).toHaveAttribute("aria-pressed", "true");
   await panel.getByLabel("Compartments across width").fill("2");
   const closeGaps = panel.getByRole("checkbox", { name: "Close gaps on open sides" });
   await expect(closeGaps).toBeDisabled();
@@ -41,13 +52,33 @@ test("design a bin live and add it to an existing Gridfinity baseplate", async (
   await expect(closeGaps).not.toBeChecked();
   await panel.getByRole("button", { name: "Open front side", exact: true }).click();
   await closeGaps.check();
+  const levels = panel.getByRole("group", { name: "Finger scoop", exact: true });
+  const scoop = levels.getByRole("button", { name: "1 Standard", exact: true });
+  await panel.getByRole("button", { name: "Open front side", exact: true }).click();
+  await scoop.click();
+  await panel.getByRole("button", { name: "Open front side", exact: true }).click();
+  await expect(levels.getByRole("button", { name: "0 Off", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await panel.getByRole("button", { name: "Open front side", exact: true }).click();
+  await levels.getByRole("button", { name: "2 Steep", exact: true }).click();
+  await panel.getByRole("button", { name: "Open back side", exact: true }).click();
+  const scoopWall = panel.getByRole("group", { name: "Finger scoop wall" });
+  await expect(scoopWall.getByRole("button", { name: "Back", exact: true })).toBeDisabled();
+  await scoopWall.getByRole("button", { name: "Right", exact: true }).click();
+  await expect(levels.getByRole("button", { name: "2 Steep", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await closeGaps.check();
   await panel.getByText("Construction & magnets", { exact: true }).click();
   await panel.getByLabel("Wall thickness (mm)").fill("1.5");
   await panel.getByLabel("Floor thickness (mm)").fill("2.5");
   await panel.getByRole("checkbox", { name: "Magnet pockets", exact: true }).check();
-  await panel.getByText("Divider positions", { exact: true }).click();
   await panel.getByLabel("Divider 1 from left (mm)").fill("29");
   await panel.getByLabel("Divider 1 from left (mm)").press("Tab");
+  const previewMode = panel.getByRole("button", { name: "3D preview", exact: true });
+  await expect(previewMode).toBeEnabled({ timeout: 30_000 });
+  await previewMode.click();
+  await expect(panel.locator("canvas")).toBeVisible();
+  await panel.getByRole("button", { name: "Top view" }).click();
+  await panel.getByText("Use an existing baseplate", { exact: true }).click();
+  await panel.getByRole("button", { name: /4 × 3/ }).click();
   await panel.getByLabel("Column from left").fill("4");
   await expect(panel.getByRole("status").filter({ hasText: "extends beyond the baseplate" })).toBeVisible();
   await expect(add).toBeDisabled();
@@ -56,6 +87,10 @@ test("design a bin live and add it to an existing Gridfinity baseplate", async (
   await expect(add).toBeDisabled();
   await expect(add).toBeEnabled({ timeout: 30_000 });
   await expect(panel.locator("canvas")).toBeVisible();
+  const canvasBox = await panel.locator("canvas").boundingBox();
+  const settingsBox = await panel.getByRole("region", { name: "Bin review" }).boundingBox();
+  expect(canvasBox.height).toBeGreaterThanOrEqual(400);
+  expect(canvasBox.x).toBeGreaterThan(settingsBox.x + settingsBox.width);
   await expect.poll(() => page.evaluate(() => window.__store.doc.bodies.length)).toBe(1);
   await page.screenshot({ path: info.outputPath("standalone-bin.png") });
   await page.setViewportSize({ width: 390, height: 820 });
@@ -66,7 +101,7 @@ test("design a bin live and add it to an existing Gridfinity baseplate", async (
   expect(baseplate).toEqual(original);
   expect(bin.m.slice(12, 15)).toEqual([-1, 30, 3.25]);
   expect(bin.mcpGridfinity).toMatchObject({
-    kind: "bin", columns: 2, rows: 2, dividers: { x: 1, y: 0 }, openSides: ["front"], closeGaps: true,
+    kind: "bin", columns: 2, rows: 2, heightUnits: 4, dividers: { x: 1, y: 0 }, openSides: ["back"], closeGaps: true, fingerScoop: "right", fingerScoopSlope: 2,
     wall: 1.5, floor: 2.5, magnetPockets: { count: 16 },
   });
   expect(bin.mcpGridfinity.dividerPositions.x[0]).toBeCloseTo(29 / 80.5, 8);

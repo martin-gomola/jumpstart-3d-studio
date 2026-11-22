@@ -25,12 +25,14 @@ test("layout bounds, overlap, height, unknown fields and budgets are rejected wi
 });
 test("custom drawer divider positions persist as millimetre fractions and rotate with each bin", async () => {
   const { rotateDrawerLayout } = await import("../shared/drawer-layout.js");
-  const custom = layout({ bins: [bin("tray", { columns: 2, rows: 3, dividers: { x: 1, y: 2 }, dividerPositions: { x: [0.25], y: [0.25, 0.75] } })] });
+  const custom = layout({ bins: [bin("tray", { columns: 2, rows: 3, fingerScoop: "front", dividers: { x: 1, y: 2 }, dividerPositions: { x: [0.25], y: [0.25, 0.75] } })] });
   const normalized = normalizeDrawerLayout(custom);
   assert.deepEqual(normalized.bins[0].dividerPositions, { x: [0.25], y: [0.25, 0.75] });
   assert.deepEqual(drawerParts(normalized)[0].dividerPositions, { x: [0.25], y: [0.25, 0.75] });
+  assert.equal(drawerParts(normalized)[0].fingerScoop, "front");
   const rotated = rotateDrawerLayout(normalized);
   assert.deepEqual(rotated.bins[0].dividers, { x: 2, y: 1 });
+  assert.equal(rotated.bins[0].fingerScoop, "left");
   assert.deepEqual(rotated.bins[0].dividerPositions, { x: [0.25, 0.75], y: [0.75] });
   for (const positions of [{ x: [0.4, 0.6], y: [0.5] }, { x: [0], y: [0.5] }, { x: [0.25], y: [0.75, 0.25] }]) {
     assert.throws(() => normalizeDrawerLayout(layout({ bins: [bin("tray", { dividers: { x: 1, y: 2 }, dividerPositions: positions })] })));

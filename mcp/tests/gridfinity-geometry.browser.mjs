@@ -14,6 +14,36 @@ function fixture(specs) {
   return doc;
 }
 
+test("finger scoop forms one connected bin with a curved rise and unchanged outside dimensions", async ({ page }, info) => {
+  const spec = { kind: "bin", columns: 2, rows: 2, heightUnits: 6, lip: true };
+  const doc = fixture([spec, { ...spec, fingerScoop: "front", position: [120, 0, 0] },
+    { ...spec, fingerScoop: "front", fingerScoopSlope: 2, position: [240, 0, 0] }]);
+  const errors = watchErrors(page);
+  await boot(page, info); await loadDoc(page, doc);
+  const { inspectGeometry } = await import("../browser/inspection/inspection.js");
+  const parts = await page.evaluate(() => window.__store.doc.bodies.map(body => {
+    const data = window.__app.scene.views.get(body.id)?.data;
+    return { bbox: data.bbox, vertices: Array.from(data.vertices), triangles: Array.from(data.triangles) };
+  }));
+  expect(parts[1].bbox).toEqual(parts[0].bbox);
+  expect(parts[2].bbox).toEqual(parts[0].bbox);
+  const samples = [-38, -33, -28, -20].map(y => ({ axis: "Z", point: [0, y, 0] }));
+  const checked = inspectGeometry(parts[1], { mesh: true, samples });
+  expect(checked.meshValidation).toMatchObject({ valid: true, disconnectedComponents: 1 });
+  const tops = checked.samples.map(sample => sample.intervals[0][1]);
+  expect(tops[0]).toBeGreaterThan(tops[1]);
+  expect(tops[1]).toBeGreaterThan(tops[2]);
+  expect(tops[2]).toBeGreaterThan(tops[3]);
+  expect(tops[3]).toBeCloseTo(9, 2);
+  const edgeSample = { axis: "Z", point: [39, -38, 0] };
+  const standardEdge = inspectGeometry(parts[1], { samples: [edgeSample] }).samples[0].intervals[0][1];
+  const steep = inspectGeometry(parts[2], { mesh: true, samples: [edgeSample] });
+  expect(steep.meshValidation).toMatchObject({ valid: true, disconnectedComponents: 1 });
+  expect(standardEdge).toBeCloseTo(tops[0], 1);
+  expect(steep.samples[0].intervals[0][1] - 9).toBeCloseTo((standardEdge - 9) * 1.5, 1);
+  expect(errors).toEqual([]);
+});
+
 test("native Gridfinity insert and socket baseplate have measured bounds and noninterfering aligned geometry",async({page},info)=>{
   const errors=watchErrors(page);
   const doc=fixture([{kind:"insert",columns:2,rows:3,position:[0,0,0.25]},{kind:"baseplate",columns:2,rows:3}]);
@@ -52,6 +82,32 @@ test("native divided bin with stacking lip builds as a connected editable solid"
   const other={node:{t:"prim",kind:"box",p:{w:2,d:2,h:2},mods:[]},m:[1,0,0,0,0,1,0,0,0,0,1,0,200,0,0,1]};
   const [inspection]=await page.evaluate(pairs=>window.__app.kernel.inspectPairs(pairs),[{id:"single",a:native,b:other}]);
   expect(inspection.status,JSON.stringify(inspection)).toBe("measured");
+  expect(errors).toEqual([]);
+});
+
+test("asymmetric rounded dividers clear the upper bin feet at nominal stacking height", async ({ page }, info) => {
+  const spec = { kind: "bin", columns: 2, rows: 2 };
+  const doc = fixture([{ ...spec, lip: true, fingerScoop: "front", dividers: { x: 1, y: 1 }, dividerPositions: { x: [0.25], y: [0.25] } },
+    { ...spec, position: [0, 0, 20.65] }]);
+  const errors = watchErrors(page);
+  await boot(page, info); await loadDoc(page, doc);
+  const { inspectGeometry } = await import("../browser/inspection/inspection.js");
+  const meshes = await page.evaluate(() => window.__store.doc.bodies.map(body => {
+    const { vertices, triangles } = window.__app.scene.views.get(body.id).data;
+    return { vertices: Array.from(vertices), triangles: Array.from(triangles) };
+  }));
+  for (const mesh of meshes) expect(inspectGeometry(mesh, { mesh: true }).meshValidation).toMatchObject({ valid: true, disconnectedComponents: 1 });
+  const dividerX = -40.55 + 81.1 * 0.25;
+  const samples = [ [dividerX, 0, 0], [dividerX + 0.8, 0, 0], [dividerX + 0.8, 40.45, 0] ]
+    .map(point => ({ axis: "Z", point }));
+  const tops = inspectGeometry(meshes[0], { samples }).samples.map(sample => sample.intervals[0][1]);
+  expect(tops[0]).toBeCloseTo(16.99, 2);
+  expect(tops[1]).toBeCloseTo(9, 2);
+  expect(tops[2]).toBeCloseTo(16.99, 2);
+  const [a, b] = doc.bodies.map(body => ({ node: resolveNode(body.node, doc), m: body.m }));
+  const [fit] = await page.evaluate(pair => window.__app.kernel.inspectPairs([pair]), { id: "stack", a, b });
+  expect(fit.status, JSON.stringify(fit)).toBe("measured");
+  expect(fit.overlapVolumeMm3).toBeCloseTo(0, 5);
   expect(errors).toEqual([]);
 });
 
@@ -118,6 +174,12 @@ test("open bin walls remove their rims while retaining connected floors and Grid
   }
   expect(parts[5].bounds.max[2]).toBeCloseTo(9, 5);
   expect(parts[6].bounds.max[2]).toBeCloseTo(20.99, 5);
+  const topAt = (part, x) => inspectGeometry(part, { samples: [{ axis: "Z", point: [x, 0, 0] }] }).samples[0].intervals[0][1];
+  // 0.2 mm in from the closed wall, the 1 mm quarter circle rises 0.4 mm.
+  expect(topAt(parts[0], 40.35)).toBeCloseTo(9.4, 1);
+  expect(topAt(parts[0], 39.4)).toBeCloseTo(9, 3);
+  expect(topAt(parts[2], 40.35)).toBeCloseTo(9, 3);
+  expect(topAt(parts[2], -40.35)).toBeCloseTo(9.4, 1);
   const probe = (w, d, h, x = 0, y = 0, z = 0) => ({ node: { t: "prim", kind: "box", p: { w, d, h, r: 0, c: 0 }, mods: [] }, m: [...IDENTITY.slice(0, 12), x, y, z, 1] });
   const pairs = [];
   for (let index = 0; index < document.bodies.length; index++) {

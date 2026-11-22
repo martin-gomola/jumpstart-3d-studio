@@ -13,7 +13,7 @@ function dividerBounds(values, index, span, wall) {
   return { min, max };
 }
 
-export function DividerPositionEditor({ id, message, bin, wall, disabled, onCommit }) {
+export function DividerPositionEditor({ id, message, bin, wall, disabled, onCommit, showEmptyPlan = false }) {
   const positions = bin.dividerPositions || evenDividerPositions(bin.dividers);
   const spans = { x: axisSpan(bin, wall, "x"), y: axisSpan(bin, wall, "y") };
   const viewHeight = 1000 * bin.rows / bin.columns;
@@ -84,7 +84,7 @@ export function DividerPositionEditor({ id, message, bin, wall, disabled, onComm
     flushSync(() => onCommit(next));
   };
   const xCount = positions.x.length, yCount = positions.y.length;
-  if (!xCount && !yCount) return <p className="ai-template-note">Set either compartment count above 1 to add a divider. New dividers start evenly spaced.</p>;
+  if (!xCount && !yCount && !showEmptyPlan) return <p className="ai-template-note">Set either compartment count above 1 to add a divider. New dividers start evenly spaced.</p>;
   const line = (axis, index) => {
     const values = visible[axis], position = values[index], bounds = dividerBounds(values, index, spans[axis], wall);
     const label = `${axis === "x" ? "Across width" : "Along depth"} divider ${index + 1}`;
@@ -106,7 +106,7 @@ export function DividerPositionEditor({ id, message, bin, wall, disabled, onComm
       {positions.x.map((_, index) => line("x", index))}
       {positions.y.map((_, index) => line("y", index))}
     </svg>
-    <p id={`${id}-note`} className="ai-template-note">Drag a divider or edit its distance from the inside wall. Front is at the bottom; each compartment needs at least 2 mm clear width.</p>
+    <p id={`${id}-note`} className="ai-template-note">{xCount || yCount ? "Drag a divider or edit its distance from the inside wall. Front is at the bottom; each compartment needs at least 2 mm clear width." : "Set either compartment count above 1 to add a divider. New dividers start evenly spaced."}</p>
     <div className="drawer-divider-fields">
       {(["x", "y"]).map(axis => positions[axis].length > 0 && <section key={axis} className="drawer-divider-axis">
         <h4>{dividerAxis[axis].heading}</h4>

@@ -101,7 +101,7 @@ test("drawer magnet controls align baseplates and bins, check the raised seating
   await tool("jumpstart_save_document", { editorId, expectedRevision: applied.revision });
   await tool("jumpstart_reopen_document", { editorId, expectedRevision: applied.revision, documentId: applied.document.id });
   expect((await get()).drawerLayouts[0].definition).toEqual(applied.drawerLayouts[0].definition);
-  await page.getByRole("button", { name: "Layout", exact: true }).click();
+  await page.getByRole("button", { name: "Design", exact: true }).click();
   await page.locator('.drawer-bin[data-bin-id="bin-1"]').click();
   await page.locator("#drawer-bin-magnets").uncheck();
   await page.getByRole("button", { name: "Preview layout", exact: true }).click();

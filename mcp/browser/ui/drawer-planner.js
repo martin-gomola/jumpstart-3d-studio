@@ -81,6 +81,8 @@ export function createDrawerPlanner({ request, onBusy = () => {}, storage = glob
   function updateBin(changes) {
     const bin = picked(); if (!bin || state.busy) return false;
     const candidate = { ...bin, ...changes }, next = copy(state.draft);
+    if (candidate.kind !== "bin" || candidate.openSides?.includes(candidate.fingerScoop)) delete candidate.fingerScoop;
+    if (!candidate.fingerScoop) delete candidate.fingerScoopSlope;
     if (Object.hasOwn(changes, "dividers") && !Object.hasOwn(changes, "dividerPositions")) delete candidate.dividerPositions;
     if (JSON.stringify(candidate) === JSON.stringify(bin)) { refresh(); return true; }
     const error = placementError(state.draft, candidate, bin.id);
@@ -208,7 +210,7 @@ export function createDrawerPlanner({ request, onBusy = () => {}, storage = glob
       const next = copy(state.draft); next.bins = next.bins.filter(entry => entry.id !== bin.id);
       put({ selectedId: null }); commit(next, "Bin removed. Undo layout restores it.");
     }),
-    rotateBin: act(() => { const bin = picked(); if (bin) updateBin({ columns: bin.rows, rows: bin.columns, dividers: { x: bin.dividers.y, y: bin.dividers.x }, openSides: rotateOpenSides(bin.openSides), ...(bin.dividerPositions ? { dividerPositions: rotateDividerPositions(bin.dividerPositions) } : {}), ...(bin.pockets ? { pockets: rotateBinPockets(bin.pockets) } : {}) }); }),
+    rotateBin: act(() => { const bin = picked(); if (bin) updateBin({ columns: bin.rows, rows: bin.columns, dividers: { x: bin.dividers.y, y: bin.dividers.x }, openSides: rotateOpenSides(bin.openSides), ...(bin.fingerScoop ? { fingerScoop: rotateOpenSides([bin.fingerScoop])[0] } : {}), ...(bin.dividerPositions ? { dividerPositions: rotateDividerPositions(bin.dividerPositions) } : {}), ...(bin.pockets ? { pockets: rotateBinPockets(bin.pockets) } : {}) }); }),
     duplicateBin: act(() => perform(() => {
       const bin = picked(), space = firstDrawerSpace(state.draft, bin.columns, bin.rows); if (!space) throw new Error("No space for another bin of that size.");
       if (state.draft.bins.length >= 16) throw new Error("This layout supports up to 16 bins.");
