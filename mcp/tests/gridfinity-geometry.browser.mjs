@@ -14,6 +14,30 @@ function fixture(specs) {
   return doc;
 }
 
+test("bin floor keeps a rounded wall root without a thick band above the floor", async ({ page }, info) => {
+  const doc = fixture([{ kind: "bin", columns: 2, rows: 3, heightUnits: 5, lip: true }]);
+  await boot(page, info); await loadDoc(page, doc);
+  const mesh = await page.evaluate(() => {
+    const { vertices, triangles } = window.__app.scene.views.get("body-0").data;
+    return { vertices: Array.from(vertices), triangles: Array.from(triangles) };
+  });
+  const { inspectGeometry } = await import("../browser/inspection/inspection.js");
+  for (const [axis, outer] of [["X", 41.75], ["Y", 62.75]]) {
+    const samples = [9.05, 9.2, 9.65].map(z => ({ axis, point: [3, 3, z] }));
+    const result = inspectGeometry(mesh, { samples });
+    const thickness = result.samples.map(({ intervals }) => {
+      expect(intervals).toHaveLength(2);
+      const [inside, outside] = intervals[1];
+      expect(outside).toBeCloseTo(outer, 3);
+      return outside - inside;
+    });
+    expect(thickness[0]).toBeLessThan(1.65);
+    expect(thickness[0]).toBeGreaterThan(thickness[1] + 0.1);
+    expect(thickness[1]).toBeGreaterThan(1.28);
+    expect(thickness[2]).toBeCloseTo(1.2, 3);
+  }
+});
+
 test("finger scoop forms one connected bin with a curved rise and unchanged outside dimensions", async ({ page }, info) => {
   const spec = { kind: "bin", columns: 2, rows: 2, heightUnits: 3, lip: true };
   const doc = fixture([spec, { ...spec, fingerScoop: "front", position: [120, 0, 0] },
@@ -176,11 +200,11 @@ test("open bin walls remove their rims while retaining connected floors and Grid
   expect(parts[5].bounds.max[2]).toBeCloseTo(9, 5);
   expect(parts[6].bounds.max[2]).toBeCloseTo(20.99, 5);
   const topAt = (part, x) => inspectGeometry(part, { samples: [{ axis: "Z", point: [x, 0, 0] }] }).samples[0].intervals[0][1];
-  // 0.2 mm in from the closed wall, the 1 mm quarter circle rises 0.4 mm.
-  expect(topAt(parts[0], 40.35)).toBeCloseTo(9.4, 1);
+  // 0.2 mm in from the closed wall, the 0.6 mm quarter circle rises about 0.153 mm.
+  expect(topAt(parts[0], 40.35)).toBeCloseTo(9.153, 2);
   expect(topAt(parts[0], 39.4)).toBeCloseTo(9, 3);
   expect(topAt(parts[2], 40.35)).toBeCloseTo(9, 3);
-  expect(topAt(parts[2], -40.35)).toBeCloseTo(9.4, 1);
+  expect(topAt(parts[2], -40.35)).toBeCloseTo(9.153, 2);
   const probe = (w, d, h, x = 0, y = 0, z = 0) => ({ node: { t: "prim", kind: "box", p: { w, d, h, r: 0, c: 0 }, mods: [] }, m: [...IDENTITY.slice(0, 12), x, y, z, 1] });
   const pairs = [];
   for (let index = 0; index < document.bodies.length; index++) {

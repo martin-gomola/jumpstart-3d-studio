@@ -123,7 +123,8 @@ export function buildGridfinity(operation, { document, idFactory, nextSeq, clipS
   const carrierHeight = op.kind === "baseplate" ? magnetCarrierHeight(op.magnets) : 0;
   const topZ = op.kind === "baseplate" ? 5 + carrierHeight : op.heightUnits * 7;
   const floorZ = 7 + op.floor;
-  const floorRadius = op.kind === "bin" && op.openSides.length < 4 ? Math.min(1, (topZ - floorZ) / 2) : 0;
+  // Keep a rounded wall root while limiting the wall buildup above the solid floor.
+  const floorRadius = op.kind === "bin" && op.openSides.length < 4 ? Math.min(0.6, (topZ - floorZ) / 2) : 0;
   const lipBottom = topZ-3.8;
   // Shared by the rim solid and flush opening tools: z, inward offset, radius.
   const rimProfile = [[lipBottom-0.01,op.wall,Math.max(0,3.75-op.wall)],
