@@ -89,22 +89,8 @@ button { cursor: pointer; }
 .modeswitch button { display: inline-flex; align-items: center; gap: 7px; border: 0; background: transparent; color: #aeb9c6; padding: 5px 14px; border-radius: 999px; font: 600 13.5px/1 var(--f-label); letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
 .modeswitch button::before { content: ""; width: 7px; height: 7px; border-radius: 2px; background: #6f98d8; opacity: .55; }
 .modeswitch #mode-advanced::before { background: #e8a317; }
-.modeswitch #mode-chisel::before { background: #d6a44e; border-radius: 50%; }
 .modeswitch .beta { font: 700 8.5px/1 var(--f-ui); letter-spacing: .06em; padding: 2px 4px; border-radius: 4px; background: #d6a44e; color: #1b1407; margin-left: -2px; vertical-align: super; }
-/* Chisel: the sculpting app over the work area, under the top bar */
-.chisel-host { position: fixed; left: 0; right: 0; bottom: 0; top: calc(46px + env(safe-area-inset-top, 0px)); z-index: 40; background: var(--paper); }
-/* Chisel's Easy / Pro switch, hanging just under the Chisel button */
-.chisel-level { position: fixed; z-index: 42; display: inline-flex; gap: 2px; padding: 3px; border-radius: 0 0 12px 12px; background: var(--block); box-shadow: 0 6px 16px var(--shadow); }
-.chisel-level[hidden] { display: none; }
-.chisel-level button { border: 0; background: transparent; color: #aeb9c6; font: 600 12.5px/1 var(--f-label); letter-spacing: .08em; text-transform: uppercase; padding: 5px 12px; border-radius: 9px; cursor: pointer; }
-.chisel-level button:hover { color: var(--block-ink); }
-.chisel-level button[aria-pressed="true"] { background: var(--block-ink); color: var(--block); }
-:root[data-ui="contrast"] .chisel-level { border: 2px solid #fff; border-top: 0; }
-:root[data-ui="contrast"] .chisel-level button[aria-pressed="true"] { background: var(--accent); color: #000; }
-.chisel-host[hidden] { display: none; }
-.chisel-host iframe { width: 100%; height: 100%; border: 0; display: block; }
 .toasts { z-index: 45 !important; }
-#app[data-mode="chisel"] .toasts { position: fixed; }
 .expbadge { font: 700 9.5px/1 var(--f-ui); letter-spacing: .08em; text-transform: uppercase; color: #1b1407; background: #d6a44e; border-radius: 4px; padding: 3px 5px; margin-left: 6px; }
 .modeswitch button[aria-pressed="true"] { background: var(--block-ink); color: var(--block); }
 .modeswitch button[aria-pressed="true"]::before { opacity: 1; }
@@ -823,7 +809,6 @@ body.fp-on .toasts { position: fixed; z-index: 175 !important; }
 .proj-ov-bar button[aria-pressed="true"] { background: #2d63c8; }
 .proj-ov-bar button.done { background: #fff; color: #111; font-weight: 600; }
 @media (max-width: 600px) {
-  .chisel-host { padding-top: 30px; box-sizing: border-box; }
   .status { gap: 6px; padding-left: 6px; padding-right: 6px; }
   .status .hintline { display: none; }
   .status select { max-width: 74px; }
@@ -876,7 +861,6 @@ body.s3d-on { overflow: hidden; }
 .lathe-pedal { width: 96px; height: 64px; border-radius: 12px; border: 2px solid #333; background: linear-gradient(#5a5f66, #2c3036); color: #fff; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; box-shadow: 0 5px 0 #15181b; touch-action: none; user-select: none; -webkit-user-select: none; }
 .lathe-pedal.down, .lathe-pedal.on { transform: translateY(4px); box-shadow: 0 1px 0 #15181b; background: linear-gradient(#3f8b4a, #26632f); }
 .lathe-lab { max-width: calc(100% - 24px); }
-.chisel-lathe-btn { margin-left: 6px; }
 .lathe-msg { position: absolute; left: 50%; top: 46px; transform: translateX(-50%); max-width: calc(100% - 24px); padding: 8px 14px; border-radius: 10px; background: #b33a00; color: #fff; font-weight: 700; font-size: 13px; box-shadow: 0 4px 14px rgba(0,0,0,.25); pointer-events: none; }
 .lathe-msg[hidden] { display: none; }
 .lathe-pedal.running { background: linear-gradient(#c8432b, #8f2a19); }
@@ -909,7 +893,6 @@ body.s3d-on .tut-panel { z-index: 96; }
 .tb-btn.save-btn, .tb-btn.tut-btn { display: inline-flex; align-items: center; gap: 5px; }
 .tb-btn.save-btn .lbl, .tb-btn.tut-btn .lbl { font-size: 12.5px; font-weight: 600; }
 .tb-btn.tut-btn { color: #ffd66b; }
-#app[data-mode="chisel"] #btn-tutorials { display: none; }
 @media (max-width: 1760px) { .savestate { display: none; } }
 @media (max-width: 1660px) { #btn-projects .lbl, #btn-export .lbl { display: none; } .docname { width: 170px; } }
 @media (max-width: 1340px) and (min-width: 1101px) { .topbar .tb-btn.save-btn .lbl { display: inline; } }
@@ -998,7 +981,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 body { -webkit-tap-highlight-color: transparent; }
 .tile { -webkit-user-select: none; }
 /* no text selection, magnifier or "Save image" callout when pressing on the 3D view or the toolbars */
-.viewport, .viewport canvas, .topbar, .ribbon, .bbar, .dock-track, .status, .chisel-host { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.viewport, .viewport canvas, .topbar, .ribbon, .bbar, .dock-track, .status { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 /* taps act at once (no double-tap zoom delay) */
 button, .btn, .tb-btn, .ibtn, .rbtn, .tile, a, label, select, summary { touch-action: manipulation; }
 /* iPhone / iPad zoom the page into any text box smaller than 16px: keep them at 16px there */
@@ -1022,7 +1005,6 @@ html.ios .topbar { padding-left: max(12px, env(safe-area-inset-left, 0px)); padd
     <div class="modeswitch" role="group" aria-label="Mode">
       <button id="mode-beginner" aria-pressed="true" title="Drag shapes and combine them">Beginner</button>
       <button id="mode-advanced" aria-pressed="false" title="Sketches, features and a timeline">Advanced</button>
-      <button id="mode-chisel" aria-pressed="false" title="Sculpt with brushes, like clay">Chisel</button>
       <button id="mode-arch" aria-pressed="false" title="Architect: draw floor plans, raise walls, add doors, windows and roofs, then use the building in your design">Architect</button>
       <button id="ai-status" class="ai-status" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="ai-setup-panel" aria-live="polite" aria-atomic="true" aria-describedby="ai-status-tooltip" aria-label="Checking AI bridge. Open AI client setup.">
         <span class="ai-status-light" aria-hidden="true"></span>

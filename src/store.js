@@ -21,9 +21,9 @@ export const IDENTITY = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
 export function newDoc(name = "Untitled", mode = "beginner") {
   return { v: 1, id: uid("d"), name, mode, created: Date.now(), seq: 0, grid: 1, bodies: [], sketches: [], planes: [], joints: [] };
 }
-// older designs have no mode: anything with sketches or features is Advanced
+// Older designs have no mode; retired Chisel designs fall back to the same inference.
 export function docMode(doc) {
-  if (doc.mode === "beginner" || doc.mode === "advanced" || doc.mode === "chisel" || doc.mode === "arch") return doc.mode;
+  if (doc.mode === "beginner" || doc.mode === "advanced" || doc.mode === "arch") return doc.mode;
   const json = JSON.stringify(doc.bodies || []);
   return (doc.sketches || []).length || /"t":"(extrude|revolve|fillet|chamfer|hole|shell|bool)"/.test(json) ? "advanced" : "beginner";
 }

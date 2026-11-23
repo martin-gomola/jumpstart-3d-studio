@@ -36,7 +36,6 @@ import { initFlexiGen } from "./flexigen.js";
 import { initFloorPlan } from "./floorplan.js";
 import { initMeshStep } from "./meshstep.js";
 import { initCosForge } from "./cosforge.js";
-import { initChisel } from "./chisel.js";
 import { initMcp } from "../mcp/browser/editor-bridge.js";
 
 /* global __WASM_PARTS__ */
@@ -93,7 +92,6 @@ function engineSources() {
 function boot() {
   $("mode-beginner").onclick = () => app.switchMode("beginner");
   $("mode-advanced").onclick = () => app.switchMode("advanced");
-  $("mode-chisel").onclick = () => app.switchMode("chisel");
   $("mode-arch").onclick = () => app.switchMode("arch");
   const vpEl = $("viewport");
   const vp = (app.vp = new Viewport(vpEl));
@@ -181,7 +179,6 @@ app.voxel = initVoxel(app);
   app.floorplan = initFloorPlan(app);
   app.meshstep = initMeshStep(app);
   app.cosforge = initCosForge(app);
-  app.chisel = initChisel(app);
   app.arch = initArch(app);
   app.cam = initCam(app);
 
@@ -331,24 +328,13 @@ app.voxel = initVoxel(app);
 app.setMode = function (mode, initial) {
   if (app.mode === mode && !initial) return;
   if (app.command) app.command.cancel();
-  // Chisel: sculpting in its own frame over the work area. Leaving it saves the
-  // sculpts into the design as mesh bodies.
-  const wasChisel = app.mode === "chisel", wasArch = app.mode === "arch";
+  const wasArch = app.mode === "arch";
   app.mode = mode;
   document.getElementById("app").dataset.mode = mode;
   $("mode-beginner").setAttribute("aria-pressed", mode === "beginner");
   $("mode-advanced").setAttribute("aria-pressed", mode === "advanced");
-  $("mode-chisel").setAttribute("aria-pressed", mode === "chisel");
   $("mode-arch").setAttribute("aria-pressed", mode === "arch");
   if (wasArch && mode !== "arch") app.arch.leave();
-  if (mode === "chisel") {
-    $("inspector").hidden = true;
-    document.querySelectorAll(".popover").forEach((p) => p.remove());
-    app.chisel.enter();
-    app.refreshUI("mode");
-    return;
-  }
-  if (wasChisel) app.chisel.leave();
   // Architect: its own tools and panels in the same 3D view
   if (mode === "arch") {
     document.querySelectorAll(".popover").forEach((p) => p.remove());
@@ -383,7 +369,7 @@ app.switchMode = function (mode) {
     store.doc.mode = mode;
     app.projects.changed();
   }
-  if (mode !== "chisel" && mode !== "arch") app.toast(mode === "advanced" ? "Advanced mode: sketches, features and the timeline" : "Beginner mode: drag shapes, group and cut with holes");
+  if (mode !== "arch") app.toast(mode === "advanced" ? "Advanced mode: sketches, features and the timeline" : "Beginner mode: drag shapes, group and cut with holes");
 };
 
 // Slice (like Fusion's sketch palette option): when a sketch plane runs through a body, the part
@@ -489,7 +475,6 @@ app.setSnap = function (on, quiet) {
   $("snap-toggle").setAttribute("aria-pressed", app.snapOn);
   $("snap").disabled = !app.snapOn;
   app.syncSnapMenu && app.syncSnapMenu();
-  app.chisel && app.chisel.snapChanged && app.chisel.snapChanged();
   if (!quiet) { app.toast(app.snapOn ? "Grid snapping on" : "Grid snapping off: shapes and sketch points move freely"); savePrefs(); }
   if (app.sketcher.active) app.advanced.sketchUI("snap");
 };
@@ -499,7 +484,6 @@ app.setObjectSnap = function (on, quiet) {
   app.objectSnap = !!on;
   $("snap-obj").setAttribute("aria-pressed", app.objectSnap);
   app.syncSnapMenu && app.syncSnapMenu();
-  app.chisel && app.chisel.snapChanged && app.chisel.snapChanged();
   if (!quiet) { app.toast(app.objectSnap ? "Snapping to objects and bodies on" : "Snapping to objects and bodies off"); savePrefs(); }
 };
 
@@ -536,7 +520,6 @@ app.setPerf = function (pref, quiet) {
   const level = pref === "auto" ? autoLevel : pref;
   app.perfLevel = level;
   app.vp.setPerf(level);
-  app.chiselPerf && app.chiselPerf(level);
   document.querySelectorAll("#menu-theme button[data-perf]").forEach((b) => b.setAttribute("aria-checked", b.dataset.perf === pref));
   const note = document.getElementById("perf-auto-note"); if (note) note.textContent = "now " + PERF_NAMES[autoLevel];
   if (!quiet) { try { localStorage.setItem(PERF_KEY, pref); } catch (e) {} app.toast(PERF_NAMES[level] + (pref === "auto" ? " (Auto)" : "") + ": " + (level === "ultra" ? "the sharpest picture, for powerful computers." : level === "high" ? "lighter drawing while you move the view, for most laptops and Chromebooks." : "the lightest drawing, for slower computers.")); }
@@ -564,8 +547,6 @@ app.setSketchStyle = function (patch, quiet) {
   if (app.scene) app.scene.syncSketches(store.view);
   if (app.sketcher && app.sketcher.active) app.sketcher.redraw();
   if (app.vp) app.vp.request();
-  // Chisel reads the colours when its theme is (re)applied
-  try { app.chiselTheme && app.chiselTheme(); } catch (e) {}
   if (!quiet) savePrefs();
 };
 
@@ -769,14 +750,13 @@ app.showAbout = function () {
       ]),
       sec("Editor core 2.0 changes", [
         ["3D Sketch:", "draw lines in 3D on a body, a virtual sphere, egg or cube, or in the air, with a split screen: turn the camera with one hand while you draw with the other (touch, pen, mouse or trackpad). Freehand or nodes, undo and redo; every line becomes a solid tube."],
-        ["Lathe:", "turn a body (or a copy of it) or a square or round blank on a virtual wood lathe: pick the speed, a foot pedal (Space) that you hold or that stays on, seven chisels you can twist, flying chips, then hollow it out and add it to the design or export STL, 3MF or OBJ. In Beginner, Advanced and Chisel."],
+        ["Lathe:", "turn a body (or a copy of it) or a square or round blank on a virtual wood lathe: pick the speed, a foot pedal (Space) that you hold or that stays on, seven chisels you can twist, flying chips, then hollow it out and add it to the design or export STL, 3MF or OBJ. In Beginner and Advanced."],
         ["Jump Brick Builder:", "in Advanced → Simulate, rebuild objects out of printable stud-and-tube building bricks (classic 8 mm or jumbo 16 mm) with a parts list and layer-by-layer building steps, built in place or laid out on print beds."],
         ["Also:", "a 256 × 256 mm Beginner workplane, path patterns in Advanced, imperial threads, and two new Lathe tutorials."],
       ]),
       sec("Four modes", [
         ["Beginner:", "drag-and-drop shapes, solids and holes, grouping, align, mirror, pattern and drop to workplane, like Tinkercad."],
         ["Advanced:", "sketch-based, parametric modeling with a feature timeline, like Fusion 360."],
-        ["Chisel:", "3D sculpting with brushes, like digital clay, in Easy (big, simple tools for kids and first-timers) or Pro (30 brushes, masking, cuts and more)."],
         ["Architect:", "floor plans, walls, doors, windows and roofs for houses and buildings, a landscape with water and trees, sent to Beginner or Advanced as editable shapes (scaled to fit the build plate) or exported with the landscape."],
         ["Switch any time:", "your design carries over between modes."]]),
       sec("Beginner tools", [
@@ -792,14 +772,6 @@ app.showAbout = function () {
         ["Modify:", "fillet, chamfer, offset face, shell, combine, split body, split face, pattern, move/copy, scale and align."],
         ["Decorate:", "surface textures (including your own pictures), patterns raised on or cut into flat faces, emboss or deboss text on flat and curved faces, and appearances (colors and materials)."],
         ["Inspect:", "measure distances, angles and sizes."]]),
-      sec("Chisel sculpting", [
-        ["Your design is there:", "bodies from Beginner and Advanced show up ready to sculpt. Sculpt, cut or move one and it becomes a sculpt; undo brings the original back. Copy sculpts a copy instead."],
-        ["Brushes:", "build, clay, inflate, carve, crease, pinch, smooth, flatten, move, snakehook, twist, mask and paint, with falloff, alpha, symmetry and radial symmetry."],
-        ["Stylus:", "pen pressure (Wacom, Apple Pencil, Surface Pen) changes brush size and strength; the eraser end carves."],
-        ["Sketch and extrude:", "the same rectangle, circle and polygon sketch tools as Advanced, on an origin plane or a model's face, then extrude a new body, or join or cut. New bodies stay real CAD, editable in Advanced."],
-        ["Move:", "exactly like Beginner: drag on the workplane with grid snapping and snap guides, size handles, lift arrow, rotation arcs, Tab to type sizes."],
-        ["Cut and select:", "hole punch, lasso, box and plane cuts; window or crossing selection like the other modes. Easy mode has a simple Combine tool (join, cut away, keep the overlap)."],
-        ["Files:", "sculpts show in Beginner and Advanced as meshes; export STL or OBJ (with painted colors) in millimeters."]]),
       sec("Simulate", [
         ["3D Print Sim:", "30+ printer profiles (Bambu Lab, Creality, Elegoo, Flashforge, Prusa, Snapmaker), multi-color printing with AMS-style switchers, dual nozzles and tool changers: paint faces with a filament per toolhead and watch the tool changes (changes, purge waste, prime tower), supports, layer-by-layer preview, print time, and strength maps."],
         ["Simulate:", "joints and motion, stress tests, and printed-part strength by filament and print orientation."],
@@ -814,7 +786,7 @@ app.showAbout = function () {
         ["Saving:", "designs are kept in this browser. Save (or Ctrl+S) makes a new version each time: \"Lopez, Maria, Keychain v1\", v2, v3…, and STL and project files carry the same name and number. Optional Autosave keeps numbered backups (\"… autosave v1\", v2…) with crash recovery."]]),
       sec("Viewing", [
         ["Lighting:", "realistic shading and shadows (sun button), light, dark or high-contrast themes, orthographic view and the view cube."],
-        ["Projection & animation:", "Projector (a second window that shows your objects on black, for a projector or second screen), Media (pictures and videos on objects: facing view, wrap around, all sides or ball), and Picture to 3D model (puffs a picture's subject up into a rounded, printable solid with the picture painted on), and in Chisel: ready-made characters (people, heads, animals, aliens), textures, a History strip, and the Puppet Animator (rig, pose, keyframes up to 10 seconds, an animation library, a virtual set with your own background, MP4 export)."],
+        ["Projection & animation:", "Projector (a second window that shows your objects on black, for a projector or second screen), Media (pictures and videos on objects: facing view, wrap around, all sides or ball), and Picture to 3D model (puffs a picture's subject up into a rounded, printable solid with the picture painted on)."],
         ["Performance:", "Auto, Normal (slower computers), High (most laptops and Chromebooks) or Ultra (powerful computers, sharpest) in the theme menu (◐): lighter modes draw fewer pixels while the view moves and simpler shadows, with every tool and export unchanged. Auto picks a mode for the computer and steps down if things get slow."],
         ["Tutorials:", "sixteen step-by-step projects (eight in Beginner, eight in Advanced, marked Easy, Proficient or Advanced, 5-15 minutes each), from a name keychain and a rocket to a chess pawn, a wall hook, a box with a drawer and a candy jar with a screw-on lid. Each step shows which tool to use, how and when, with a short animation, and ticks itself off when it's done."],
         ["Help:", "press ? for every keyboard shortcut; right-click a shape for copy, paste, duplicate and delete."]]),
@@ -847,7 +819,6 @@ app.showShortcuts = function () {
       rows("Advanced", [["L R C", "Start a sketch with that tool"], ["Arrows", "Nudge the selection, the way it looks on screen (Ctrl ↑↓: up / down)"], ["S", "Create sketch"], ["E", "Extrude"], ["Shift R", "Revolve"], ["Q", "Offset face (press pull)"], ["H", "Hole"], ["F", "Fillet"], ["Shift C", "Chamfer"], ["M", "Move / copy"], ["A", "Align"], ["P", "Pattern"], ["B", "Combine"], ["T", "Texture"], ["I", "Measure"], ["Shift F", "Fit all"], ["Drag right / left", "Window / crossing select"]]),
       rows("Beginner", [["L R C", "Sketch a line, rectangle or circle"], ["E", "Extrude"], ["A", "Align"], ["P", "Pattern"], ["M", "Mirror"], ["H", "Make hole"], ["S", "Make solid"], ["D", "Drop to workplane"], ["T", "Texture"], ["F", "Fit all"], ["Arrows", "Nudge, the way it looks on screen (Shift ×10)"], ["Ctrl ↑↓", "Lift / lower"], [", .", "Turn 1° after a rotation arc (Shift 15°)"], ["Ctrl G", "Group (Shift: ungroup)"], ["Ctrl D", "Duplicate"], ["Tab", "Type sizes on the selected shape (Shift Tab: back)"], ["I", "Measure"]]),
       rows("Architect", [["W", "Wall (click each corner)"], ["R", "Room (drag corner to corner)"], ["E", "Raise walls"], ["D", "Door"], ["N", "Window"], ["O", "Roof"], ["G", "Floor"], ["T", "Finishes (textures, colours, patterns)"], ["L", "Landscape (ground, water, plants)"], ["S", "Simulate (weather, flood test)"], ["Arrows", "Nudge the selected roof, door or window"], ["V", "Select"], ["0-9 Enter", "While drawing a wall: type its exact length (12' 6\" or 3600)"], ["Enter", "Finish the walls you are drawing"], ["Shift", "Draw at any angle"], ["Alt", "Turn snapping off for a moment"], ["P", "Plan view / 3D"], ["X", "See-through on or off"], ["Delete", "Delete the selection"], ["Esc", "Stop drawing, back to Select"]]),
-      rows("Chisel (Pro)", [["D", "Standard brush"], ["C", "Clay"], ["S", "Smooth"], ["T", "Flatten"], ["G", "Move brush"], ["N", "Snakehook"], ["Q", "Mask"], ["J", "Paint"], ["M", "Select & move"], ["[ ]", "Brush size"], ["Shift drag", "Smooth"], ["Alt drag", "Invert brush"], ["Ctrl drag", "Mask"], ["X", "Mirror X"], ["F", "Frame"], ["Drag right / left", "Window / crossing select (Select & move)"], ["Tab", "Type sizes (Select & move)"], ["R C P", "Rectangle, circle, polygon (Sketch)"], ["E", "Extrude the sketch"], ["Esc", "Cancel the shape / sketch"]]),
       ...(IS_MAC ? [rows("Mac trackpad", [["Option drag", "Orbit"], ["Option Shift drag", "Pan"], ["Pinch", "Zoom"], ["Two-finger scroll", "Zoom"], ["Control click", "Right-click menu (drag to orbit)"]])] : []),
       rows("Everywhere", [[", .", "After using a rotation arc or ring: turn 1° (Shift: 15°)"], ["Shift drag", "On a rotation arc or ring: turn by any angle (otherwise 15° steps)"], ["Ctrl C", "Copy"], ["Ctrl V", "Paste"], ["Ctrl A", "Select all"], ["Right-click", "Copy, paste, duplicate, delete"], ["Ctrl Z", "Undo"], ["Ctrl Shift Z", "Redo"], ["Ctrl L", "Lock / unlock"], ["Ctrl S", "Save"], ["Shift S", "Snapping on / off"], ["Del", "Delete"], ["Home", "Home view"], ["?", "This list"]])));
   back.append(modal);
@@ -890,14 +861,12 @@ app.fit = function () {
 };
 
 app.undo = function () {
-  if (app.mode === "chisel") { app.chisel.undo(); return; }
   if (app.simLock) { app.toast("Undo is off in the 3D Print Sim: it doesn't change your design."); return; }
   if (app.command) app.command.cancel();
   const l = store.undo();
   if (l) app.toast("Undid " + l.toLowerCase());
 };
 app.redo = function () {
-  if (app.mode === "chisel") { app.chisel.redo(); return; }
   if (app.simLock) return;
   if (app.command) app.command.cancel();
   const l = store.redo();
@@ -1064,7 +1033,6 @@ app.promptValue = function ({ at, label, value, onOk, onCancel, unit = getUnit()
 
 // ------------------------------------------------------------------ keyboard
 function onKey(e) {
-  if (app.mode === "chisel") return; // Chisel has its own keys (in its frame)
   const tag = (e.target.tagName || "").toLowerCase();
   if (e.target.closest?.("tool-choice")) return;
   if (tag === "input" || tag === "select" || tag === "textarea") return;

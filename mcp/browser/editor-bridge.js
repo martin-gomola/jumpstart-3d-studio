@@ -400,7 +400,7 @@ export function initMcp(app) {
     if (app.lathe?.active) throw new Error("Finish the interactive Lathe before using MCP edits");
     if (app.command || app.sketcher.active) throw new Error("Finish or cancel the open Sketch or CAD command before using MCP edits");
     if (store.preview) throw new Error("Finish or cancel the current preview before using MCP edits");
-    if (app.mode === "chisel" || app.simLock) throw new Error("Leave Chisel or Print Simulation before using MCP edits");
+    if (app.simLock) throw new Error("Leave Print Simulation before using MCP edits");
   }
 
   function checkRevision(expectedRevision) {

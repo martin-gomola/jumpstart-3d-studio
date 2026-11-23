@@ -6,7 +6,7 @@
 
 ![Docker Compose](https://img.shields.io/badge/Run-Docker%20Compose-2496ED?logo=docker&logoColor=white)
 ![MCP](https://img.shields.io/badge/AI-Local%20MCP-477652)
-![Studio 0.1.1](https://img.shields.io/badge/Studio-0.1.1-1f4fa8)
+![Studio 0.1.2](https://img.shields.io/badge/Studio-0.1.2-1f4fa8)
 ![Editor 2.7.7](https://img.shields.io/badge/Editor-JumpStart%203D%202.7.7-365F40)
 [![MIT License](https://img.shields.io/badge/License-MIT-6B7D5C.svg)](LICENSE)
 

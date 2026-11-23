@@ -296,7 +296,8 @@ export function initProjects(app) {
         acts.replaceWith(confirmRow);
       };
       acts.append(delBtn);
-      card.append(th, el("div", { class: "meta" }, el("b", {}, (p.name || "Untitled") + (p.ver ? " v" + p.ver : "")), el("span", {}, when + (p.where === "account" ? " · account" : "")), p.mode ? el("span", { class: "tag " + p.mode }, p.mode === "advanced" ? "Advanced" : p.mode === "chisel" ? "Chisel" : "Beginner") : null), acts);
+      const mode = p.mode === "chisel" ? "beginner" : p.mode;
+      card.append(th, el("div", { class: "meta" }, el("b", {}, (p.name || "Untitled") + (p.ver ? " v" + p.ver : "")), el("span", {}, when + (p.where === "account" ? " · account" : "")), mode ? el("span", { class: "tag " + mode }, mode === "advanced" ? "Advanced" : "Beginner") : null), acts);
       grid.append(card);
     }
   }

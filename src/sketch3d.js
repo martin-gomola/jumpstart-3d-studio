@@ -35,7 +35,7 @@ export function initSketch3D(app) {
     if (ui) return;
     if (app.command && app.advanced && app.advanced.cancel) { try { app.advanced.cancel(); } catch (e) {} }
     if (app.sketcher && app.sketcher.active) app.exitSketch();
-    const from = app.mode === "chisel" ? "advanced" : app.mode;
+    const from = app.mode;
     const sel = (app.sel || []).filter((id) => findBody(store.doc, id) && !findBody(store.doc, id).hidden);
     const st = {
       from,
