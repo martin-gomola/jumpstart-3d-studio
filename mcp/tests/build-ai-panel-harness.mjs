@@ -6,7 +6,7 @@ import { AI_STATUS_CSS } from "../browser/ui/ai-status.js";
 import { reactBuildOptions } from "../../react-build.mjs";
 
 // The kit gates open local HTML. Bundle the production panel with a document
-// fixture; actual native previews and transactions remain covered by browser tests.
+// fixture; native previews and transactions are outside this UI gate.
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const output = resolve(root, "exports/ai-panel");
 await mkdir(`${output}/harness`, { recursive: true });
@@ -24,7 +24,7 @@ const entry = `
   initTemplatePanel({
     request: async action => {
       if (action === 'get_document') return { revision: 0, document: { id: 'ui-gate-fixture' }, bodies: [], drawerLayouts: [] };
-      throw new Error('Native model generation is exercised in the running app browser tests.');
+      throw new Error('Native model generation is outside this UI gate.');
     }, subscribe: () => {}, createPreviewView: () => { throw new Error('No native preview in this fixture.'); }
   });
   new MutationObserver(() => { document.documentElement.dataset.ui = document.documentElement.dataset.theme; }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });

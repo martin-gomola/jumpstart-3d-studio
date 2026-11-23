@@ -93,7 +93,7 @@ the CAD engine, so it takes a few seconds to open. The demo has no AI agent conn
 | `make logs` | See server messages |
 | `make mcp-config` | Print the MCP config for TOML-based clients |
 | `npm run build` | Rebuild the browser app into `build/site/` |
-| `npm test` | Run unit and browser tests (about 15 minutes) |
+| `npm test` | Run the MCP regression tests |
 
 ## What this repo adds to JumpStart 3D
 

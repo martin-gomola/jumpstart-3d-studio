@@ -29,5 +29,5 @@ for (const [name, command, args] of jobs) {
   console.log(`${result.pass ? "PASS" : "FAIL"} ${name}`); if (!result.pass) console.log(result.output);
 }
 await writeFile(`${output}/results.json`, JSON.stringify(results, null, 2));
-console.log(`${results.filter(r => r.pass).length}/${results.length} tool-control gate runs passed. These cover shared controls; full tool interactions are covered by editor-v274.browser.mjs.`);
+console.log(`${results.filter(r => r.pass).length}/${results.length} tool-control gate runs passed.`);
 process.exitCode = results.every(r => r.pass) ? 0 : 1;

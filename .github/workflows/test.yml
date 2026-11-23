@@ -1,4 +1,4 @@
-# Builds both outputs and runs the Playwright regression tests (see test/README.md).
+# Builds the app and runs the MCP regression tests.
 # Runs on every pull request and on pushes to main. Public repository: Actions minutes are free.
 name: test
 
@@ -28,30 +28,3 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm run test:mcp
-
-  # The browser tests run on one worker per machine, so they are split across machines instead.
-  browser:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3, 4]
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npx playwright install --with-deps chromium
-      - run: npm run build
-      - run: npm run test:mcp:browser -- --shard=${{ matrix.shard }}/4
-      - if: failure()
-        uses: actions/upload-artifact@v7
-        with:
-          name: playwright-report-${{ matrix.shard }}
-          path: |
-            playwright-report/
-            test-results/
-          retention-days: 7

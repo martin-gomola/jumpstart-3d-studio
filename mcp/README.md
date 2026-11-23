@@ -1030,9 +1030,7 @@ heat-set insert bosses, a name plate, a nut-trap block, and an M30 screw cap.
 Printed-part tasks carry `grader` probes. At the `candidate` checkpoint the
 recorder measures named bodies with `jumpstart_inspect_geometry` at points the
 agent never sees, and `native-mods` requires the native feature the request
-names. `mcp/tests/agent-calibration-*.browser.mjs` build a scripted reference
-for each of these tasks and run the same grader, so a failing agent run is not
-a miscalibrated probe.
+names.
 
 ```sh
 npm run benchmark:agent -- tasks

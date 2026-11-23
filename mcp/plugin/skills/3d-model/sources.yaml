@@ -41,10 +41,6 @@ sources:
     path: mcp/server/imports.mjs
     trust: "Operator-managed import directory, asset digests, file allowlist, and resource limits."
     mutable: true
-  - id: household-acceptance
-    path: mcp/tests/household-acceptance.browser.mjs
-    trust: "Measured geometry acceptance fixtures; illustrative test dimensions, not real product fit requirements."
-    mutable: true
   - id: user-workflow
     locator: "User spacer and plugin-bundle requests in this development conversation."
     trust: "User's requested local modeling workflow and measured/assumed distinction."

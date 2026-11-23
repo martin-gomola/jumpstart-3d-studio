@@ -34,5 +34,5 @@ try {
       if (state === "active") await page.mouse.up();
     }
   }
-  console.log("Tool choices: three themes, eight states each verified with a browser; active popup/commit behavior is covered by editor-v274.browser.mjs.");
+  console.log("Tool choices: three themes, eight states each verified with a browser.");
 } finally { await browser.close(); }
