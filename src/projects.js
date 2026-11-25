@@ -4,6 +4,7 @@ import { el, uid, debounce, makeZip, fmt } from "./util.js";
 import { ICON } from "./icons.js";
 import { initRecovery } from "./recovery.js";
 import { selectExportBodies } from "./bodyRoles.js";
+import { packMesh, unpackMesh } from "./meshpack.js";
 
 const LS_INDEX = "workplane.index.v1";
 const LS_DOC = "workplane.doc.v1.";
@@ -143,6 +144,32 @@ export function initProjects(app) {
   const VER_KEY = "jumpstart3d.ver.";
   const verOf = (doc = store.doc) => Math.max(doc.ver || 0, +(ls.get(VER_KEY + doc.id) || 0) || 0);
   const versionName = (doc = store.doc, v = verOf(doc)) => (doc.name || "Untitled") + (v ? " v" + v : "");
+  const SAVE_DL_KEY = "jumpstart.saveDownload";
+  const saveDownloads = () => { try { return localStorage.getItem(SAVE_DL_KEY) !== "off"; } catch (e) { return true; } };
+  function renderSaveDl() {
+    const button = document.getElementById("save-dl-toggle");
+    if (button) {
+      const on = saveDownloads();
+      button.setAttribute("aria-checked", String(on));
+      const state = button.querySelector("small");
+      if (state) state.textContent = on ? "on" : "off";
+    }
+  }
+  async function projectFileText() {
+    const out = { app: "jumpstart-3d", version: 1, doc: store.doc };
+    try {
+      const { resolveNode, bodyKey } = await import("./store.js");
+      const keys = [];
+      for (const body of store.doc.bodies || []) { try { keys.push(bodyKey(resolveNode(body.node, store.doc))); } catch (e) {} }
+      const slow = app.kernel?.slowMeshes ? app.kernel.slowMeshes(keys) : [];
+      if (slow.length) {
+        const items = [];
+        for (const item of slow) items.push({ key: item.key, ms: item.ms, data: await packMesh(item.mesh) });
+        out.built = { note: "Built shapes of slow bodies, so the design opens quickly. Safe to delete.", items };
+      }
+    } catch (e) {}
+    return JSON.stringify(out, null, 1);
+  }
   function bumpVersion() {
     const doc = store.doc, v = verOf(doc) + 1;
     doc.ver = v;
@@ -166,7 +193,11 @@ export function initProjects(app) {
       restoreVersion(doc, previousDocumentVersion, previousStoredVersion);
       return false;
     }
-    app.toast(`Saved as "${versionName(store.doc, v)}"`);
+    if (saveDownloads()) {
+      const filename = safeName() + ".json";
+      app.toast(`Saved as "${versionName(store.doc, v)}" and downloaded ${filename}`);
+      await offer(filename, await projectFileText());
+    } else app.toast(`Saved as "${versionName(store.doc, v)}"`);
     app.onSaved && app.onSaved(v);
     return true;
   }
@@ -529,7 +560,7 @@ export function initProjects(app) {
     // a project file is a save too: it gets the next version number
     bumpVersion();
     if (await saveNow()) app.onSaved && app.onSaved(verOf());
-    await offer(safeName() + ".json", JSON.stringify({ app: "jumpstart-3d", version: 1, doc: store.doc }, null, 1));
+    await offer(safeName() + ".json", await projectFileText());
   }
   function importJSON(file) {
     const r = new FileReader();
