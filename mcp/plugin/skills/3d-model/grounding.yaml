@@ -166,3 +166,31 @@ rules:
     skillFile: references/edit-existing-parts.md
     sources: [agent-trace]
     locator: "Observable named tool requests, results and timing only"
+  - instruction: "Before requesting an original model file or rebuilding the part, check whether a typed boolean can edit the current body."
+    skillFile: references/edit-existing-parts.md
+    sources: [model-plan, group-operation, combine-operation]
+    locator: "Existing-body ids, hole-flagged group members and boolean targets"
+  - instruction: "Do not place an existing body id in `replaceBodyIds` when the same plan references it as a `target`, `member` or `source`."
+    skillFile: references/edit-existing-parts.md
+    sources: [model-plan]
+    locator: "buildModelPlan removes replaceBodyIds before operation processing"
+  - instruction: "`replaceBodyIds` removes those bodies before the plan operations run, which makes the references unavailable."
+    skillFile: references/edit-existing-parts.md
+    sources: [model-plan]
+    locator: "buildModelPlan removes replacement bodies before iterating through operations"
+  - instruction: "The default `union` keeps the primitive's hole role."
+    skillFile: references/edit-existing-parts.md
+    sources: [group-operation]
+    locator: "group operation copies the primitive body hole flag into group children"
+  - instruction: 'Explicit `operation: "cut"` marks every member after the first as a cutter.'
+    skillFile: references/edit-existing-parts.md
+    sources: [group-operation]
+    locator: "group operation maps members after index zero to hole children for cut"
+  - instruction: "Separate three different requests: an edge fillet rounds a selected seam; a curved rib or gusset adds material along a path or wall; a torus adds a rounded annular bead."
+    skillFile: references/edit-existing-parts.md
+    sources: [curved-reinforcement-correction]
+    locator: "User's correction distinguishing the intended wall reinforcement from the mistaken torus and gap-edge fillet"
+  - instruction: "Do not substitute one for another."
+    skillFile: references/edit-existing-parts.md
+    sources: [curved-reinforcement-correction]
+    locator: "User's correction distinguishing the intended wall reinforcement from the mistaken torus and gap-edge fillet"

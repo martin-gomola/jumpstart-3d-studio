@@ -2,7 +2,7 @@
 name: 3d-model
 description: Creates and revises editable CAD parts, measured drawer layouts, Gridfinity bins, baseplates and custom inserts, household objects, and imported-part assemblies in JumpStart through local MCP. Use for drawer organization, magnet pockets, measured cutouts, trays, brackets, enclosures, hooks, phone holders and cases, spacers, knobs, fit checks, imported STL resizing, dimensioned SVG or PDF drawings, and tutorial models. Avoid generic 3D illustration, rendering, website design, and standalone product comparisons.
 metadata:
-  version: "1.23.0"
+  version: "1.23.1"
 ---
 
 # Model a part in JumpStart
@@ -50,6 +50,7 @@ copy the entire tool catalog into working notes.
    After an apply the selection holds the applied bodies, not a user choice.
 3. For edits, use the target’s `editing` context to choose parameters, a supported native feature edit or a new operation. Read [Edit existing parts](references/edit-existing-parts.md) for local edits and preservation contracts. Read selected `bodyIds` with `includeGeometry:true`. Turn off
    `includeSelectors`, `includeFeatureTree`, or `includeSketches` when not needed.
+   Check whether a typed boolean can edit the current body before requesting a source file.
    Use MCP geometry for dimensions; use available localhost screenshots for visual context, particularly mating sides, slope, and camera orientation.
 
 ## Specify
@@ -76,7 +77,7 @@ copy the entire tool catalog into working notes.
    document or replacement is requested or authorized.
 3. Inspect complete preview views, dimensions, acceptance results and `changes`; the section image cuts X mid-part unless `section` names the critical cut.
    For edits, check both the requested delta and preserved source definitions.
-   Use `jumpstart_inspect_geometry` for independent sections and mesh checks; require connected support-mesh validation for phone-cradle previews. Check a requested number by measuring the geometry, never by restating the plan constant behind it. Add an image only when it shows something new.
+   Use `jumpstart_inspect_geometry` with the `previewId` to independently measure geometry and require `meshValidation.valid: true` for every created or changed body before apply. For phone cradles, also confirm one connected support mesh.
 4. Correct the plan and preview again when measurements or orientation disagree.
    Stop on critical validation failures or unsupported operations. Failed or
    unknown attached requirements block apply; do not weaken them to pass. A retry that drops or shrinks a requested feature (a skipped fillet) is a different design: report it as a departure.
@@ -84,12 +85,9 @@ copy the entire tool catalog into working notes.
 ## Apply and deliver
 
 1. Apply only the successful `previewId` using `jumpstart_apply_model` against the same editor.
-   If its `meshValidation` is not valid for every body, correct the plan and preview again.
-   Reread and preview again after a changed revision. Inspect state before retrying a timeout and reuse the same preview id where appropriate.
-   An authorized creation or edit includes adding the validated result to the editor;
-   honor requests for a proposal, comparison or preview only without applying.
-   Otherwise, apply without another insertion request. After a disconnect, verify
-   the same document and regenerate stale previews; if still offline, report unapplied state.
+   An authorized creation or edit includes applying the validated result; honor requests for a proposal, comparison or preview only.
+   After a disconnect or revision change, verify the same document and refresh stale previews. Inspect state before retrying and reuse the same preview id when appropriate.
+   If still offline, report an unsent apply as unapplied and an unconfirmed apply as outcome unknown.
 2. Confirm the final document, measured dimensions, and intended assembly pose.
    Preserve unrelated work. Undo only the agent's intended edit using the
    current revision. Save only when requested or part of the agreed task.

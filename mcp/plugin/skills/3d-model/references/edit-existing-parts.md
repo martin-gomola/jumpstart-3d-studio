@@ -36,6 +36,77 @@ silently detaching them. Use the appropriate parameter/generator route first.
 Unsupported native topology is a capability gap, not permission to edit app
 source, execute JavaScript, replace unrelated parts or approximate with a mesh.
 
+## Edit a body that is already in the document
+
+Before requesting an original model file or rebuilding the part, check whether a
+typed boolean can edit the current body. `group` and `combine` operations accept
+body ids from the document, including imported mesh bodies, when the preview
+kernel supports the requested cut or join. A mesh has no editable parametric
+history, but that alone does not prevent a localized boolean.
+
+- For one cutter, use `combine` with the existing body as `target` and a primitive
+  as `tool`. Set `operation` to `cut`, `join` or `intersect` according to the
+  requested material change. `combine` retains the target's body id.
+- When creating a new group body id is intended, mirror the editor's Hole-and-Group
+  workflow by adding a primitive with
+  `hole: true`, then use a `group` operation with the existing body and cutter as
+  `members`. The default `union` keeps the primitive's hole role. Explicit
+  `operation: "cut"` marks every member after the first as a cutter.
+- Example `plan` for a round cavity. Replace the example `name` and `body-id`
+  with the current document name and target id from `jumpstart_get_document`.
+  Choose the cutter's position and height from measured bounds and the requested floor.
+
+  ```json
+  {
+    "name": "Current document name",
+    "primitives": [
+      {
+        "id": "opening-tool",
+        "kind": "cylinder",
+        "parameters": { "w": 35, "d": 35, "h": 23 },
+        "position": [0, 0, 2]
+      }
+    ],
+    "operations": [
+      { "id": "opened-body", "type": "combine", "target": "body-id", "tool": "opening-tool", "operation": "cut" }
+    ]
+  }
+  ```
+
+  The cutter is consumed and the target remains under its original id. Omit
+  `replaceBodyIds`. A `group` instead consumes its members and adds a new body,
+  which fails a single-target `requirements.intent` check.
+- Position cutters from measured body bounds and the requested floor or opening.
+  Primitive positions are world-space, centered on X/Y, with the bottom at Z.
+  Inspect sections or material intervals to verify the remaining floor and
+  opening; inspect the full preview to make sure surrounding details remain.
+- Do not place an existing body id in `replaceBodyIds` when the same plan
+  references it as a `target`, `member` or `source`. `replaceBodyIds` removes
+  those bodies before the plan operations run, which makes the references
+  unavailable. Use it only for a rebuild that does not refer to the replaced
+  bodies.
+
+Request an external source file only when the current body and available typed
+operations cannot express the requested edit and a rebuild is necessary. Check
+the managed import catalog before asking the operator to place another file.
+
+## Resolve curved reinforcement before modeling
+
+Separate three different requests: an edge fillet rounds a selected seam; a
+curved rib or gusset adds material along a path or wall; a torus adds a rounded
+annular bead. Do not substitute one for another. Use a fillet only when the
+requested edge is identified and supported. Use a typed swept or revolved
+profile for a requested rib or gusset when its path and section are clear. Use
+a torus only when the reference calls for a bead. If a screenshot does not show
+which side, path, or cross-section the user means, ask one concise question
+before applying a materially different shape.
+
+For any strengthening feature, record where the material is added, the path it
+follows, and its section dimensions. Do not infer the desired cross-section
+from the word “arc” alone. Verify the cable opening or other functional gap
+after adding the reinforcement; inspect a section through both the feature and
+the opening.
+
 ## Declare the change and preservation contract
 
 Before preview, record the requested outcome, target ids and geometric evidence

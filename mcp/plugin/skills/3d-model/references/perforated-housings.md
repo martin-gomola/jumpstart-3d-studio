@@ -7,12 +7,16 @@ conversion or structural certification.
 1. Read the current document. Cosmetic edits may concern a newly loaded model;
    do not assume the previous product is still present. Inspect representation.
    If fillets require native geometry but only a mesh is available, explain the
-   limitation and obtain agreement to reconstruct before replacing it. Once
-   reconstruction is authorized, measure floor, cavity, access cutout and hooks
-   from sections and line samples. Prefer retaining source mounting geometry to
-   recreating it from a 2D extrusion: matching its middle section can still lose
-   the 3D rounding needed for insertion. Distinguish reconstructed surfaces from
-   retained ones, and keep the source available for comparison.
+   limit of that fillet operation, then test a typed `combine` on the current
+   body for a local cut or join. A rejected mesh fillet does not prove a
+   boolean is unavailable. Request a source file only when the current body and
+   supported operations cannot express the requested edit and reconstruction is
+   necessary. Once reconstruction is authorized, measure floor, cavity, access
+   cutout and hooks from sections and line samples. Prefer retaining source
+   mounting geometry to recreating it from a 2D extrusion: matching its middle
+   section can still lose the 3D rounding needed for insertion. Distinguish
+   reconstructed surfaces from retained ones, and keep the source available for
+   comparison.
 2. Establish a visible design change: outer corner radius, touch-edge radius,
    perforation count, hole orientation, rib thickness and solid perimeter. Keep
    floor and load paths around mounting roots solid. Change corner radii in the
@@ -21,7 +25,8 @@ conversion or structural certification.
    the fit is requested. Consider trimming the exterior instead of enlarging the
    pocket; retain local root pads if necessary to connect original hooks. Measure
    wall and floor sections independently and report any retained thicker zones.
-3. Verify a face pattern's local axes and actual output. A requested row/column
+3. For a suitable flat face, discover `holePattern` with `shape: "hex"`. Verify its
+   local axes and actual output. A requested row/column
    count may be filtered by the selected flat face and margin. Inspect the number
    and position of holes on both sides rather than reporting the requested count.
    Measure margins to the full housing boundary separately from the tool's margin
@@ -32,7 +37,11 @@ conversion or structural certification.
    departure; do not silently drop an explicitly required hole count.
 4. If a fitted pattern cannot express the orientation or layout, use an explicit
    `regularPolygon` sketch, a native cut extrusion and `featurePattern` along a
-   named world axis. A cut through both walls is suitable only when the intervening
+   named world axis. Set the cut directly on the sketch-backed `extrude` feature;
+   `featurePattern` cannot repeat a `combine` operation. For an STL, compare
+   material intervals at the same world coordinates before and after the cut
+   to confirm material was removed and protected walls remain. A cut through
+   both walls is suitable only when the intervening
    space is empty and no other feature is crossed. Inspect both sides. For a
    regular hexagon, across-flats size is not its vertex-to-vertex span: derive rib
    spacing from the oriented profile, then verify it with solid intervals.

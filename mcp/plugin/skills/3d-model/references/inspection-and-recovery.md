@@ -108,9 +108,10 @@ Do not center or align reference geometry in a way that hides a placement error.
 2. Inspect preview errors, dimensions, assumptions, axis triad, camera directions,
    and images. For angled mounts, confirm the phone's top edge leans in the
    requested world direction and the screen faces the user. Use
-   `jumpstart_inspect_geometry` for dimensions, sections, and mesh checks. A
-   phone-cradle preview must report one connected support mesh before apply. A
-   cropped image is insufficient visual evidence; obtain a complete view before
+   `jumpstart_inspect_geometry` with `previewId` for dimensions, sections, and
+   mesh checks. Require `meshValidation.valid: true` for every created or changed
+   body before apply. A phone-cradle preview must also report one connected support mesh.
+   A cropped image is insufficient visual evidence; obtain a complete view before
    claiming the appearance was checked. Look at the images even when every check
    passes: mirrored text, a hole in the wrong face or a feature too shallow to
    see passes the numbers.
@@ -121,7 +122,9 @@ Do not center or align reference geometry in a way that hides a placement error.
    timeout, inspect state before retrying; reuse the same preview ID rather than
    generating a second edit blindly. Never bypass the MCP transport through raw
    HTTP, arbitrary JavaScript, or UI clicks. Report a closed transport and request
-   MCP reconnection when it cannot recover.
+   MCP reconnection when it cannot recover. If apply was never sent, report
+   it as unapplied. If it was sent without a confirmed result, report the
+   outcome as unknown until the same document can be checked.
 5. Confirm the resulting document and dimensions. Preserve other bodies unless
    the user requested replacement. Use `jumpstart_undo` with the current revision
    for recovery; do not undo unrelated edits.

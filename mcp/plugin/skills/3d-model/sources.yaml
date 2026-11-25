@@ -37,6 +37,14 @@ sources:
     path: mcp/browser/plans/model-plan.js
     trust: "Typed model-plan normalization and native feature compilation; current implementation source."
     mutable: true
+  - id: group-operation
+    path: mcp/browser/plans/operations/group.js
+    trust: "Typed group semantics for existing body ids, hole-flagged primitive members, and explicit cut groups."
+    mutable: true
+  - id: combine-operation
+    path: mcp/browser/plans/operations/combine.js
+    trust: "Typed join, cut and intersect semantics for an existing body target and a tool body."
+    mutable: true
   - id: managed-imports
     path: mcp/server/imports.mjs
     trust: "Operator-managed import directory, asset digests, file allowlist, and resource limits."
@@ -144,6 +152,10 @@ sources:
   - id: gridfinity-user-workflow
     locator: "User's Gridfinity custom-cutout and two-tab AI-sidebar requests in this conversation."
     trust: "Requested workflow: exact item research, explicit evidence, editable inserts and shared manual/agent generation. Product images do not establish object shape or fit."
+    mutable: false
+  - id: curved-reinforcement-correction
+    locator: "User correction on the candle-holder wall reinforcement, cable gap, and rejected torus/gap-edge fillet interpretations."
+    trust: "The user's distinction between curved reinforcement, an edge fillet, and a torus bead; images provide visual context but not missing section dimensions."
     mutable: false
 
   - id: native-feature-edit
