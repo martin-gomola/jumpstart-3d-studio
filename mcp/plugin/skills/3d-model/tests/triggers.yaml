@@ -107,3 +107,6 @@ cases:
   - prompt: "Make a lid that fits this unscaled product photo exactly."
     expected: clarify-target
     mode: ambiguous
+  - prompt: "Slim these sliding lid rails in JumpStart and keep their roots flush with the lid edge."
+    expected: invoke
+    mode: implicit

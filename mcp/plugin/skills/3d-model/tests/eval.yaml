@@ -10,6 +10,7 @@ baseline:
     - "An AirPods insert was replaced with a generic frame, shown only in preview, then trimmed with a mesh Boolean whose reported success did not remove the measured overlap."
     - "A housing's face pattern produced fewer holes than requested; a CAD-valid fillet produced degenerate triangles; an authorized edit remained unapplied after a disconnect."
     - "A rebuilt hook matched its middle width but lost transverse tip rounding and failed a real board fit; thinning around the old perforation pattern then exposed knife edges."
+    - "A sliding lid used bumps on a vertical stop as catches and recessed the rail roots while trying to reduce the size of their returns."
 cases:
   - id: magnetic-drawer-height
     prompt: "Add 6 by 2 mm magnets to my baseplates and bins, keeping this drawer's height."
@@ -472,3 +473,21 @@ cases:
       - "Requests the missing mating measurements while distinguishing visible shape observations."
     fail_if:
       - "Treats a visual size estimate as verified physical fit."
+
+  - id: sliding-lid-foil-retention
+    prompt: "Use this reference lid to make a one-way sliding cover that holds the original foil only when closed."
+    setup: "Reference photos show a U-shaped slide with an open entry. A side view of the actual container shows a projecting flange; its thickness and clearance are supplied, and folded foil has not been measured."
+    expect:
+      - "Uses an open entry and rear stop, with a return below the flange and any intended foil contact near full closure."
+      - "Checks sections through a guide and rear catch, and reports that physical foil contact is unverified."
+    fail_if:
+      - "Calls a bump on a vertical wall an under-flange catch or uses a front crossbar that interferes with entry."
+
+  - id: sliding-lid-slim-rails
+    prompt: "These sliding rails are too massive. Keep their roots flush with the lid edge and avoid large print overhangs."
+    setup: "A printable face-down lid already has the intended rail spacing and slot height, but the return is unnecessarily deep."
+    expect:
+      - "Shortens the return and lowers the rail while retaining the flush root, mating dimensions, and useful underlap."
+      - "Measures the candidate section and checks overhangs in the intended print pose."
+    fail_if:
+      - "Recesses the rail root to slim it or treats a mesh check as proof of printed strength."
