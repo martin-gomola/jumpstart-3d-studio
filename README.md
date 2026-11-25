@@ -50,6 +50,14 @@ tab open. The AI button in the top bar shows whether an agent is connected.
 
 Set `JUMPSTART_LAN_ADDRESS` to your server's LAN IP and, optionally, `JUMPSTART_CAD_ORIGIN` to your HTTPS CAD hostname in `.env`, then run `make deploy`.
 
+For public browser access, set `JUMPSTART_PUBLIC_CAD_ORIGIN` to a separate HTTPS
+origin at your reverse proxy. The public editor supports browser-local projects and
+file downloads. Use the private editor for AR shares and temporary desktop links.
+To enable Umami pageviews, configure `ANALYTICS_SCRIPT` as in `.env.example`.
+The server adds the tag to the public origin when configured, otherwise to
+`JUMPSTART_CAD_ORIGIN`. The example excludes query strings and fragments and
+respects Do Not Track.
+
 The same container publishes the editor on `<LAN-IP>:3210` and AR shares on port `3211`. The LAN editor accepts only the configured addresses. A reverse proxy can forward the CAD hostname to `<LAN-IP>:3210` and the AR hostname to `<LAN-IP>:3211`. Use the Wi-Fi network or your VPN on the phone.
 
 The localhost editor and MCP retain `127.0.0.1:3210`. Network editor pages support manual modeling and AR sharing; agent connections remain local, even with `?mcp=1`. Designs are stored per browser origin, so opening the IP address or another hostname does not automatically transfer existing browser-local projects. Save and open a project file to move one.

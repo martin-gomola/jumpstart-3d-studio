@@ -642,7 +642,7 @@ function matchesIfModifiedSince(req, mtimeMs) {
   return Math.floor(mtimeMs / 1000) * 1000 <= since;
 }
 
-async function serveStatic(req, res, pathname, networkEditor = false) {
+async function serveStatic(req, res, pathname, networkEditor = false, sharing = true) {
   if (!networkEditor && !allowedLocalRequest(req, true)) {
     process.stderr.write(`Rejected local app request: method=${req.method} host=${req.headers.host || ""} origin=${req.headers.origin || ""} site=${req.headers["sec-fetch-site"] || ""} mode=${req.headers["sec-fetch-mode"] || ""} dest=${req.headers["sec-fetch-dest"] || ""}\n`);
     return json(res, 403, { error: "Only localhost requests are accepted" });
@@ -670,7 +670,11 @@ async function serveStatic(req, res, pathname, networkEditor = false) {
     // the final shell payload rather than the file on disk.
     try {
       let shell = await readFile(file, "utf8");
-      const capabilityMeta = '<meta name="jumpstart-ar-sharing" content="1"><meta name="jumpstart-slicer-handoff" content="1">' +
+      // Only the configured HTTPS editor receives the operator's tracker.
+      if (networkEditor && analyticsOrigin && req.headers.host === analyticsOrigin.host && analyticsScript) {
+        shell = shell.replace("<!-- ANALYTICS -->", () => analyticsScript);
+      }
+      const capabilityMeta = (sharing ? '<meta name="jumpstart-ar-sharing" content="1"><meta name="jumpstart-slicer-handoff" content="1">' : '') +
         (networkEditor ? '' : '<meta name="jumpstart-mcp-bridge" content="1">');
       shell = shell.includes("</head>")
         ? shell.replace("</head>", `${capabilityMeta}\n</head>`)
@@ -762,12 +766,23 @@ if (arServer) {
 const lanPort = Number(process.env.JUMPSTART_LAN_PORT || 0);
 if (!Number.isInteger(lanPort) || lanPort < 0 || lanPort > 65535) throw new Error("Invalid JUMPSTART_LAN_PORT");
 const lanOrigins = (process.env.JUMPSTART_LAN_ORIGINS || "").split(",").map(value => value.trim()).filter(Boolean);
+const publicOriginValue = process.env.JUMPSTART_PUBLIC_CAD_ORIGIN;
+const publicOrigin = publicOriginValue ? new URL(publicOriginValue) : null;
+if (publicOrigin && (publicOrigin.protocol !== "https:" || publicOrigin.origin !== publicOriginValue ||
+    lanOrigins.some(origin => new URL(origin).hostname === publicOrigin.hostname))) {
+  throw new Error("JUMPSTART_PUBLIC_CAD_ORIGIN must be a separate HTTPS origin without a path or credentials");
+}
+if (publicOrigin) lanOrigins.push(publicOrigin.origin);
 for (const origin of lanOrigins) {
   const url = new URL(origin);
   if (!["http:", "https:"].includes(url.protocol) || url.origin !== origin) throw new Error("LAN origins must be HTTP(S) origins without paths or credentials");
 }
+const analyticsOrigin = publicOrigin ?? lanOrigins
+  .map(origin => new URL(origin))
+  .find(url => url.protocol === "https:" && url.origin === process.env.JUMPSTART_CAD_ORIGIN);
+const analyticsScript = process.env.ANALYTICS_SCRIPT?.trim();
 if (lanPort && !lanOrigins.length) throw new Error("JUMPSTART_LAN_ORIGINS is required for network editor access");
-const lanServer = lanPort ? createLanEditor({ origins: lanOrigins, serveStatic, handleAr, handleSlicer: createSlicerHandoff() }) : null;
+const lanServer = lanPort ? createLanEditor({ origins: lanOrigins, publicOrigin, serveStatic, handleAr, handleSlicer: createSlicerHandoff() }) : null;
 if (lanServer) {
   lanServer.on("error", error => { process.stderr.write(`JumpStart LAN editor failed: ${error.message}\n`); process.exitCode = 1; close(); });
   lanServer.listen(lanPort, process.env.JUMPSTART_LAN_HOST || "127.0.0.1");
