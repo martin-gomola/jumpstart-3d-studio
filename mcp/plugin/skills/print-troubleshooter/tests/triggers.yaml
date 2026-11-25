@@ -1,0 +1,10 @@
+positive:
+  - "Na X2D mi PETG Basic robí vlákna medzi dielmi. Tu je fotka a projekt .3mf."
+  - "Use Print Troubleshooter to compare this rough print and project with the filament spec."
+negative:
+  - "Open my exported 3MF in Bambu Studio."
+  - "Change the latch dimensions so the lid fits."
+  - "Start printing on my X2D."
+ambiguous:
+  - prompt: "PETG isn't working."
+    expected: Ask what failed and where before proposing a calibration test.

@@ -1,0 +1,16 @@
+guidance:
+  - instruction: Follow the material and filament paths returned by the brand and material indexes.
+    source: ofd-api
+    locator: API Endpoints, Brands and Materials & Filaments
+  - instruction: Read the manufacturer's data for drying when available, including the equipment it specifies.
+    source: bambu-petg
+    locator: Recommended Printing Settings, Drying Settings before Printing
+  - instruction: The Bambu X2D manual explains its Bambu Studio calibration workflow.
+    source: bambu-x2d
+    locator: Flow dynamics calibration
+  - instruction: Use the OrcaSlicer calibration guide to select and score a test.
+    source: orca-calibration
+    locator: Calibration steps and linked individual tests
+  - instruction: Treat generated values as hypotheses even for matching materials.
+    source: community-generator
+    locator: Sources and priority; Checks for the P1S

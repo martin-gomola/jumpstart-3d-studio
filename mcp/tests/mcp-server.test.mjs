@@ -3,12 +3,20 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 import { once } from "node:events";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { makeZip } from "../../src/util.js";
 
 test("stdio MCP discovery and localhost registration work through mcp/server/server.mjs", { timeout: 15000 }, async () => {
   const entry = "mcp/server/server.mjs";
+  const imports = await mkdtemp(join(tmpdir(), "jumpstart-print-project-"));
+  const settings = { printer_model: "Bambu Lab X2D", print_settings_id: "0.20mm Standard @BBL X2D", filament_settings_id: ["Bambu PETG Basic"], nozzle_temperature: ["250"], machine_start_gcode: "G28" };
+  const project = makeZip([{ name: "Metadata/project_settings.config", data: new TextEncoder().encode(JSON.stringify(settings)) }]);
+  await writeFile(join(imports, "test-project.3mf"), Buffer.from(await project.arrayBuffer()));
   const child = spawn(process.execPath, [entry], {
     cwd: new URL("../..", import.meta.url),
-    env: { ...process.env, JUMPSTART_MCP_PORT: "0" },
+    env: { ...process.env, JUMPSTART_MCP_PORT: "0", JUMPSTART_MCP_IMPORT_DIR: imports },
     stdio: ["pipe", "pipe", "pipe"],
   });
   const lines = createInterface({ input: child.stdout });
@@ -40,6 +48,8 @@ test("stdio MCP discovery and localhost registration work through mcp/server/ser
     assert.deepEqual(names, [
       "jumpstart_list_imports",
       "jumpstart_get_outline",
+      "jumpstart_inspect_print_project",
+      "jumpstart_get_filament_reference",
       "jumpstart_list_editors",
       "jumpstart_get_document",
       "jumpstart_preview_model",
@@ -64,6 +74,15 @@ test("stdio MCP discovery and localhost registration work through mcp/server/ser
       "jumpstart_render_drawing",
       "jumpstart_export_drawing",
     ]);
+    assert.equal(listing.result.tools.find(tool => tool.name === "jumpstart_inspect_print_project").annotations.readOnlyHint, true);
+    const assets = await send({ jsonrpc: "2.0", id: 41, method: "tools/call", params: { name: "jumpstart_list_imports", arguments: {} } });
+    const [asset] = JSON.parse(assets.result.content[0].text).assets;
+    const inspected = await send({ jsonrpc: "2.0", id: 42, method: "tools/call", params: { name: "jumpstart_inspect_print_project", arguments: { assetId: asset.assetId } } });
+    const value = inspected.result.structuredContent;
+    assert.equal(value.status, "read");
+    assert.equal(value.settings.printer.printer_model, "Bambu Lab X2D");
+    assert.deepEqual(value.settings.filament.nozzle_temperature, ["250"]);
+    assert.ok(!JSON.stringify(value).includes("G28"));
     assert.equal(listing.result.tools.find((tool) => tool.name === "jumpstart_preview_model").inputSchema.properties.plan.type, "object");
     assert.equal(listing.result.tools.find((tool) => tool.name === "jumpstart_preview_model").inputSchema.properties.plan.properties.primitives.items.properties.kind.enum.includes("tube"), true);
     const profileVariants = listing.result.tools.find((tool) => tool.name === "jumpstart_preview_model").inputSchema.properties.plan.properties.sketches.items.properties.profile.oneOf;
@@ -98,13 +117,15 @@ test("stdio MCP discovery and localhost registration work through mcp/server/ser
     assert.deepEqual(phoneCradleSchema.properties.topEdgeToward.enum, ["+Y", "-Y"]);
     assert.match(phoneCradleSchema.properties.topEdgeToward.description, /\+Y means.*toward the dashboard/);
     assert.equal(listing.result.tools.find((tool) => tool.name === "jumpstart_preview_resize_body").inputSchema.properties.size.additionalProperties, false);
-    assert.ok(JSON.stringify(listing.result.tools).length < 90_000, "tools/list should stay compact");
+    const diagnosticTools = new Set(["jumpstart_inspect_print_project", "jumpstart_get_filament_reference"]);
+    assert.ok(JSON.stringify(listing.result.tools.filter(tool => !diagnosticTools.has(tool.name))).length < 90_000, "existing tool list should stay compact");
+    assert.ok(JSON.stringify(listing.result.tools.filter(tool => diagnosticTools.has(tool.name))).length < 2_400, "print diagnostics should stay compact");
     const byName = Object.fromEntries(listing.result.tools.map((tool) => [tool.name, tool]));
-    assert.ok(listing.result.tools.every((tool) => tool.annotations?.openWorldHint === false && typeof tool.annotations.readOnlyHint === "boolean"));
+    assert.ok(listing.result.tools.every((tool) => tool.annotations?.openWorldHint === (tool.name === "jumpstart_get_filament_reference") && typeof tool.annotations.readOnlyHint === "boolean"));
     assert.equal(byName.jumpstart_preview_model.annotations.readOnlyHint, true);
     assert.deepEqual(byName.jumpstart_apply_model.annotations, { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false });
     assert.equal(byName.jumpstart_undo.annotations.destructiveHint, true);
-    assert.deepEqual(Object.keys(byName).filter((name) => byName[name].outputSchema), ["jumpstart_list_editors", "jumpstart_apply_model", "jumpstart_undo", "jumpstart_export_model", "jumpstart_save_document", "jumpstart_export_drawing"]);
+    assert.deepEqual(Object.keys(byName).filter((name) => byName[name].outputSchema), ["jumpstart_inspect_print_project", "jumpstart_list_editors", "jumpstart_apply_model", "jumpstart_undo", "jumpstart_export_model", "jumpstart_save_document", "jumpstart_export_drawing"]);
     assert.equal(byName.jumpstart_render_drawing.annotations.readOnlyHint, true);
     assert.equal(byName.jumpstart_render_drawing.inputSchema.properties.requirements, undefined);
     assert.ok(byName.jumpstart_undo.inputSchema.properties.expectedRevision.description);
@@ -200,7 +221,7 @@ test("stdio MCP discovery and localhost registration work through mcp/server/ser
     assert.equal(result.editors[0].editorId, "test-editor");
     assert.ok(result.editors[0].lastSeenAt);
     const imports = await send({ jsonrpc: "2.0", id: 32, method: "tools/call", params: { name: "jumpstart_list_imports", arguments: {} } });
-    assert.deepEqual(JSON.parse(imports.result.content[0].text).assets, []);
+    assert.deepEqual(JSON.parse(imports.result.content[0].text).assets, [asset]);
     await fetch(`http://127.0.0.1:${port}/__mcp/heartbeat`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ editorId: "second-tab", documentId: "doc-1", documentName: "Same design", focused: true }),
@@ -217,5 +238,6 @@ test("stdio MCP discovery and localhost registration work through mcp/server/ser
     await Promise.race([once(child, "exit"), new Promise((resolve) => { timer = setTimeout(resolve, 3_000); })]);
     clearTimeout(timer);
     if (child.exitCode === null) child.kill("SIGTERM");
+    await rm(imports, { recursive: true, force: true });
   }
 });

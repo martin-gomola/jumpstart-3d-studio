@@ -288,8 +288,7 @@ including `docker exec`, require explicit migration before installing.
 
 For Claude Code, run `make claude-install`; for Cursor, run `make cursor-install`.
 Each registers the same host proxy at user level and copies every skill in
-`mcp/plugin/skills/` (`3d-model`, `step-parts`, `woodwork-joints-3d`, and
-`bambu-handoff`) into
+`mcp/plugin/skills/` into
 `~/.claude/skills/` or `~/.cursor/skills/`. Rerun the target after pulling to
 refresh the skills. A custom `jumpstart` server entry or a skill directory with
 one of those names that this installer did not create stops the install without
@@ -370,6 +369,8 @@ apply commits a successful preview as one undoable edit.
 | Tool | Purpose |
 | --- | --- |
 | `jumpstart_list_imports` | List operator-managed CAD files and tool outlines by metadata and SHA-256 asset id; returns no file contents. |
+| `jumpstart_inspect_print_project` | Read saved printer, process, and filament settings from a managed Bambu Studio or OrcaSlicer project 3MF by asset id. |
+| `jumpstart_get_filament_reference` | Look up the exact brand, material family and filament product in Open Filament Database. Returns the source URL and published reference values. |
 | `jumpstart_get_outline` | Convert a managed SVG or tool JSON outline into a pocket contour with its size, simplification deviation and finger holes. |
 | `jumpstart_list_editors` | List connected editor tabs and their connection state. |
 | `jumpstart_get_document` | Read the document revision and selected bodies, with optional feature trees, sketches, and geometry selectors. |
@@ -1285,12 +1286,19 @@ marketplace. It bundles the host MCP proxy, the
 [3d-model skill](plugin/skills/3d-model/SKILL.md), and its companions
 [step-parts](plugin/skills/step-parts/SKILL.md),
 [woodwork-joints-3d](plugin/skills/woodwork-joints-3d/SKILL.md) and
-[bambu-handoff](plugin/skills/bambu-handoff/SKILL.md). Modeling
+[bambu-handoff](plugin/skills/bambu-handoff/SKILL.md), plus
+[print-troubleshooter](plugin/skills/print-troubleshooter/SKILL.md). Modeling
 decisions and worked examples belong in the skills, rather than the root README.
 
 Requirements: host Node.js 22 or newer and a Codex CLI supporting `codex plugin`.
 Start the app separately with `make up` and keep the editor tab open. Restart
 Codex or open a new chat after installation; invoke `$3d-model` explicitly.
+
+For print defects, use `$print-troubleshooter` with a photo and a description.
+Copy the actual slicer project 3MF to the managed imports directory. In Docker,
+this is the `imports/` folder under `JUMPSTART_DATA_DIR`. The skill compares
+the saved project settings against Open Filament Database and picks one
+calibration test. The reader works without an open editor tab.
 
 Run `make codex-install` again after pulling updates. The generated bundle pins
 the current host Node executable and uses the Studio release version from

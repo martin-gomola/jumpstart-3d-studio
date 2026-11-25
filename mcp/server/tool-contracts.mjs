@@ -70,7 +70,7 @@ export function extendMcpTools(tools, basePlan) {
       const description = PARAMETER_DESCRIPTIONS[`${tool.name}.${key}`] || PARAMETER_DESCRIPTIONS[key];
       if (description && !schema.description) properties[key] = { ...schema, description };
     }
-    tool.annotations = { ...annotationsFor(tool.name), openWorldHint: false };
+    tool.annotations = { openWorldHint: false, ...annotationsFor(tool.name) };
     if (OUTPUT_SCHEMAS[tool.name]) tool.outputSchema = OUTPUT_SCHEMAS[tool.name];
   }
   return all;
@@ -109,6 +109,7 @@ const PARAMETER_DESCRIPTIONS = {
 
 const READ_ONLY = { readOnlyHint: true };
 function annotationsFor(name) {
+  if (name === "jumpstart_get_filament_reference") return { readOnlyHint: true, openWorldHint: true };
   if (/^jumpstart_(list_|get_|inspect_|select_|preview_)/.test(name)) return READ_ONLY;
   return {
     jumpstart_apply_model: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
@@ -124,6 +125,14 @@ function annotationsFor(name) {
 
 const revisionOut = { type: "string", description: "Document revision after the call." };
 const OUTPUT_SCHEMAS = {
+  jumpstart_inspect_print_project: {
+    type: "object", required: ["assetId", "file", "status"],
+    properties: {
+      assetId: { type: "string" }, file: { type: "string" }, status: { enum: ["read", "missing_settings"] },
+      source: { type: "string" }, scope: { type: "string" }, message: { type: "string" },
+      settings: { type: "object", properties: { printer: { type: "object" }, process: { type: "object" }, filament: { type: "object" } } },
+    },
+  },
   jumpstart_list_editors: { type: "object", required: ["editors"], properties: { editors: { type: "array", items: { type: "object", required: ["editorId", "documentId"], properties: { editorId: { type: "string" }, documentId: { type: "string" }, documentName: { type: "string" }, focused: { type: "boolean" }, connectionState: { type: "string" } } } } } },
   jumpstart_apply_model: { type: "object", required: ["applied", "previewId", "revision", "meshValidation"], properties: { applied: { type: "boolean" }, previewId: { type: "string" }, revision: revisionOut, bodyIds: { type: "array", items: { type: "string" } }, meshValidation: { type: "object", required: ["valid", "bodies"], properties: { valid: { type: "boolean" }, bodies: { type: "object" } } } } },
   jumpstart_undo: { type: "object", required: ["undone", "revision"], properties: { undone: { type: "boolean" }, revision: revisionOut, document: { type: "object" } } },

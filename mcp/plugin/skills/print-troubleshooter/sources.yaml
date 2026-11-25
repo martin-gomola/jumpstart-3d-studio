@@ -1,0 +1,21 @@
+sources:
+  - id: ofd-api
+    url: https://openfilamentdatabase.org/docs
+    mutable: true
+    authority: Open Filament Collective publishes its API structure and source dataset.
+  - id: bambu-petg
+    url: https://store.bblcdn.com/s1/default/cb94589bf7994fdcbfa833badefae9cd/Bambu_PETG_Basic_Technical_Data_Sheet.pdf
+    mutable: false
+    authority: Manufacturer technical sheet for Bambu PETG Basic.
+  - id: bambu-x2d
+    url: https://csm.bblcdn.com/hub/7c58718aaa2e40edab56efb87419a96a.pdf
+    mutable: false
+    authority: Manufacturer user guide for X2D.
+  - id: orca-calibration
+    url: https://github.com/OrcaSlicer/OrcaSlicer/wiki/calibration_guide
+    mutable: true
+    authority: Slicer maintainers document how to choose and evaluate calibration tests.
+  - id: community-generator
+    url: https://github.com/skornehl/bambu-filament-profiles#sources-and-priority
+    mutable: true
+    authority: The project documents its profile generation, source precedence and default printer. It does not establish X2D calibration values.

@@ -9,6 +9,7 @@ export const MAX_IMPORT_BYTES_PER_PLAN = 24 * 1024 * 1024;
 export const MAX_IMPORT_CATALOG_FILES = 128;
 export const CAD_FORMATS = new Set(["stl", "3mf", "step"]);
 export const OUTLINE_FORMATS = new Set(["svg", "json"]);
+export const PRINT_PROJECT_FORMATS = new Set(["3mf"]);
 const FORMATS = new Set([".stl", ".3mf", ".step", ".stp", ".svg", ".json"]);
 const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
@@ -85,6 +86,7 @@ export async function resolveManagedImports(directory, requestedIds, formats = C
   const missing = requestedIds.find((id) => !found.has(id));
   if (missing) throw new Error(`Import ${missing} is unavailable, changed, or not an allowed regular file in the managed imports directory`);
   const wrong = requestedIds.map((id) => found.get(id)).find((asset) => !formats.has(asset.format));
+  if (wrong && formats === PRINT_PROJECT_FORMATS) throw new Error("Choose a project 3MF from jumpstart_list_imports.");
   if (wrong) throw new Error(formats === CAD_FORMATS ? `${wrong.name} is a tool outline; read it with jumpstart_get_outline and cut it as a pocket contour` : `${wrong.name} is not a tool outline; outlines are SVG or tool JSON files`);
   return requestedIds.map((id) => found.get(id));
 }

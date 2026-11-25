@@ -19,7 +19,9 @@ import { failureGuidance } from "../shared/failure-guidance.js";
 import { extendMcpTools } from "./tool-contracts.mjs";
 import { inspectTriangleMesh } from "../shared/geometry.js";
 import { clientPresence } from "./presence.mjs";
-import { listManagedImports, resolveManagedImports, MAX_IMPORTS_PER_PLAN, MAX_IMPORT_CATALOG_FILES, OUTLINE_FORMATS } from "./imports.mjs";
+import { listManagedImports, resolveManagedImports, MAX_IMPORTS_PER_PLAN, MAX_IMPORT_CATALOG_FILES, OUTLINE_FORMATS, PRINT_PROJECT_FORMATS } from "./imports.mjs";
+import { inspectPrintProject } from "./print-project.mjs";
+import { FILAMENT_NAME_PATTERN, getFilamentReference } from "./filament-reference.mjs";
 import { parseOutline, outlinePocket, OUTLINE_LIMITS } from "../shared/traced-outline.js";
 
 const ROOT = resolve(fileURLToPath(new URL("../..", import.meta.url)));
@@ -248,6 +250,28 @@ const tools = extendMcpTools([
       properties: {
         assetId: { type: "string", pattern: "^[a-f0-9]{64}$", description: "SHA-256 asset id of an svg or json outline from jumpstart_list_imports." },
         maxSegments: { type: "integer", minimum: OUTLINE_LIMITS.minSegments, maximum: OUTLINE_LIMITS.segments, description: `Most line segments in the contour; default ${OUTLINE_LIMITS.segments}. Fewer segments simplify more and raise deviation.` },
+      },
+    },
+  },
+  {
+    name: "jumpstart_inspect_print_project",
+    title: "Read slicer settings from a project 3MF",
+    description: "Read saved printer, process and filament settings from a managed Bambu Studio or OrcaSlicer project 3MF. Use a SHA-256 asset id from jumpstart_list_imports. Reads project-level JSON only, never executes or returns G-code, and does not need a browser tab or printer connection. Returns missing_settings for a 3MF without embedded project settings.",
+    inputSchema: {
+      type: "object", additionalProperties: false, required: ["assetId"],
+      properties: { assetId: { type: "string", pattern: "^[a-f0-9]{64}$", description: "Managed 3MF asset id from jumpstart_list_imports." } },
+    },
+  },
+  {
+    name: "jumpstart_get_filament_reference",
+    title: "Look up a filament in Open Filament Database",
+    description: "Find the exact public filament product by brand, material family and product name. Returns sourced temperature ranges, drying and throughput data when published, and slicer preset identifiers. Does not read a project or tune settings.",
+    inputSchema: {
+      type: "object", additionalProperties: false, required: ["brand", "material", "filament"],
+      properties: {
+        brand: { type: "string", pattern: FILAMENT_NAME_PATTERN, description: "Public brand name, e.g. Bambu Lab, or its database slug." },
+        material: { type: "string", pattern: FILAMENT_NAME_PATTERN, description: "Material family, e.g. PETG." },
+        filament: { type: "string", pattern: FILAMENT_NAME_PATTERN, description: "Exact product name without the brand prefix, e.g. PETG Basic, or its database slug." },
       },
     },
   },
@@ -802,6 +826,11 @@ async function executeTool(name, args) {
       const outline = parseOutline(Buffer.from(asset.base64, "base64").toString("utf8"), asset.name);
       return { assetId: asset.assetId, file: asset.name, ...outlinePocket(outline, { maxSegments: args.maxSegments }), sourceEvidence: { product: outline.name.slice(0, 160), kind: "measured", units: "mm" } };
     }
+    case "jumpstart_inspect_print_project": {
+      const [asset] = await resolveManagedImports(IMPORTS, [args.assetId], PRINT_PROJECT_FORMATS);
+      return { assetId: asset.assetId, file: asset.name, ...inspectPrintProject(Buffer.from(asset.base64, "base64")) };
+    }
+    case "jumpstart_get_filament_reference": return getFilamentReference(args);
     case "jumpstart_list_editors": return { editors: listEditors() };
     case "jumpstart_get_document": return await run("get_document", { ...args, editorId: host(args) });
     case "jumpstart_preview_new_document": return await run("preview_new_document", { ...args, editorId: host(args) });

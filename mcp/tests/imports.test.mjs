@@ -4,10 +4,11 @@ import { mkdtemp, mkdir, readFile, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
-import { deflateRawSync } from "node:zlib";
+import { crc32, deflateRawSync } from "node:zlib";
 import { listManagedImports, resolveManagedImports, MAX_IMPORT_FILE_BYTES, MAX_IMPORT_CATALOG_FILES } from "../server/imports.mjs";
 import { MAX_3MF_ENTRY_BYTES, MAX_3MF_TOTAL_UNCOMPRESSED_BYTES } from "../../src/meshimport.js";
 import { parse3MF } from "../../src/meshimport.js";
+import { inspectPrintProject } from "../server/print-project.mjs";
 
 function storedZip(entries) {
   const locals = [], central = [];
@@ -17,6 +18,7 @@ function storedZip(entries) {
     const filename = Buffer.from(name), raw = Buffer.from(spec.data), method = spec.deflated ? 8 : 0;
     const data = spec.deflated ? deflateRawSync(raw) : raw, declaredSize = spec.declaredSize ?? raw.length;
     const local = Buffer.alloc(30), header = Buffer.alloc(46);
+    local.writeUInt32LE(crc32(raw), 14); header.writeUInt32LE(crc32(raw), 16);
     local.writeUInt32LE(0x04034b50, 0); local.writeUInt16LE(20, 4); local.writeUInt16LE(method, 8); local.writeUInt32LE(data.length, 18); local.writeUInt32LE(raw.length, 22); local.writeUInt16LE(filename.length, 26);
     locals.push(local, filename, data);
     header.writeUInt32LE(0x02014b50, 0); header.writeUInt16LE(20, 4); header.writeUInt16LE(20, 6); header.writeUInt16LE(method, 10); header.writeUInt32LE(data.length, 20); header.writeUInt32LE(declaredSize, 24); header.writeUInt16LE(filename.length, 28); header.writeUInt32LE(offset, 42);
@@ -27,6 +29,22 @@ function storedZip(entries) {
   end.writeUInt32LE(0x06054b50, 0); end.writeUInt16LE(Object.keys(entries).length, 8); end.writeUInt16LE(Object.keys(entries).length, 10); end.writeUInt32LE(centralBytes.length, 12); end.writeUInt32LE(offset, 16);
   return Buffer.concat([...locals, centralBytes, end]);
 }
+
+test("print settings reader handles deflated settings and distinguishes model exports", () => {
+  const path = "Metadata/project_settings.config";
+  const value = inspectPrintProject(storedZip({
+    [path]: { deflated: true, data: JSON.stringify({
+      printer_settings_id: "X2D 0.4", filament_settings_id: ["PETG Basic", "PLA Basic"],
+      nozzle_temperature: ["250", "220"], filament_start_gcode: ["G28"],
+    }) },
+  }));
+  assert.deepEqual(value.settings.filament.nozzle_temperature, ["250", "220"]);
+  assert.equal(value.settings.printer.printer_settings_id, "X2D 0.4");
+  assert.equal(Object.hasOwn(value.settings.filament, "filament_start_gcode"), false);
+  assert.equal(inspectPrintProject(storedZip({ "3D/3dmodel.model": "<model/>" })).status, "missing_settings");
+  assert.throws(() => inspectPrintProject(storedZip({ [path]: "[]" })), /JSON object/);
+  assert.throws(() => inspectPrintProject(storedZip({ [path]: { data: "{}", declaredSize: 1024 * 1024 + 1 } })), /1 MiB/);
+});
 
 test("managed imports list metadata and resolve digest ids without exposing path input", async () => {
   const directory = await mkdtemp(join(tmpdir(), "jumpstart-imports-"));

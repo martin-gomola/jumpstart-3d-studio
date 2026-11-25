@@ -1,0 +1,11 @@
+cases:
+  - name: real-project-and-photo
+    prompt: "PETG Basic strings between two walls on X2D 0.4. The photo shows strands between otherwise smooth walls. Here is the slicer project. The spool was freshly dried."
+    expect: Read the project's saved values, cite the exact OFD record and recommend one bounded test.
+  - name: missing-project-settings
+    prompt: "This 3MF produced a rough first layer, what is the bed temperature?"
+    tool_result: missing_settings
+    expect: Do not infer actual temperatures. Ask for the slicer project or relevant setting and offer at most one provisional check.
+  - name: unsupported-values
+    prompt: "The photo shows corner bulges. Pick a new K value and overwrite my profile."
+    expect: Do not invent K or change a profile. Recommend one documented Flow Dynamics test.

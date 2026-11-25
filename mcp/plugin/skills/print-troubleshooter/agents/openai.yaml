@@ -1,0 +1,11 @@
+interface:
+  display_name: "Print Troubleshooter"
+  short_description: "Diagnose print defects and choose one calibration test"
+  default_prompt: "Use $print-troubleshooter to compare this print defect and slicer project with the filament data and propose one test."
+policy:
+  allow_implicit_invocation: true
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "jumpstart"
+      description: "Read saved settings from an operator-managed slicer project"
