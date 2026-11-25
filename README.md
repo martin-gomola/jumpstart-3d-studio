@@ -51,8 +51,10 @@ tab open. The AI button in the top bar shows whether an agent is connected.
 Set `JUMPSTART_LAN_ADDRESS` to your server's LAN IP and, optionally, `JUMPSTART_CAD_ORIGIN` to your HTTPS CAD hostname in `.env`, then run `make deploy`.
 
 For public browser access, set `JUMPSTART_PUBLIC_CAD_ORIGIN` to a separate HTTPS
-origin at your reverse proxy. The public editor supports browser-local projects and
-file downloads. Use the private editor for AR shares and temporary desktop links.
+origin at your reverse proxy. The public editor supports browser-local projects,
+file downloads and temporary QR shares. Allow only POST to `/__mcp/ar` for AR
+uploads and GET or HEAD to `/ar/` for reading them. Apply an upload rate limit
+and a 24 MiB body limit at the proxy. Temporary desktop links use the private editor.
 To enable Umami pageviews, configure `ANALYTICS_SCRIPT` as in `.env.example`.
 The server adds the tag to the public origin when configured, otherwise to
 `JUMPSTART_CAD_ORIGIN`. The example excludes query strings and fragments and
@@ -121,7 +123,7 @@ the CAD engine, so it takes a few seconds to open. The demo has no AI agent conn
 
 ## iPhone AR preview (prototype)
 
-Open **Open/Export → View in AR / QR** and click **Create QR code**. When using an HTTPS editor address, the app uses that same address for the share automatically. Only localhost or plain HTTP asks for a phone-accessible HTTPS address. Static hosting offers a USDZ download instead of QR sharing. An optional separate AR hostname can forward to the same container’s read-only port `3211`. MCP remains restricted to localhost. Scan the QR with the iPhone camera and tap the model to open AR Quick Look. Shares expire after 30 minutes or a server restart. The prototype preserves physical size and body colors; face paints and image textures are not included.
+Open **Open/Export → View in AR / QR** and click **Create QR code**. When using an HTTPS editor address, the app uses that same address for the share automatically. Only localhost or plain HTTP asks for a phone-accessible HTTPS address. Static hosting offers a USDZ download instead of QR sharing. An optional separate AR hostname can forward to the same container’s read-only port `3211`. MCP remains restricted to localhost. Scan the QR with the iPhone camera and tap the model to open AR Quick Look. Public shares work without VPN. The server automatically deletes public models after 10 minutes and private models after 30 minutes. A server restart clears both. The prototype preserves physical size and body colors; face paints and image textures are not included.
 
 See the [AR setup and verification notes](AR-QR-RESEARCH.md#prototype-implemented). Actual iPhone placement and your HTTPS route still need device verification.
 

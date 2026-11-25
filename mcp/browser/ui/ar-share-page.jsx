@@ -43,7 +43,7 @@ export function renderArSharePage({ themeCss, expired = false }) {
       <a className="primary" rel="ar" href={base + '/model.usdz#allowsContentScaling=0'}><img src={base + '/poster.svg'} width="24" height="24" alt="" /><span>View in your room</span></a>
       <p className="instruction">Move your phone slowly to find a surface.</p>
       <a className="download" href={base + '/model.usdz'}>Download 3D model</a>
-      <p className="expiry">Link expires 30 minutes after sharing.</p>
+      <p className="expiry">Link expires __AR_TTL_MINUTES__ minutes after sharing.</p>
     </>}
   </main></body></html>);
 }

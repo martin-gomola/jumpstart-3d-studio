@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { createLanEditor } from "./lan-editor.mjs";
-import { createArShares } from "./ar-shares.mjs";
+import { AR_TTL_MINUTES, createArShares, PUBLIC_AR_TTL_MINUTES } from "./ar-shares.mjs";
 import { createSlicerHandoff } from "./slicer-handoff.mjs";
 import { createAgentTrace } from "./agent-trace.mjs";
 
@@ -674,7 +674,10 @@ async function serveStatic(req, res, pathname, networkEditor = false, sharing = 
       if (networkEditor && analyticsOrigin && req.headers.host === analyticsOrigin.host && analyticsScript) {
         shell = shell.replace("<!-- ANALYTICS -->", () => analyticsScript);
       }
-      const capabilityMeta = (sharing ? '<meta name="jumpstart-ar-sharing" content="1"><meta name="jumpstart-slicer-handoff" content="1">' : '') +
+      const arMinutes = sharing ? AR_TTL_MINUTES : PUBLIC_AR_TTL_MINUTES;
+      const capabilityMeta = '<meta name="jumpstart-ar-sharing" content="1">' +
+        `<meta name="jumpstart-ar-ttl-minutes" content="${arMinutes}">` +
+        (sharing ? '<meta name="jumpstart-slicer-handoff" content="1">' : '<meta name="jumpstart-public-ar" content="1">') +
         (networkEditor ? '' : '<meta name="jumpstart-mcp-bridge" content="1">');
       shell = shell.includes("</head>")
         ? shell.replace("</head>", `${capabilityMeta}\n</head>`)
@@ -782,7 +785,11 @@ const analyticsOrigin = publicOrigin ?? lanOrigins
   .find(url => url.protocol === "https:" && url.origin === process.env.JUMPSTART_CAD_ORIGIN);
 const analyticsScript = process.env.ANALYTICS_SCRIPT?.trim();
 if (lanPort && !lanOrigins.length) throw new Error("JUMPSTART_LAN_ORIGINS is required for network editor access");
-const lanServer = lanPort ? createLanEditor({ origins: lanOrigins, publicOrigin, serveStatic, handleAr, handleSlicer: createSlicerHandoff() }) : null;
+const lanServer = lanPort ? createLanEditor({
+  origins: lanOrigins, publicOrigin, serveStatic, handleAr,
+  handlePublicAr: publicOrigin ? createArShares({ ttlMinutes: PUBLIC_AR_TTL_MINUTES }) : undefined,
+  handleSlicer: createSlicerHandoff(),
+}) : null;
 if (lanServer) {
   lanServer.on("error", error => { process.stderr.write(`JumpStart LAN editor failed: ${error.message}\n`); process.exitCode = 1; close(); });
   lanServer.listen(lanPort, process.env.JUMPSTART_LAN_HOST || "127.0.0.1");

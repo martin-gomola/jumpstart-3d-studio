@@ -10,6 +10,8 @@ function Panel({ app, store, close }) {
   });
   const [base, setBase] = useState(automaticBase);
   const [canShare, setCanShare] = useState(() => document.querySelector('meta[name="jumpstart-ar-sharing"]')?.content === '1');
+  const publicShare = document.querySelector('meta[name="jumpstart-public-ar"]')?.content === '1';
+  const ttlMinutes = Number(document.querySelector('meta[name="jumpstart-ar-ttl-minutes"]')?.content) || 30;
   const [details, setDetails] = useState(false);
   const action = useRef(null);
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [result, setResult] = useState(null);
@@ -21,6 +23,8 @@ function Panel({ app, store, close }) {
       const origin = shareBase(base);
       const data = await arSnapshot({ ...app, store });
       const response = await fetch('/__mcp/ar', { method: 'POST', headers: { 'Content-Type': 'model/vnd.usdz+zip' }, body: data });
+      if (response.status === 413) throw new Error('The model is too large for sharing. Select fewer bodies or download USDZ.');
+      if (response.status === 429) throw new Error('The AR sharing limit is reached. Wait a few minutes and try again.');
       if (!response.ok) throw new Error(response.status === 404 || response.status === 503 ? 'AR sharing needs the local JumpStart server.' : 'Could not create the AR share. Check the local server.');
       let payload;
       try { payload = await response.json(); } catch { /* Static hosts and proxies can return an empty successful response. */ }
@@ -70,11 +74,11 @@ function Panel({ app, store, close }) {
       </div>}
       {result && <>
         <div className="ar-panel-qr"><div className="ar-panel-qr-frame"><img width="240" height="240" src={result.qr} alt="QR code for this AR model" /></div></div>
-        <p className="ar-panel-meta">Same Wi-Fi or VPN · Expires in 30 minutes</p>
+        <p className="ar-panel-meta">{publicShare ? 'Works without VPN' : 'Same Wi-Fi or VPN'} · Expires in {ttlMinutes} minutes</p>
       </>}
       <div role="status" aria-live="polite" className={error ? 'ar-panel-error' : 'ar-panel-status'}>{error || (busy ? (canShare ? 'Creating snapshot…' : 'Preparing USDZ…') : result ? 'QR code ready.' : '')}</div>
       <button className="ar-panel-disclosure" aria-expanded={details} aria-controls="ar-share-details" onClick={() => setDetails(!details)}><span>Share details</span><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg></button>
-      <div id="ar-share-details" hidden={!details}><p className="ar-panel-details">Uses selected printable bodies, or all printable bodies if none are selected. Preserves size and body colors; face paints and image textures are not included.</p>{canShare && <p className="ar-panel-details">Anyone with the link and network access can open it. Shares expire after 30 minutes or a server restart.</p>}</div>
+      <div id="ar-share-details" hidden={!details}><p className="ar-panel-details">Uses selected printable bodies, or all printable bodies if none are selected. Preserves size and body colors; face paints and image textures are not included.</p>{canShare && <p className="ar-panel-details">{publicShare ? 'Anyone with the link can open it.' : 'Anyone with the link and network access can open it.'} The server removes the model after {ttlMinutes} minutes or a restart.</p>}</div>
     </div>
     <div className="ar-panel-actions">
       <button className="ar-panel-action" onClick={close}>Close</button>

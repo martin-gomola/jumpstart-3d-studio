@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
 
 // A distinct listener prevents LAN clients from reaching MCP by spoofing Host/Origin.
-export function createLanEditor({ origins, publicOrigin, serveStatic, handleAr, handleSlicer }) {
+export function createLanEditor({ origins, publicOrigin, serveStatic, handleAr, handlePublicAr, handleSlicer }) {
   const allowed = new Set(origins);
   const hosts = new Set(origins.map(origin => new URL(origin).host));
   const publicHost = publicOrigin?.host;
@@ -10,7 +10,16 @@ export function createLanEditor({ origins, publicOrigin, serveStatic, handleAr, 
     if (!hosts.has(req.headers.host)) return reject(403, 'Unrecognized editor address');
     const path = new URL(req.url || '/', 'http://localhost').pathname;
     if (req.headers.host === publicHost) {
-      if (/^\/(?:__mcp|ar|slicer-handoff)(?:\/|$)/.test(path)) return reject(404, 'Not found');
+      if (path === '/__mcp/ar') {
+        if (req.headers.origin !== publicOrigin.origin ||
+            (req.headers['sec-fetch-site'] && req.headers['sec-fetch-site'] !== 'same-origin')) {
+          return reject(403, 'Same-origin editor upload required');
+        }
+        void handlePublicAr(req, res, path, true);
+        return;
+      }
+      if (path.startsWith('/ar/')) { void handlePublicAr(req, res, path); return; }
+      if (/^\/(?:__mcp|slicer-handoff)(?:\/|$)/.test(path)) return reject(404, 'Not found');
       void serveStatic(req, res, path, true, false);
       return;
     }
