@@ -6,6 +6,7 @@ import { initRecovery } from "./recovery.js";
 import { selectExportBodies } from "./bodyRoles.js";
 import { packMesh, unpackMesh } from "./meshpack.js";
 import { openSlicerHandoff } from "./slicer-handoff.jsx";
+import { x2dBuildTransform } from "./bambu-project.js";
 
 const LS_INDEX = "workplane.index.v1";
 const LS_DOC = "workplane.doc.v1.";
@@ -220,7 +221,7 @@ export function initProjects(app) {
   app.recovery = rec;
   // the Autosave button in the top bar
   const asBtn = $("btn-autosave");
-  const showAutosave = () => { asBtn.textContent = rec.enabled ? "Autosave: On" : "Autosave: Off"; asBtn.setAttribute("aria-pressed", rec.enabled ? "true" : "false"); };
+  const showAutosave = () => { asBtn.querySelector("span").textContent = rec.enabled ? "Autosave: On" : "Autosave: Off"; asBtn.setAttribute("aria-pressed", rec.enabled ? "true" : "false"); };
   asBtn.onclick = () => {
     rec.setEnabled(!rec.enabled);
     showAutosave();
@@ -492,7 +493,7 @@ export function initProjects(app) {
     app.onExport && app.onExport("laser");
   }
   // 3MF: one object per body with its color, vertices shared so slicers see closed meshes
-  function threeMFBytes(bodies = exportBodies()) {
+  function threeMFBytes(bodies = exportBodies(), profile = null) {
     const objs = [];
     for (const b of bodies) {
       const v = app.scene.views.get(b.id);
@@ -503,12 +504,19 @@ export function initProjects(app) {
     const hex = (c) => { const m = /^#?([0-9a-f]{6})$/i.exec(c || ""); return "#" + (m ? m[1] : "A7B0BA").toUpperCase() + "FF"; };
     const num = (x) => { const r = Math.round(x * 1e5) / 1e5; return Object.is(r, -0) ? "0" : String(r); };
     const out = [];
-    out.push('<?xml version="1.0" encoding="UTF-8"?>\n<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">');
-    out.push(' <metadata name="Application">JumpStart 3D</metadata>');
+    const bambuNamespace = profile ? ' xmlns:BambuStudio="http://schemas.bambulab.com/package/2021"' : "";
+    out.push(`<?xml version="1.0" encoding="UTF-8"?>\n<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"${bambuNamespace}>`);
+    out.push(` <metadata name="Application">${profile ? "BambuStudio-" + profile.version : "JumpStart 3D"}</metadata>`);
+    if (profile) out.push(' <metadata name="BambuStudio:3mfVersion">1</metadata>');
     out.push(' <metadata name="Title">' + esc(store.doc.name || "design") + '</metadata>');
-    out.push(' <resources>\n  <basematerials id="1">');
-    objs.forEach((o) => out.push('   <base name="' + esc(o.b.name || "Body") + '" displaycolor="' + hex(o.b.color) + '"/>'));
-    out.push('  </basematerials>');
+    out.push(' <resources>');
+    if (!profile) {
+      out.push('  <basematerials id="1">');
+      objs.forEach((o) => out.push('   <base name="' + esc(o.b.name || "Body") + '" displaycolor="' + hex(o.b.color) + '"/>'));
+      out.push('  </basematerials>');
+    }
+    const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
+    const objectSettings = [], instances = [];
     objs.forEach((o, k) => {
       const M = o.m.elements, P = o.data.vertices, T = o.data.triangles;
       const det = M[0] * (M[5] * M[10] - M[9] * M[6]) - M[4] * (M[1] * M[10] - M[9] * M[2]) + M[8] * (M[1] * M[6] - M[5] * M[2]);
@@ -517,6 +525,10 @@ export function initProjects(app) {
         const x = M[0] * P[i * 3] + M[4] * P[i * 3 + 1] + M[8] * P[i * 3 + 2] + M[12];
         const y = M[1] * P[i * 3] + M[5] * P[i * 3 + 1] + M[9] * P[i * 3 + 2] + M[13];
         const z = M[2] * P[i * 3] + M[6] * P[i * 3 + 1] + M[10] * P[i * 3 + 2] + M[14];
+        if (profile) [x, y, z].forEach((value, axis) => {
+          min[axis] = Math.min(min[axis], value);
+          max[axis] = Math.max(max[axis], value);
+        });
         const key = num(x) + "," + num(y) + "," + num(z);
         let id = index.get(key);
         if (id === undefined) { id = verts.length; index.set(key, id); verts.push('     <vertex x="' + num(x) + '" y="' + num(y) + '" z="' + num(z) + '"/>'); }
@@ -529,20 +541,36 @@ export function initProjects(app) {
         if (det < 0) [b2, c] = [c, b2];
         tris.push('     <triangle v1="' + a + '" v2="' + b2 + '" v3="' + c + '"/>');
       }
-      out.push('  <object id="' + (k + 2) + '" type="model" name="' + esc(o.b.name || "Body") + '" pid="1" pindex="' + k + '">\n   <mesh>\n    <vertices>');
+      const name = esc(o.b.name || "Body");
+      const meshId = profile ? k * 2 + 1 : k + 2;
+      const material = profile ? "" : ` pid="1" pindex="${k}"`;
+      out.push(`  <object id="${meshId}" type="model" name="${name}"${material}>\n   <mesh>\n    <vertices>`);
       out.push(verts.join("\n"));
       out.push('    </vertices>\n    <triangles>');
       out.push(tris.join("\n"));
       out.push('    </triangles>\n   </mesh>\n  </object>');
+      if (profile) {
+        const id = meshId + 1;
+        out.push(`  <object id="${id}" type="model"><components><component objectid="${meshId}"/></components></object>`);
+        objectSettings.push(`<object id="${id}"><metadata key="name" value="${name}"/><metadata key="extruder" value="1"/><part id="${meshId}" subtype="normal_part"><metadata key="name" value="${name}"/></part></object>`);
+        instances.push(`<model_instance><metadata key="object_id" value="${id}"/><metadata key="instance_id" value="0"/></model_instance>`);
+      }
     });
     out.push(' </resources>\n <build>');
-    objs.forEach((o, k) => out.push('  <item objectid="' + (k + 2) + '"/>'));
+    const transform = profile ? x2dBuildTransform(min, max, 261) : "";
+    objs.forEach((o, k) => out.push(profile
+      ? `  <item objectid="${k * 2 + 2}" transform="${transform}" printable="1"/>`
+      : `  <item objectid="${k + 2}"/>`));
     out.push(' </build>\n</model>\n');
     const enc = new TextEncoder();
     return makeZipBytes([
       { name: "[Content_Types].xml", data: enc.encode('<?xml version="1.0" encoding="UTF-8"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/></Types>') },
       { name: "_rels/.rels", data: enc.encode('<?xml version="1.0" encoding="UTF-8"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>') },
       { name: "3D/3dmodel.model", data: enc.encode(out.join("\n")) },
+      ...(profile ? [
+        { name: "Metadata/project_settings.config", data: enc.encode(JSON.stringify(profile)) },
+        { name: "Metadata/model_settings.config", data: enc.encode(`<config>${objectSettings.join("")}<plate><metadata key="plater_id" value="1"/>${instances.join("")}</plate></config>`) },
+      ] : []),
     ]);
   }
   async function makeZipBytes(files) { return new Uint8Array(await makeZip(files).arrayBuffer()); }
@@ -625,6 +653,10 @@ export function initProjects(app) {
     if (a === "bambu") {
       const bodies = exportBodies();
       openSlicerHandoff(() => threeMFBytes(bodies), exportName() + ".3mf");
+    }
+    if (a === "bambu-x2d") {
+      const bodies = exportBodies();
+      openSlicerHandoff(profile => threeMFBytes(bodies, profile), exportName() + "-X2D.3mf", { x2d: true });
     }
     if (a === "step") exportSTEP();
     if (a === "dxf") app.advanced.exportSketchesDXF(null);

@@ -267,16 +267,34 @@ app.voxel = initVoxel(app);
   app.syncSnapMenu = syncSnapMenu;
   // the sketch palette's snap checkbox drives the same setting
   Object.defineProperty(app.sketcher, "snapOn", { get: () => app.snapOn, set: (v) => app.setSnap(v) });
-  const tmenu = $("menu-theme"), more = $("btn-theme");
+  const tmenu = $("menu-theme"), theme = $("btn-theme");
+  const moreMenu = $("menu-more"), more = $("btn-more");
+  let themeReturn = theme;
   function showMore(open, restoreFocus = false) {
-    tmenu.hidden = !open;
+    moreMenu.hidden = !open;
     more.setAttribute("aria-expanded", String(open));
-    if (!open) {
-      tmenu.querySelector("details").open = false;
-      if (restoreFocus) more.focus();
-    }
+    if (restoreFocus) more.focus();
   }
-  more.onclick = () => showMore(tmenu.hidden);
+  function showTheme(open, restoreFocus = false) {
+    tmenu.hidden = !open;
+    theme.setAttribute("aria-expanded", String(open));
+    if (restoreFocus) (themeReturn.getClientRects().length ? themeReturn : more).focus();
+  }
+  more.onclick = () => {
+    showTheme(false);
+    showMore(moreMenu.hidden);
+  };
+  theme.onclick = () => {
+    themeReturn = theme;
+    showMore(false);
+    showTheme(tmenu.hidden);
+  };
+  $("more-theme").onclick = () => {
+    themeReturn = more;
+    showMore(false);
+    showTheme(true);
+    tmenu.querySelector("button").focus();
+  };
   tmenu.addEventListener("click", (e) => {
     const data = e.target.closest("button")?.dataset;
     if (data?.theme) app.setTheme(data.theme);
@@ -284,16 +302,21 @@ app.voxel = initVoxel(app);
     else if (data?.layout) app.setLayout(data.layout);
     else if (data?.device) app.setTabletMode(!app.tabletOn);
     else return;
-    showMore(false, true);
+    showTheme(false, true);
   });
+  const menus = more.parentElement;
   window.addEventListener("pointerdown", (e) => {
-    if (!tmenu.hidden && !tmenu.contains(e.target) && !more.contains(e.target)) showMore(false);
+    if (!menus.contains(e.target)) {
+      showMore(false);
+      showTheme(false);
+    }
   });
-  more.parentElement.addEventListener("keydown", (e) => {
-    if (e.key !== "Escape" || tmenu.hidden) return;
+  menus.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || (tmenu.hidden && moreMenu.hidden)) return;
     e.preventDefault();
     e.stopPropagation();
-    showMore(false, true);
+    if (!tmenu.hidden) showTheme(false, true);
+    else showMore(false, true);
   });
   $("btn-tutorials").onclick = () => { showMore(false, true); app.tutorials.open(); };
   $("more-undo").onclick = () => { showMore(false, true); app.undo(); };
@@ -311,7 +334,7 @@ app.voxel = initVoxel(app);
     const on = !!fsEl();
     document.documentElement.classList.toggle("is-full", on);
     $("btn-full").setAttribute("aria-pressed", on);
-    $("btn-full").textContent = on ? "Exit full screen" : "Full screen";
+    $("btn-full").querySelector("span").textContent = on ? "Exit full screen" : "Full screen";
     if (!on) { document.querySelector(".fs-tip")?.remove(); try { navigator.keyboard && navigator.keyboard.unlock(); } catch (e) {} }
   };
   // iPhone has no full screen for web pages (Add to Home Screen gives the full screen there)
@@ -504,7 +527,7 @@ function loadPrefs() {
   app.tabletPrevLayout = p.tabletPrevLayout || null;
   app.setTabletMode(!!p.tablet, true);
   // an iPad (or other tablet) that hasn't chosen yet: suggest Tablet & Pencil mode once
-  if (p.tablet === undefined && isTablet()) setTimeout(() => app.toast("On an iPad or tablet? Turn on Tablet & Pencil mode in More actions under View settings: fingers move the view, the Apple Pencil draws and picks precisely."), 4000);
+  if (p.tablet === undefined && isTablet()) setTimeout(() => app.toast("On an iPad or tablet? Turn on Tablet & Pencil mode in View settings: fingers move the view, the Apple Pencil draws and picks precisely."), 4000);
   // realistic lighting starts off (faster); it stays on only for someone who turned it on themselves
   app.setLighting(p.lightOn === true, true);
   app.setAppearances(p.appear !== false, true);
@@ -574,10 +597,10 @@ function onSlow() {
     const next = PERF_ORDER[i + 1];
     try { localStorage.setItem(PERF_AUTO_KEY, next); } catch (e) {}
     app.setPerf("auto", true);
-    app.toast("Switched to " + PERF_NAMES[next] + " to keep things smooth. You can change it in More actions under View settings.");
+    app.toast("Switched to " + PERF_NAMES[next] + " to keep things smooth. You can change it in View settings.");
   } else if (app.perfPref !== "auto" && i < 2 && !slowTold) {
     slowTold = true;
-    app.toast("Things look slow on this computer. Try " + (i === 0 ? "High or Normal" : "Normal") + " in More actions under View settings: " + (i === 0 ? "they draw" : "it draws") + " less, and every tool still works.");
+    app.toast("Things look slow on this computer. Try " + (i === 0 ? "High or Normal" : "Normal") + " in View settings: " + (i === 0 ? "they draw" : "it draws") + " less, and every tool still works.");
   }
 }
 
@@ -609,7 +632,7 @@ app.setLayout = function (name, quiet) {
   requestAnimationFrame(() => { window.dispatchEvent(new Event("resize")); app.vp && app.vp.request(); });
   if (!quiet) {
     savePrefs();
-    app.toast(LAYOUTS[name] + " layout: " + ({ default: "tools across the top.", simple: "bigger buttons with names.", clean: "icons down the left side (hover for names).", classic: "a tool palette down the right side.", tablet: "big tools along the bottom." })[name] + " Change it any time in More actions under View settings.");
+    app.toast(LAYOUTS[name] + " layout: " + ({ default: "tools across the top.", simple: "bigger buttons with names.", clean: "icons down the left side (hover for names).", classic: "a tool palette down the right side.", tablet: "big tools along the bottom." })[name] + " Change it any time in View settings.");
   }
 };
 
@@ -818,7 +841,7 @@ app.showAbout = function () {
         ["Roland MDX-50:", "CAM Studio has Roland MDX-50 profiles (with the 5-tool changer, and with the ZCL-50A rotary axis) and a Roland NC code post processor for MDX-series mills."],
       ]),
       sec("Editor core 2.7.4 changes", [
-        ["Sketch line style:", "choose how thick sketch lines are (Hairline, Thin, Medium, Thick or Extra thick) and their colour (the theme's own colour, or black, white, blue, red, green, orange, purple, yellow or cyan) in More actions under View settings, under Sketch lines. It applies in Advanced, Beginner and Chisel and is remembered. The new default, Thin, is thinner than before."],
+        ["Sketch line style:", "choose how thick sketch lines are (Hairline, Thin, Medium, Thick or Extra thick) and their colour (the theme's own colour, or black, white, blue, red, green, orange, purple, yellow or cyan) in the Sketch lines section of View settings. It applies in Advanced, Beginner and Chisel and is remembered. The new default, Thin, is thinner than before."],
         ["Shell → Hollow:", "the Shell tool now has two types. Openings removes the faces you click (an open box or cup); Hollow makes the whole model hollow inside, closed all round, with a 2 mm wall to start that you can change (quick picks 1, 2, 3 and 5 mm). Hollow works on the selected shapes, or click shapes to add them."],
         ["Shell and Fillet in Beginner:", "Beginner's toolbar has Fillet (click edges or a face, or Round all edges of the shape) and Shell (Hollow to start). The shape's panel lists its fillets and shells with Edit and Remove, plus Round edges and Make hollow buttons. Fillet and Chamfer in Advanced have the all-edges button too."],
         ["Hollow in Chisel:", "a new Hollow tool (in Easy and full Chisel) makes a sculpted model hollow inside with the wall thickness you choose."],
@@ -932,7 +955,7 @@ app.showAbout = function () {
       sec("Viewing", [
         ["Lighting:", "realistic shading and shadows (sun button), light, dark or high-contrast themes, orthographic view and the view cube."],
         ["Projection & animation:", "Projector (a second window that shows your objects on black, for a projector or second screen), Media (pictures and videos on objects: facing view, wrap around, all sides or ball), and Picture to 3D model (puffs a picture's subject up into a rounded, printable solid with the picture painted on)."],
-        ["Performance:", "Auto, Normal (slower computers), High (most laptops and Chromebooks) or Ultra (powerful computers, sharpest) in More actions under View settings: lighter modes draw fewer pixels while the view moves and simpler shadows, with every tool and export unchanged. Auto picks a mode for the computer and steps down if things get slow."],
+        ["Performance:", "Auto, Normal (slower computers), High (most laptops and Chromebooks) or Ultra (powerful computers, sharpest) in View settings: lighter modes draw fewer pixels while the view moves and simpler shadows, with every tool and export unchanged. Auto picks a mode for the computer and steps down if things get slow."],
         ["Tutorials:", "sixteen step-by-step projects (eight in Beginner, eight in Advanced, marked Easy, Proficient or Advanced, 5-15 minutes each), from a name keychain and a rocket to a chess pawn, a wall hook, a box with a drawer and a candy jar with a screw-on lid. Each step shows which tool to use, how and when, with a short animation, and ticks itself off when it's done."],
         ["Help:", "press ? for every keyboard shortcut; right-click a shape for copy, paste, duplicate and delete."]]),
       el("p", { class: "ab-credit" }, "Created with Vibe Coding Assistance"),
