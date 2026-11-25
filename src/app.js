@@ -305,6 +305,10 @@ app.voxel = initVoxel(app);
     showTheme(false, true);
   });
   const menus = more.parentElement;
+  $("btn-export").addEventListener("click", () => {
+    showMore(false);
+    showTheme(false);
+  });
   window.addEventListener("pointerdown", (e) => {
     if (!menus.contains(e.target)) {
       showMore(false);

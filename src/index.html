@@ -118,8 +118,9 @@ button { cursor: pointer; }
 #menu-more svg { width: var(--ai-status-toolSize16, 16px); height: var(--ai-status-toolSize16, 16px); flex: none; }
 #btn-full .fs-off, #btn-full[aria-pressed="true"] .fs-on { display: none; }
 #btn-full[aria-pressed="true"] .fs-off { display: block; }
-.file-actions .menu { right: auto; left: 0; width: min(300px, calc(100vw - 56px)); }
-@media (max-width: 960px) { .ts-btn-l { display: none; } }
+.file-actions .menu { width: min(300px, calc(100vw - 56px)); }
+@media (max-width: 1100px) { .ts-btn-l { display: none; } }
+@media (min-width: 641px) and (max-width: 800px) { .topbar-actions .tb-btn { padding-inline: 5px; } }
 .menu button { display: flex; width: 100%; text-align: left; border: 0; background: none; padding: 8px 10px; border-radius: 4px; gap: 10px; align-items: baseline; }
 .menu button:disabled { opacity: .45; cursor: default; }
 .menu button:not(:disabled):hover { background: var(--accent-soft); }
@@ -1287,28 +1288,6 @@ html.ios .topbar { padding-left: max(12px, env(safe-area-inset-left, 0px)); padd
       <input id="docname" class="docname" aria-label="Design name" value="Untitled design">
       <span id="docver" class="docver" hidden>v1</span>
       <button class="tb-btn save-btn" id="btn-save" aria-label="Save" title="Save (Ctrl+S): each save is a new version, v1, v2, v3…"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h11l3 3v15H5z"/><path d="M8 3v6h8V3"/><rect x="8" y="13" width="8" height="6" rx="1"/></svg><span class="lbl">Save</span></button>
-      <div class="menu-wrap file-actions">
-        <button class="tb-btn" id="btn-export" aria-label="Open/Export" aria-expanded="false" aria-controls="menu-export" title="Open a project file, save a copy, or export"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg><span class="lbl">Open/Export</span></button>
-        <div class="menu" id="menu-export" hidden>
-          <button id="btn-projects">Designs</button>
-          <button data-act="import">Open a project file…</button>
-          <button id="file-import-content" data-act="import-content" title="Add to the current design: STL, 3MF, STEP, SVG, DXF, or an image">Import into design…</button>
-          <button data-act="json">Save Project File <small>.json</small></button>
-          <hr>
-          <div id="file-export-heading" class="menu-head">Export</div>
-          <button data-act="ar">View in AR / QR <small>iPhone</small></button>
-          <button data-act="stl">STL for 3D printing <small>.stl</small></button>
-          <button data-act="3mf">3MF for 3D printing (with colors) <small>.3mf</small></button>
-          <button data-act="bambu">Open in Bambu Studio… <small>.3mf</small></button>
-        <button data-act="bambu-x2d">Export X2D project… <small>.3mf</small></button>
-          <button data-act="step">STEP for other CAD <small>.step</small></button>
-          <button data-act="dxf" title="Every sketch, flat, for laser or vinyl cutters and other CAD">Sketches as DXF <small>.dxf</small></button>
-          <button data-act="laser-svg" id="exp-laser-svg" title="Flat parts (like a 3 mm acrylic lamp panel) as a laser file: the outline and holes to cut (red), recesses in the top to engrave (black)">Laser cut file <small>.svg</small></button>
-          <button data-act="laser-dxf" id="exp-laser-dxf" title="Flat parts as a laser file with layers CUT and ENGRAVE">Laser cut file <small>.dxf</small></button>
-          <hr>
-          <button data-act="savedl" id="save-dl-toggle" role="menuitemcheckbox" aria-checked="true" title="Every Save (Ctrl+S) also downloads the project file (.json) to your Downloads, so work isn't lost when the browser is cleared">Download a file on every Save <small>on</small></button>
-        </div>
-      </div>
       <span id="savestate" class="savestate" role="status"></span>
     </div>
     <div class="spacer"></div>
@@ -1357,6 +1336,28 @@ html.ios .topbar { padding-left: max(12px, env(safe-area-inset-left, 0px)); padd
           <div class="menu-head">Sketch lines</div>
           <div class="sk-widths" id="sk-widths" role="group" aria-label="Sketch line width"></div>
           <div class="sk-colors" id="sk-colors" role="group" aria-label="Sketch line colour"></div>
+        </div>
+        <div class="menu-wrap file-actions">
+          <button class="tb-btn" id="btn-export" aria-label="Open/Export" aria-expanded="false" aria-controls="menu-export" title="Open a project file, save a copy, or export"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg><span class="lbl">Open/Export</span></button>
+          <div class="menu" id="menu-export" hidden>
+            <button id="btn-projects">Designs</button>
+            <button data-act="import">Open a project file…</button>
+            <button id="file-import-content" data-act="import-content" title="Add to the current design: STL, 3MF, STEP, SVG, DXF, or an image">Import into design…</button>
+            <button data-act="json">Save Project File <small>.json</small></button>
+            <hr>
+            <div id="file-export-heading" class="menu-head">Export</div>
+            <button data-act="ar">View in AR / QR <small>iPhone</small></button>
+            <button data-act="stl">STL for 3D printing <small>.stl</small></button>
+            <button data-act="3mf">3MF for 3D printing (with colors) <small>.3mf</small></button>
+            <button data-act="bambu">Open in Bambu Studio… <small>.3mf</small></button>
+          <button data-act="bambu-x2d">Export X2D project… <small>.3mf</small></button>
+            <button data-act="step">STEP for other CAD <small>.step</small></button>
+            <button data-act="dxf" title="Every sketch, flat, for laser or vinyl cutters and other CAD">Sketches as DXF <small>.dxf</small></button>
+            <button data-act="laser-svg" id="exp-laser-svg" title="Flat parts (like a 3 mm acrylic lamp panel) as a laser file: the outline and holes to cut (red), recesses in the top to engrave (black)">Laser cut file <small>.svg</small></button>
+            <button data-act="laser-dxf" id="exp-laser-dxf" title="Flat parts as a laser file with layers CUT and ENGRAVE">Laser cut file <small>.dxf</small></button>
+            <hr>
+            <button data-act="savedl" id="save-dl-toggle" role="menuitemcheckbox" aria-checked="true" title="Every Save (Ctrl+S) also downloads the project file (.json) to your Downloads, so work isn't lost when the browser is cleared">Download a file on every Save <small>on</small></button>
+          </div>
         </div>
         <button class="tb-btn" id="btn-more" type="button" aria-label="More actions" aria-expanded="false" aria-controls="menu-more" title="More actions"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.75"/><circle cx="12" cy="12" r="1.75"/><circle cx="19" cy="12" r="1.75"/></svg></button>
         <div class="menu" id="menu-more" hidden>

@@ -636,6 +636,9 @@ export function initProjects(app) {
   window.addEventListener("pointerdown", (e) => {
     if (!menu.hidden && !menu.contains(e.target) && !fileButton.contains(e.target)) showFileMenu(false);
   });
+  document.addEventListener("focusin", (e) => {
+    if (!menu.hidden && !fileButton.parentElement.contains(e.target)) showFileMenu(false);
+  });
   fileButton.onclick = () => {
     // files hold the finished design: leave the stepped-back timeline view first
     if (store.rollTo != null) { app.timelineRoll && app.timelineRoll.stop(); store.setRoll(null); app.toast("Back to the last step: files hold the finished design."); }
