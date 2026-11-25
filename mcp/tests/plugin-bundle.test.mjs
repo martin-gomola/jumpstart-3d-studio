@@ -14,6 +14,7 @@ async function fixture(t) {
     await mkdir(join(root, path, '..'), { recursive: true });
     await cp(join(ROOT, path), join(root, path), { recursive: true });
   }
+  await cp(join(ROOT, 'package.json'), join(root, 'package.json'));
   return root;
 }
 const oldEntry = root => ({ name: 'jumpstart', enabled: true, transport: { type: 'stdio', command: '/bin/node', args: [join(root, 'mcp/server/stdio-proxy.mjs')] } });
@@ -21,6 +22,9 @@ const oldEntry = root => ({ name: 'jumpstart', enabled: true, transport: { type:
 test('portable bundle is complete and stable, and excludes evaluation fixtures', async t => {
   const root = await fixture(t), first = await buildPlugin({ root }), second = await buildPlugin({ root });
   assert.equal(first.version, second.version);
+  const { version } = JSON.parse(await readFile(join(root, 'package.json')));
+  assert.equal(first.version, version);
+  assert.equal(JSON.parse(await readFile(join(first.pluginRoot, '.codex-plugin/plugin.json'))).version, version);
   assert.ok(!first.files.some(path => path.includes('/tests/')));
   const config = JSON.parse(await readFile(join(first.pluginRoot, '.mcp.json')));
   assert.equal(config.mcpServers.jumpstart.command, 'node');
@@ -29,7 +33,7 @@ test('portable bundle is complete and stable, and excludes evaluation fixtures',
   for (const name of ['step-parts', 'woodwork-joints-3d', 'bambu-handoff']) assert.ok((await readFile(join(first.pluginRoot, `skills/${name}/SKILL.md`), 'utf8')).includes(`name: ${name}`));
   const skill = join(root, 'mcp/plugin/skills/3d-model/SKILL.md');
   await writeFile(skill, (await readFile(skill)) + '\nUpdated instructions.\n');
-  assert.notEqual((await buildPlugin({ root })).version, first.version);
+  assert.equal((await buildPlugin({ root })).version, version);
 });
 
 test('local bundle pins Node; unsafe output and stale runtime are rejected', async t => {

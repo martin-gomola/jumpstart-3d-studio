@@ -26,6 +26,9 @@ update policy.
   code. Its interface changes are reference only; see
   `documentation/REACT-WORKSPACE-PLAN.md` (local, gitignored).
 - Treat `MaxSikorski/jumpstart-3d` as a feature and implementation reference.
+- Adopt only CAD core changes and selected features that improve modeling
+  through MCP. Skip Architect (including Floor Planner) and Chisel changes
+  in future upstream updates, including changes within shared files.
 - Review source changes as file-level patches. Do not merge either repository
   into this repository as a routine update.
 - Author releases arrive as zip archives. Update the editor core with the

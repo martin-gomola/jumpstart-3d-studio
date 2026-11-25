@@ -101,3 +101,9 @@ cases:
   - prompt: "Remove an existing fillet from this JumpStart model without rebuilding other parts."
     expected: invoke
     mode: implicit
+  - prompt: "Estimate this lid's corner radius from the 20 mm grid in my photo and keep it editable in JumpStart."
+    expected: invoke
+    mode: implicit
+  - prompt: "Make a lid that fits this unscaled product photo exactly."
+    expected: clarify-target
+    mode: ambiguous

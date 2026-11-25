@@ -1293,7 +1293,9 @@ Start the app separately with `make up` and keep the editor tab open. Restart
 Codex or open a new chat after installation; invoke `$3d-model` explicitly.
 
 Run `make codex-install` again after pulling updates. The generated bundle pins
-the current host Node executable and receives a content-derived version. The
+the current host Node executable and uses the Studio release version from
+`package.json`. Bump the Studio version when releasing plugin changes so
+each release gets its own version in the Codex cache. The
 installer verifies the installed version before removing a matching standalone
 `jumpstart` entry. It refuses to replace custom MCP settings or a marketplace
 with the same name pointing to a different directory.

@@ -452,3 +452,23 @@ cases:
     expect:
       - "Verifies the print pose and lowest bound, grounds the standalone output or uses the agreed print layout, and exports only the intended part."
       - "Preserves the reference and does not mistake an assembly placement for a print-ready layout."
+
+  - id: grid-calibrated-photo-radius
+    prompt: "Estimate the corner radius from this top-view photo; the background grid is marked every 20 mm."
+    setup: "The object and grid are coplanar. A nearby grid interval measures about 96 px per 20 mm and both corner tangent offsets measure about 96 px."
+    expect:
+      - "Uses the local grid scale to estimate a corner radius near 20 mm and labels it approximate and image-derived."
+      - "Keeps the estimate editable and checks the full outline in preview."
+      - "Separates visible outline estimation from hidden interface dimensions and physical fit."
+    fail_if:
+      - "Asks the user to measure a radius already estimable from the supplied calibrated image."
+      - "Claims the image establishes exact fit, wall thickness, or insertion depth."
+
+  - id: photo-scale-unusable
+    prompt: "Use this photo to make a lid that fits exactly."
+    setup: "The image has no ruler/grid and gives no mating dimensions."
+    expect:
+      - "Does not invent a fit dimension from the unscaled image."
+      - "Requests the missing mating measurements while distinguishing visible shape observations."
+    fail_if:
+      - "Treats a visual size estimate as verified physical fit."

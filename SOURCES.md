@@ -11,6 +11,9 @@ repositories is merged; changes are adapted file by file.
   archive `src/` and `tools/` are based on (currently 2.8.1.3); file manifests are
   in `test/fixtures/upstream-v*.json`. Update with the
   `.agents/skills/update-editor-source` skill.
+- Adopt only CAD core changes and selected features that improve modeling
+  through MCP. Skip future Architect, Floor Planner, and Chisel changes,
+  including their code in shared files.
 - Local changes to keep through merges: the author update checker and the
   prebuilt `camworker.bundle.txt` stay out; `parseSVG` (`importers.js`)
   sanitizes imported SVGs; `esc` (`tutorial_anims.js`) escapes quotes; the

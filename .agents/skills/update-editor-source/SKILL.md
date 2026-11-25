@@ -18,7 +18,6 @@ Script (run from the repo root):
 ```bash
 S=.agents/skills/update-editor-source/scripts/editor-upstream.mjs
 node $S status   sources/JumpStart-3D-vX.Y.Z-full-source.zip   # read-only report
-node $S merge    sources/JumpStart-3D-vX.Y.Z-full-source.zip   # copy + 3-way merge into src/, tools/
 node $S snapshot sources/JumpStart-3D-vX.Y.Z-full-source.zip   # make it the new base + manifest
 ```
 
@@ -30,8 +29,8 @@ need to run outside the sandbox.
 ```
 - [ ] 1. Clean tree for src/, tools/, upstream/ (git status); base version = upstream/editor/app/src/version.js
 - [ ] 2. status; read the archive README "New in vX.Y.Z" section
-- [ ] 3. merge; resolve conflicts
-- [ ] 4. Decide every review-* row
+- [ ] 3. Review all changed rows against the adoption policy below
+- [ ] 4. Port the selected files or hunks and review the resulting diff
 - [ ] 5. Re-apply local rules (below)
 - [ ] 6. npm run build; node --test mcp/tests/*.test.mjs; affected browser tests
 - [ ] 7. snapshot; add the SOURCES.md section
@@ -44,6 +43,10 @@ stop: snapshot the archive `src/` is based on first, and check that
 If the archive skips versions (2.7.7 → 2.8.1), one merge from the base is fine.
 
 **2. Actions in the report**
+
+Use the report to select patches before editing. The bulk `merge` command
+applies every `copy` and `merge` row. Use `status` and port selected changes
+individually for Studio updates.
 
 | Action | Meaning | merge does |
 | --- | --- | --- |
@@ -58,8 +61,12 @@ If the archive skips versions (2.7.7 → 2.8.1), one merge from the base is fine
 | `review-notice` | LICENSE, THIRD-PARTY-NOTICES.md or LICENSES changed | nothing: update our notices |
 | `review-dependency` | an archive `third_party/<pkg>` changed | nothing: compare with our pinned `third_party/` |
 
-**3. Resolving conflicts.** Markers are labelled `ours (repo)`, `upstream <old>`,
-`upstream <new>`. Before snapshotting, these show each side:
+**3. Adoption policy.** Adopt only CAD core changes and selected features that
+improve modeling through MCP. Skip Architect (including Floor Planner) and
+Chisel, even where their changes appear in shared files. Apply only selected
+CAD hunks from mixed files. Preserve existing project compatibility.
+
+**4. Reviewing patches.** Before snapshotting, these show each side:
 
 ```bash
 git diff --no-index upstream/editor/app/src/F sources/<new>/app/src/F   # the author's change
@@ -68,11 +75,9 @@ git diff --no-index upstream/editor/app/src/F /tmp/F.ours                # our l
 git log --oneline -- src/F                                               # why we changed it
 ```
 
-Keep both intents. To abort: `git checkout -- src tools` and delete any adopted new files.
-
-**4.** A new upstream module is adopted only if a merged file imports it, or it is
-core (kernel, sketcher, regions, store, workers, geometry). Add a deliberate
-skip to `excluded.json` with its reason so later reports stay quiet.
+Adopt a new module only when it is part of the CAD core (kernel, sketcher,
+regions, store, workers, geometry) or required by a selected MCP modeling
+feature. Record durable whole-file exclusions in `excluded.json`.
 
 ## Local rules to keep (step 5)
 

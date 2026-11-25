@@ -2,7 +2,7 @@
 name: 3d-model
 description: Creates and revises editable CAD parts, measured drawer layouts, Gridfinity bins, baseplates and custom inserts, household objects, and imported-part assemblies in JumpStart through local MCP. Use for drawer organization, magnet pockets, measured cutouts, trays, brackets, enclosures, hooks, phone holders and cases, spacers, knobs, fit checks, imported STL resizing, dimensioned SVG or PDF drawings, and tutorial models. Avoid generic 3D illustration, rendering, website design, and standalone product comparisons.
 metadata:
-  version: "1.23.1"
+  version: "1.23.2"
 ---
 
 # Model a part in JumpStart
@@ -36,6 +36,7 @@ copy the entire tool catalog into working notes.
 | Clearances, mating parts, pair checks, fit coupons | [Fit and print checks](references/fit-and-print-checks.md) |
 | Printed parts, the default printer profile, print pose, screw, nut and insert holes | [Print setup and hardware](references/print-and-hardware.md) |
 | Acceptance checks, revisions, failures or final export | [Inspection and recovery](references/inspection-and-recovery.md) |
+| Estimating visible geometry from a photo with a ruler or grid | [Photo measurements](references/photo-measurements.md) |
 | Glue- and screw-free joints or splitting oversized parts; a named purchased part (bearing, motor, board) to model around; opening an export in Bambu Studio or Bambu Connect | Companion skills `woodwork-joints-3d`; `step-parts` (downloads the STEP into managed imports); `bambu-handoff` |
 
 ## Inspect
@@ -65,6 +66,7 @@ copy the entire tool catalog into working notes.
 3. For mounts, establish mating faces, insertion direction, and the side facing
    the user before transforms. For vehicles use X across, +Y toward dashboard,
    Z up; verify slope from a complete driver-side view.
+4. When a supplied photo includes a ruler or known grid, use [Photo measurements](references/photo-measurements.md) to estimate visible, coplanar geometry. Label image-derived dimensions as approximate and editable; do not treat them as verified mating dimensions.
 
 ## Build and validate
 

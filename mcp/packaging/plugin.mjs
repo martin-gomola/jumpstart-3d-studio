@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import { createHash } from "node:crypto";
 import { readFile, writeFile, mkdir, readdir, lstat, rm, copyFile } from "node:fs/promises";
 import { join, resolve, relative } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -50,15 +49,12 @@ export async function buildPlugin({ root = ROOT, output, nodePath } = {}) {
   const canonical = await readFile(join(root, "mcp/server/stdio-proxy.mjs"));
   if (!canonical.equals(await readFile(join(source, PROXY)))) throw new Error("Bundled MCP proxy is stale; run make plugin");
   const manifest = JSON.parse(await readFile(join(source, MANIFEST), "utf8"));
-  if (manifest.name !== PLUGIN || !/^\d+\.\d+\.\d+$/.test(manifest.version)) throw new Error("Plugin identity/version is invalid");
-  const digest = createHash("sha256");
+  const { version } = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
+  if (manifest.name !== PLUGIN || typeof version !== "string" || !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version)) throw new Error("Plugin identity or Studio version is invalid");
   const skills = await skillNames(root);
   for (const path of list) {
     if (path !== MANIFEST && path !== ".mcp.json" && path !== PROXY && !skills.some((name) => path.startsWith(`skills/${name}/`))) throw new Error(`Unexpected plugin file: ${path}`);
-    digest.update(path).update(await readFile(join(source, path)));
   }
-  digest.update(nodePath || "portable-node");
-  const version = `${manifest.version}+${digest.digest("hex").slice(0, 12)}`;
   const destination = resolve(output || join(root, "build", nodePath ? "codex-marketplace" : "plugin-distribution"));
   // Only these owned build roots may be replaced by the default installer.
   if (destination === resolve(root) || destination === resolve(source) || !relative(root, destination).startsWith("build/")) throw new Error("Plugin output must be an owned build/ directory");

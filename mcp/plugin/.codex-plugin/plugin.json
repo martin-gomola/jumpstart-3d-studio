@@ -1,6 +1,6 @@
 {
   "name": "jumpstart-3d",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "Create and revise local CAD models with JumpStart MCP and the 3d-model skill.",
   "skills": "./skills/",
   "mcpServers": "./.mcp.json",
