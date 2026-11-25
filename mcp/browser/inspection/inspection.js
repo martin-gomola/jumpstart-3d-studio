@@ -3,7 +3,7 @@ import { inspectRectangularFrame } from "../plans/frame-plan.js";
 import { inspectPrintability, inspectTriangleMesh, rankPrintOrientations, sectionTriangleMesh, sampleSolidIntervals } from "../../shared/geometry.js";
 
 // Estimated triangle passes per check; printability also enforces its own ray-test budget.
-export const checkPasses = (check) => check.kind === "channels" ? 104 : check.kind === "printability" ? 4 : 2;
+export const checkPasses = (check) => check.kind === "channels" ? 104 : check.kind === "printability" ? 4 : check.kind === "socketArray" ? (check.centers?.length || 0) * 6 : 2;
 
 // Advisory starting points for a 0.4 mm FDM nozzle; only the check's declared limits fail it.
 const SLENDER_RATIO = 4, MIN_BED_CONTACT_MM2 = 100, MIN_PART_DIMENSION_MM = 1.2;
@@ -75,6 +75,35 @@ export function measureParallelChannels(mesh, { axis = "Y", crossAt = 0, toleran
     limitations: ["Only axis-aligned straight parallel channels with a common flat floor are supported.", "Sampled openness at the probe height does not prove hydraulic performance or minimum thickness everywhere."] };
 }
 
+function socketSpan(mesh, axis, center, point, tolerance) {
+  const line = sampleSolidIntervals(mesh, { axis, point, tolerance });
+  if (line.ambiguous) throw new Error(`${axis} socket section is ambiguous`);
+  const gaps = line.intervals.slice(1).map((interval, index) => [line.intervals[index][1], interval[0]]);
+  const matches = gaps.filter(([min, max]) => center >= min - tolerance && center <= max + tolerance);
+  if (matches.length !== 1) throw new Error(`No unique ${axis} socket opening at ${center} mm`);
+  const [min, max] = matches[0];
+  return { center: (min + max) / 2, width: max - min };
+}
+
+// Socket dimensions are sampled through the mesh at each declared world XY center.
+// X/Y spans do not prove a round profile or physical fit.
+export function measureSocketArray(mesh, check, tolerance = 0.0001) {
+  const bounds = inspectTriangleMesh(mesh, { tolerance }).bounds;
+  if (check.depth >= bounds.dimensions[2]) throw new Error("Socket depth must be less than the body's Z dimension");
+  const probeZ = check.side === "min" ? bounds.min[2] + check.depth / 2 : bounds.max[2] - check.depth / 2;
+  const sockets = check.centers.map(([x, y], index) => {
+    const xSpan = socketSpan(mesh, "X", x, [x, y, probeZ], tolerance);
+    const ySpan = socketSpan(mesh, "Y", y, [x, y, probeZ], tolerance);
+    const vertical = sampleSolidIntervals(mesh, { axis: "Z", point: [x, y, bounds.min[2]], tolerance });
+    if (vertical.ambiguous || !vertical.intervals.length) throw new Error(`Socket ${index + 1} depth sample is ambiguous`);
+    const first = vertical.intervals[0], last = vertical.intervals.at(-1);
+    const depth = check.side === "min" ? first[0] - bounds.min[2] : bounds.max[2] - last[1];
+    return { center: [x, y], measuredCenter: [xSpan.center, ySpan.center], widthX: xSpan.width, widthY: ySpan.width, depth };
+  });
+  return { source: "generated triangle line intersections", side: check.side, count: sockets.length, sockets,
+    limitations: ["Checks X/Y opening spans and depth at declared centers; it does not prove the opening is circular, detect undeclared extra sockets, or certify physical fit."] };
+}
+
 export function inspectGeometry(mesh, options = {}) {
   const tolerance = options.tolerance ?? 0.0001;
   const estimatedPasses = 1 + (options.frame ? 8 : 0) + (options.printOrientations ? 40 : 0) + (options.samples?.length || 0) * 2 + (options.section ? 2 : 0) + (options.checks || []).reduce((sum, check) => sum + checkPasses(check), 0);
@@ -101,6 +130,17 @@ export function inspectGeometry(mesh, options = {}) {
           if (!pass) errors.push(`${key} does not match expected ${expected}`);
         }
         return { id: check.id, kind: check.kind, expected: check.expected, measured, tolerance: threshold, pass: !errors.length, errors };
+      }
+      if (check.kind === "socketArray") {
+        const measured = measureSocketArray(mesh, check, tolerance), errors = [];
+        for (let i = 0; i < measured.sockets.length; i++) {
+          const socket = measured.sockets[i], center = check.centers[i];
+          if (Math.abs(socket.widthX - check.widthX) > threshold) errors.push(`socket ${i + 1} X span ${socket.widthX.toFixed(3)} mm differs from ${check.widthX} mm`);
+          if (Math.abs(socket.widthY - check.widthY) > threshold) errors.push(`socket ${i + 1} Y span ${socket.widthY.toFixed(3)} mm differs from ${check.widthY} mm`);
+          if (Math.abs(socket.depth - check.depth) > threshold) errors.push(`socket ${i + 1} depth ${socket.depth.toFixed(3)} mm differs from ${check.depth} mm`);
+          if (Math.abs(socket.measuredCenter[0] - center[0]) > threshold || Math.abs(socket.measuredCenter[1] - center[1]) > threshold) errors.push(`socket ${i + 1} center differs from its requested position`);
+        }
+        return { id: check.id, kind: check.kind, expected: { side: check.side, centers: check.centers, widthX: check.widthX, widthY: check.widthY, depth: check.depth }, measured, tolerance: threshold, pass: !errors.length, errors };
       }
       if (check.kind === "printability") {
         if (check.maxOverhangArea === undefined && check.minWall === undefined) throw new Error("Printability check needs maxOverhangArea and/or minWall");

@@ -8403,10 +8403,6 @@ export function initAdvanced(app) {
       group("Flowers", "", [
         { id: "sim-flowers", label: "Flower Studio", title: "Flower Studio: build flowers, arrangements, wreaths and miniature trees (tabletop and model railway scenery), lifelike or mechanical, whole or as snap-together kits that print without supports", icon: "flower", fn: () => app.flowers.open() },
       ]);
-      group("Woodcraft", "", [
-        { id: "sim-chipcarve", label: "Chip Carving", title: "Chip carve a board, plate, log or a shape from your design with chip knives, a stab knife, pencil and sanding block. Pen pressure sets the depth. Add it to the design or export STL, 3MF or OBJ.", icon: "chipcarve", fn: () => app.carve.open() },
-        { id: "sim-lathe", label: "Lathe", title: "Turn a body or a wood blank on a virtual lathe", icon: "lathe", fn: () => app.lathe.open() },
-      ]);
       group("Cosplay", "", [
         { id: "sim-cosforge", label: "CosForge", title: "Design cosplay costumes: a mannequin from your measurements, themed parts to shape, sculpt and fit, then cut into printable pieces with joints (opens in its own window)", icon: "cosforge", fn: () => app.cosforge.open() },
         { id: "sim-layerscape", label: "Layerscape", title: "Layerscape: turn a photo into a layered, slot-together diorama: pick the pieces, check the build in 3D, then export laser-cut sheets, printable art or a 3D print kit, or add the finished diorama to your design (opens in its own window)", icon: "layerscape", fn: () => app.layerscape.open() },
@@ -8518,10 +8514,8 @@ export function initAdvanced(app) {
     // far right: the parts library, then the workshop tools (each opens in its own window)
     group("Workshop", "", [
       { id: "ad-fastbtn", label: "Fasteners", title: "Parts library: bolts, screws, nuts, washers, heat-set inserts and pins (metric and inch), with optional modeled threads", icon: "thread", fn: () => fastenerCmd() },
-      { id: "ad-workshop", label: "Workshop", title: "Woodworking: Jig Maker, Chip Carving and the Lathe", icon: "lathe", dropdown: [
+      { id: "ad-workshop", label: "Workshop", title: "Woodworking: Jig Maker", icon: "jig", dropdown: [
         { id: "ad-jigs", label: "Jig Maker", title: "Woodworking jigs: miter box, dowel and pocket-hole jigs, square, angle templates, drill guide, and jigs for dovetails, box joints, mortise and tenon and lap joints, all honeycombed inside to save plastic", icon: "jig", fn: () => jigCmd() },
-        { id: "ad-chipcarve", label: "Chip Carving", title: "Chip carve a board, plate, log or a shape from your design with knives; pen pressure sets the depth. The result is a mesh body.", icon: "chipcarve", fn: () => app.carve.open() },
-        { id: "ad-lathe", label: "Lathe", title: "Turn a body or a wood blank on a virtual lathe with chisels (Space is the pedal), then hollow it out. The result is a mesh body.", icon: "lathe", fn: () => app.lathe.open() },
       ] },
     ]);
     ribbon.append(el("button", { class: "ibtn panel-toggle", style: { alignSelf: "center" }, onclick: () => browser.classList.toggle("collapsed") }, el("span", { class: "lbl" }, "Browser")));

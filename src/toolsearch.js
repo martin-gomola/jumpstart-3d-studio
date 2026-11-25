@@ -92,6 +92,7 @@ export function initToolSearch(app) {
     // everything else, from the index: other modes, apps, Chisel's panel, the print sim's settings
     const have = new Set(list.map((t) => (t.group.split(" › ")[0] + "|" + t.label).toLowerCase()));
     for (const t of STATIC_TOOLS) {
+      if (["#bb-chipcarve", "#bb-lathe", "#ad-chipcarve", "#ad-lathe"].includes(t.sel)) continue;
       if (t.sel === "#btn-toolsearch" || t.sel === "#bb-import") continue;
       const k = (t.group.split(" › ")[0] + "|" + t.label).toLowerCase();
       if (have.has(k)) continue;

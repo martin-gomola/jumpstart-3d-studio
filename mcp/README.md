@@ -785,6 +785,7 @@ Supported per-body checks use generated world-space tessellation:
 | `bound` | World-space `min` or `max` coordinate along an axis; includes placement. |
 | `components` | Integer connected-component count at the inspector's weld tolerance. |
 | `channels` | Existing straight parallel, flat-bottom channel measurements and counts. |
+| `socketArray` | X/Y opening spans and blind depth at declared world XY centers for Z-axis sockets. It does not prove roundness or physical fit. |
 
 Results return `acceptance.status` as `passed`, `failed`, or `unknown`, with
 expected and measured values for numerical checks. Unknown includes an

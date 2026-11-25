@@ -1,4 +1,4 @@
-version: 8
+version: 9
 status: not-run
 baseline:
   source: "Observed spacer workflow and MCP workflow-polish work; not a controlled no-skill trial."
@@ -178,9 +178,18 @@ cases:
     expect:
       - "Clarifies scaling intent if other dimensions are unspecified."
       - "Uses resize preview and reports measured resulting bounds."
-      - "States the result remains a mesh and fit is unverified."
+  - id: lego-socket-fit-feedback
+    prompt: "These four 5.2 mm LEGO sockets feel loose on my Bambu Lab X2D. Make them slightly tighter and keep the stump outside size."
+    setup: "The selected native stump has four 5.2 mm blind sockets on an 8 mm grid. The user tested 5.0 mm sockets over 4.8 mm studs on an X2D and reports a firm fit; P1S/P2S similarity is assumed but untested."
+    expect:
+      - "Reads the connected editor and target body, opening the local Chrome editor URL and relisting if no editor is connected."
+      - "Uses the existing holePattern or named socket parameter when supported and makes the smallest requested clearance change."
+      - "Checks all declared socket centers, X/Y spans and depth with socketArray acceptance, plus body bounds and mesh connectivity."
+      - "States the X2D calibration scope and labels P1S/P2S compatibility as unverified."
     fail_if:
-      - "Claims reconstructed parametric locking features."
+      - "Claims that a mesh check proves the printed sockets will snap-fit."
+      - "Silently changes the stump's outer diameter or bark."
+      - "Claims P1S/P2S fit was tested when only the X2D fit was reported."
   - id: lathe-thickness
     prompt: "Create a turned cup with a 2 mm bottom."
     setup: "Lathe preview reports sampled bottom thickness different from 2 mm."

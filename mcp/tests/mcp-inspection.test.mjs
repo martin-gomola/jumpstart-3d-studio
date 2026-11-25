@@ -18,6 +18,21 @@ function groovedMesh() {
  }
  return {vertices,triangles};
 }
+function blindSocketArrayMesh() {
+ const xs=[-10,-6.5,-1.5,1.5,6.5,10],ys=[-10,-6.5,-1.5,1.5,6.5,10],zs=[0,4,8],vertices=[],triangles=[];
+ const solid=(i,j,k)=>k===1||!([1,3].includes(i)&&[1,3].includes(j));
+ const quad=(points)=>{const at=vertices.length/3;vertices.push(...points.flat());triangles.push(at,at+1,at+2,at,at+2,at+3);};
+ for(let i=0;i<xs.length-1;i++)for(let j=0;j<ys.length-1;j++)for(let k=0;k<zs.length-1;k++)if(solid(i,j,k)){
+  const [x0,x1]=xs.slice(i,i+2),[y0,y1]=ys.slice(j,j+2),[z0,z1]=zs.slice(k,k+2);
+  if(i===0||!solid(i-1,j,k))quad([[x0,y0,z0],[x0,y0,z1],[x0,y1,z1],[x0,y1,z0]]);
+  if(i===xs.length-2||!solid(i+1,j,k))quad([[x1,y0,z0],[x1,y1,z0],[x1,y1,z1],[x1,y0,z1]]);
+  if(j===0||!solid(i,j-1,k))quad([[x0,y0,z0],[x1,y0,z0],[x1,y0,z1],[x0,y0,z1]]);
+  if(j===ys.length-2||!solid(i,j+1,k))quad([[x0,y1,z0],[x0,y1,z1],[x1,y1,z1],[x1,y1,z0]]);
+  if(k===0||!solid(i,j,k-1))quad([[x0,y0,z0],[x0,y1,z0],[x1,y1,z0],[x1,y0,z0]]);
+  if(k===zs.length-2||!solid(i,j,k+1))quad([[x0,y0,z1],[x1,y0,z1],[x1,y1,z1],[x0,y1,z1]]);
+ }
+ return {vertices,triangles};
+}
 test('channel measurements derive from triangle intersections, with wrong expected values failing',()=>{
  const mesh=groovedMesh(),actual=measureParallelChannels(mesh,{axis:'Y',crossAt:0});
  assert.equal(actual.count,3);assert.deepEqual(actual.widths,[2,2,2]);assert.deepEqual(actual.spacings,[6,6]);assert.equal(actual.depth,3);assert.equal(actual.floor,3);assert.equal(actual.openEnds,true);assert.equal(actual.symmetric,true);
@@ -26,6 +41,17 @@ test('channel measurements derive from triangle intersections, with wrong expect
  assert.equal(inspectGeometry(mesh,{checks:[{...check,expected:{width:4}}]}).checks[0].pass,false);
  assert.equal(inspectGeometry(mesh,{checks:[{...check,expected:{count:4},tolerance:1}]}).checks[0].pass,false);
  assert.equal(inspectGeometry(mesh,{checks:[{id:'x',kind:'dimension',axis:'X',expected:25,tolerance:.01}]}).checks[0].pass,false);
+});
+test('socket-array checks measure declared centers, X/Y spans and blind depth from the mesh',()=>{
+ const centers=[[-4,-4],[-4,4],[4,-4],[4,4]];
+ const check={id:'stud-sockets',kind:'socketArray',side:'min',centers,widthX:5,widthY:5,depth:4,tolerance:.01};
+ const result=inspectGeometry(blindSocketArrayMesh(),{checks:[check]});
+ assert.equal(result.geometricRequirements,'passed');
+ assert.equal(result.checks[0].measured.count,4);
+ assert.ok(result.checks[0].measured.sockets.every(s=>Math.abs(s.widthX-5)<1e-9&&Math.abs(s.widthY-5)<1e-9&&Math.abs(s.depth-4)<1e-9));
+ assert.equal(inspectGeometry(blindSocketArrayMesh(),{checks:[{...check,widthX:5.2}]}).checks[0].pass,false);
+ assert.equal(inspectGeometry(blindSocketArrayMesh(),{checks:[{...check,depth:3.5}]}).checks[0].pass,false);
+ assert.equal(inspectGeometry(blindSocketArrayMesh(),{checks:[{...check,centers:[[0,0]]}]}).checks[0].pass,null);
 });
 test('unsupported sections fail explicitly rather than trusting submitted dimensions',()=>{
  assert.throws(()=>measureParallelChannels(groovedMesh(),{axis:'Z'}),/supports/);

@@ -170,3 +170,51 @@ sources:
     path: mcp/server/agent-trace.mjs
     trust: "Local opt-in observable tool-call evidence and bounded artifact capture, not latent reasoning scores."
     mutable: true
+  - id: brick-architect-parts
+    url: https://brickarchitect.com/parts/
+    trust: "Independent visual LEGO parts index with part identifiers, cross-links, and available metric dimensions; not an official LEGO specification and coverage varies by element."
+    mutable: true
+  - id: ldraw-parts-library
+    url: https://library.ldraw.org/
+    trust: "Community-maintained reference geometry for LEGO elements; individual part headers specify attribution and license. Not affiliated with LEGO."
+    mutable: true
+  - id: ldraw-format-spec
+    url: https://www.ldraw.org/article/218.html
+    trust: "LDU nominal System proportions and conversion; explicitly describes real-world millimeter conversions as approximate."
+    mutable: true
+  - id: ldraw-contributor-license
+    url: https://www.ldraw.org/docs-main/licenses/ldraw-org-contributor-agreement.html
+    trust: "LDraw.org's current contributor licensing terms for submitted library parts; check the individual file because CC BY 4.0 and CC0 are possible."
+    mutable: true
+  - id: bricklink-dimensions-help
+    url: https://www.bricklink.com/help.asp?helpID=2510
+    trust: "BrickLink explains that catalog dimensions are mainly for item identification and shipping estimates, not a complete CAD geometry specification."
+    mutable: true
+  - id: brickowl-catalog
+    url: https://www.brickowl.com/catalog/lego-brick-2-x-2-round-with-grille-92947
+    trust: "User-suggested secondary catalog for LEGO part identity, variants, and sourcing; not used as an authoritative source for exact mating geometry."
+    mutable: true
+  - id: lego-fit-calibration
+    locator: "User report that a 5.0 mm socket fits a nominal 4.8 mm LEGO stud firmly on a Bambu Lab X2D; the user expects P1S/P2S similarity but has not tested those printers."
+    trust: "A user-observed fit on one printer/configuration, plus an explicitly unverified cross-printer assumption; not a universal LEGO clearance."
+    mutable: false
+  - id: lego-bark-visibility
+    locator: "User report that the first 0.22 mm stump grooves were not visible after printing; later wider/deeper grooves were designed but not reprinted."
+    trust: "Observed texture visibility failure and an unverified revised geometry for this user's stump; not a general FDM minimum-relief standard."
+    mutable: false
+  - id: editor-auto-open-preference
+    locator: "User instruction to open the running local JumpStart page in Chrome when MCP has no connected editor."
+    trust: "User-authorized local editor recovery workflow; verify the document after reconnecting."
+    mutable: false
+  - id: hole-pattern-operation
+    path: mcp/browser/plans/operations/hole-pattern.js
+    trust: "Typed grid/circle patterns of round, square, hex or slot openings with optional depth on a planar face; use only fields present in the current schema."
+    mutable: true
+  - id: socket-array-inspection
+    path: mcp/browser/inspection/inspection.js
+    trust: "Socket-array acceptance measures X/Y spans and blind depth at declared world XY centers from tessellation line intersections; it does not certify profile roundness or physical fit."
+    mutable: true
+  - id: model-parameters
+    path: mcp/browser/plans/models.js
+    trust: "Named parametric plans can be revised from independent values with preview and model identity guards; generated geometry still needs independent inspection."
+    mutable: true

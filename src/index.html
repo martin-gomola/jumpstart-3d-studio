@@ -1,3 +1,4 @@
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>__JUMPSTART_PRODUCT_NAME__</title>
 <!-- ANALYTICS -->
@@ -123,6 +124,8 @@ button { cursor: pointer; }
 @media (max-width: 1100px) { .ts-btn-l { display: none; } }
 @media (min-width: 641px) and (max-width: 800px) { .topbar-actions .tb-btn { padding-inline: 5px; } }
 .menu button { display: flex; width: 100%; text-align: left; border: 0; background: none; padding: 8px 10px; border-radius: 4px; gap: 10px; align-items: baseline; }
+.file-actions .menu button { align-items: center; }
+.file-actions .menu .file-icon { width: 16px; height: 16px; flex: 0 0 16px; color: var(--ink-3); }
 .menu button:disabled { opacity: .45; cursor: default; }
 .menu button:not(:disabled):hover { background: var(--accent-soft); }
 .menu small { color: var(--ink-3); margin-left: auto; font-size: 11px; }
@@ -725,11 +728,17 @@ body.fp-on .toasts { position: fixed; z-index: 175 !important; }
 .about .ab-head > div { min-inline-size: 0; }
 .about .ab-head b { font: 700 24px/1 var(--f-label); letter-spacing: .06em; text-transform: uppercase; }
 .about .ab-head span { display: block; color: var(--ink-2); font-size: 12.5px; margin-top: 3px; }
+.about .ab-intro { margin: 8px 0 10px; color: var(--ink-2); font-size: 14px; line-height: 1.5; }
+.about .ab-repo { display: inline-flex; align-items: center; gap: 7px; color: var(--accent); font-weight: 600; text-decoration: none; }
+.about .ab-repo:hover { text-decoration: underline; }
+.about .ab-repo svg { width: 16px; height: 16px; flex: none; }
+.about .ab-lineage { margin: 12px 0 0; color: var(--ink-3); font-size: 12px; line-height: 1.45; }
 .about h3 { font: 600 13px/1.2 var(--f-label); letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin: 16px 0 6px; }
 .about ul { margin: 0; padding-left: 18px; color: var(--ink-2); line-height: 1.5; }
 .about li { margin: 2px 0; }
 .about li b { color: var(--ink); font-weight: 600; }
 .about .ab-oss { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 4px; }
+.about .ab-oss > summary { cursor: pointer; color: var(--accent); font-weight: 600; padding: 6px 0; }
 .about .ab-oss-note { margin: 0 0 6px; color: var(--ink-2); }
 .about .ab-oss li { margin: 6px 0; }
 .about .ab-oss-meta { color: var(--ink-3); font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
@@ -738,15 +747,9 @@ body.fp-on .toasts { position: fixed; z-index: 175 !important; }
 .about .ab-oss-texts summary { cursor: pointer; color: var(--accent); font-weight: 600; }
 .about .ab-lic { margin-top: 10px; }
 .about .ab-lic pre { max-height: 220px; overflow: auto; white-space: pre-wrap; font: 11px/1.45 var(--f-mono, monospace); background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; margin: 4px 0 0; color: var(--ink-2); }
-.about .ab-update { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 12px 0 2px; flex-wrap: wrap; }
 .about .ab-hver { font: 600 12px/1 var(--f-label); color: var(--ink-3); margin-left: 6px; letter-spacing: .04em; }
 .about .ab-ver { font: 500 13px/1.5 var(--f-mono, monospace); color: var(--ink-2); overflow-wrap: anywhere; text-align: center; }
-.about .ab-update .btn { text-decoration: none; }
-.about .ab-update.ab-top .ab-ver { text-align: start; }
-.about .ab-update.ab-top { justify-content: flex-start; margin: 4px 0 4px 56px; }
-.about .ab-upmsg { margin: 8px 0 0; text-align: center; color: var(--ink-2); font-size: 13px; }
-.about .ab-upmsg a { color: var(--accent); font-weight: 600; }
-.about .ab-credit { margin: 22px 0 2px; padding-top: 12px; border-top: 1px solid var(--line-2); text-align: center; font: 600 15px/1 var(--f-label); letter-spacing: .1em; color: var(--ink); }
+.about .ab-toprow { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 4px 0 8px; }
 .loading { position: absolute; inset: 0; display: grid; place-items: center; background: var(--loading-bg); z-index: 30; }
 .loading .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 22px 26px; width: min(360px, 86%); box-shadow: 0 10px 34px rgba(20,30,45,.14); }
 .loading h2 { margin: 0 0 6px; font: 600 19px/1.1 var(--f-label); letter-spacing: .06em; text-transform: uppercase; }
@@ -1341,23 +1344,23 @@ html.ios .topbar { padding-left: max(12px, env(safe-area-inset-left, 0px)); padd
         <div class="menu-wrap file-actions">
           <button class="tb-btn" id="btn-export" aria-label="Open/Export" aria-expanded="false" aria-controls="menu-export" title="Open a project file, save a copy, or export"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg><span class="lbl">Open/Export</span></button>
           <div class="menu" id="menu-export" hidden>
-            <button id="btn-projects">Designs</button>
-            <button data-act="import">Open a project file…</button>
-            <button id="file-import-content" data-act="import-content" title="Add to the current design: STL, 3MF, STEP, SVG, DXF, or an image">Import into design…</button>
-            <button data-act="json">Save Project File <small>.json</small></button>
+            <button id="btn-projects"><svg class="file-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M3 10h18M10 4v16"/></svg>Designs</button>
+            <button data-act="import"><svg class="file-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 19V6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v2"/><path d="m9 16 3 3 8-8"/></svg>Open a project file…</button>
+            <button id="file-import-content" data-act="import-content" title="Add to the current design: STL, 3MF, STEP, SVG, DXF, or an image"><svg class="file-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v10m-4-4 4 4 4-4"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>Import into design…</button>
+            <button data-act="json"><svg class="file-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h11l3 3v15H5z"/><path d="M8 3v6h8V3M8 21v-7h8v7"/></svg>Save Project File <small>.json</small></button>
             <hr>
             <div id="file-export-heading" class="menu-head">Export</div>
-            <button data-act="ar">View in AR / QR <small>iPhone</small></button>
-            <button data-act="stl">STL for 3D printing <small>.stl</small></button>
-            <button data-act="3mf">3MF for 3D printing (with colors) <small>.3mf</small></button>
-            <button data-act="bambu">Open in Bambu Studio… <small>.3mf</small></button>
-          <button data-act="bambu-x2d">Export X2D project… <small>.3mf</small></button>
-            <button data-act="step">STEP for other CAD <small>.step</small></button>
-            <button data-act="dxf" title="Every sketch, flat, for laser or vinyl cutters and other CAD">Sketches as DXF <small>.dxf</small></button>
-            <button data-act="laser-svg" id="exp-laser-svg" title="Flat parts (like a 3 mm acrylic lamp panel) as a laser file: the outline and holes to cut (red), recesses in the top to engrave (black)">Laser cut file <small>.svg</small></button>
-            <button data-act="laser-dxf" id="exp-laser-dxf" title="Flat parts as a laser file with layers CUT and ENGRAVE">Laser cut file <small>.dxf</small></button>
+            <button data-act="ar"><svg class="file-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2.5" width="12" height="19" rx="2"/><path d="M10 5h4M10 18.5h4M9 9h2v2H9zM14 9h2v2h-2zM9 13h2v2H9z"/></svg>View in AR / QR <small>iPhone</small></button>
+            <button data-act="stl"><svg class="file-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5v8l-9 5-9-5V8z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg>STL for 3D printing <small>.stl</small></button>
+            <button data-act="3mf"><svg class="file-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5v8l-9 5-9-5V8z"/><path d="m3 8 9 5 9-5M12 13v8"/><circle cx="7" cy="10" r="1" fill="currentColor" stroke="none"/><circle cx="16" cy="9" r="1" fill="currentColor" stroke="none"/></svg>3MF for 3D printing (with colors) <small>.3mf</small></button>
+            <button data-act="bambu"><svg class="file-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v5H4zM3 9h18v9H3zM7 18v3h10v-3M8 13h8"/></svg>Open in Bambu Studio… <small>.3mf</small></button>
+            <button data-act="bambu-x2d"><svg class="file-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v5H4zM3 9h18v9H3zM7 18v3h10v-3M8 13h8M12 11v4"/></svg>Export X2D project… <small>.3mf</small></button>
+            <button data-act="step"><svg class="file-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5v8l-9 5-9-5V8z"/><path d="m3 8 9 5 9-5M12 13v8M7.5 5.5l9 5"/></svg>STEP for other CAD <small>.step</small></button>
+            <button data-act="dxf" title="Every sketch, flat, for laser or vinyl cutters and other CAD"><svg class="file-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19 11 5l9 14z"/><path d="M4 19h16M8 14h8M11 5v3"/></svg>Sketches as DXF <small>.dxf</small></button>
+            <button data-act="laser-svg" id="exp-laser-svg" title="Flat parts (like a 3 mm acrylic lamp panel) as a laser file: the outline and holes to cut (red), recesses in the top to engrave (black)"><svg class="file-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h7v7H4zM13 5h7v7h-7zM4 14h7v6H4zM13 14h7v6h-7z"/></svg>Laser cut file <small>.svg</small></button>
+            <button data-act="laser-dxf" id="exp-laser-dxf" title="Flat parts as a laser file with layers CUT and ENGRAVE"><svg class="file-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h7v7H4zM13 5h7v7h-7zM4 14h7v6H4zM13 14h7v6h-7z"/></svg>Laser cut file <small>.dxf</small></button>
             <hr>
-            <button data-act="savedl" id="save-dl-toggle" role="menuitemcheckbox" aria-checked="true" title="Every Save (Ctrl+S) also downloads the project file (.json) to your Downloads, so work isn't lost when the browser is cleared">Download a file on every Save <small>on</small></button>
+            <button data-act="savedl" id="save-dl-toggle" role="menuitemcheckbox" aria-checked="true" title="Every Save (Ctrl+S) also downloads the project file (.json) to your Downloads, so work isn't lost when the browser is cleared"><svg class="file-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m-5-5 5 5 5-5M4 17v4h16v-4"/></svg>Download a file on every Save <small>on</small></button>
           </div>
         </div>
         <button class="tb-btn" id="btn-more" type="button" aria-label="More actions" aria-expanded="false" aria-controls="menu-more" title="More actions"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.75"/><circle cx="12" cy="12" r="1.75"/><circle cx="19" cy="12" r="1.75"/></svg></button>

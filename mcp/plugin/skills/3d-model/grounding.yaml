@@ -194,3 +194,59 @@ rules:
     skillFile: references/edit-existing-parts.md
     sources: [curved-reinforcement-correction]
     locator: "User's correction distinguishing the intended wall reinforcement from the mistaken torus and gap-edge fillet"
+  - instruction: "it is an independent fan resource, not an official LEGO specification. Coverage and detail vary by part."
+    skillFile: references/lego-parts.md
+    sources: [brick-architect-parts]
+    locator: "Brick Architect catalog provenance and part-specific dimension example"
+  - instruction: "Its 1 LDU = 0.4 mm conversion is explicitly approximate."
+    skillFile: references/lego-parts.md
+    sources: [ldraw-format-spec]
+    locator: "LDU conversion and real-world approximation warning"
+  - instruction: "Attribute CC BY 4.0 parts when redistributing derived geometry; some parts may instead be CC0, so check the individual part's license."
+    skillFile: references/lego-parts.md
+    sources: [ldraw-parts-library, ldraw-contributor-license]
+    locator: "Current library and per-part license terms"
+  - instruction: "BrickLink says its catalog dimensions are mainly for item identification and shipping estimates; do not treat those fields as complete measured CAD geometry."
+    skillFile: references/lego-parts.md
+    sources: [bricklink-dimensions-help]
+    locator: "BrickLink catalog dimension purpose"
+  - instruction: "If none are listed, open the MCP startup URL in connected Chrome (normally `http://localhost:3210/?mcp=1`) and relist."
+    skillFile: SKILL.md
+    sources: [editor-auto-open-preference]
+    locator: "Inspect section recovery for an empty editor list"
+  - instruction: "For repeated sockets on a flat bottom face, prefer the native `holePattern` operation for a grid of round blind holes when its current schema covers the requested layout."
+    skillFile: references/lego-parts.md
+    sources: [hole-pattern-operation]
+    locator: "LEGO socket array generation"
+  - instruction: "expose socket diameter and depth as named model parameters when fit may need tuning."
+    skillFile: references/lego-parts.md
+    sources: [model-parameters]
+    locator: "Fit revision parameters"
+  - instruction: "the maintainer reports a firm fit on a Bambu Lab X2D with a 5.0 mm socket over a nominal 4.8 mm stud (0.2 mm diametral clearance)."
+    skillFile: references/lego-parts.md
+    sources: [lego-fit-calibration, ldraw-format-spec]
+    locator: "User-reported X2D socket fit and LDraw stud dimension"
+  - instruction: "P1S and P2S similarity is the maintainer's assumption, not a tested result; use a fit coupon when changing printer, material or profile."
+    skillFile: references/lego-parts.md
+    sources: [lego-fit-calibration]
+    locator: "Unverified transfer to other Bambu printer models"
+  - instruction: "When the user reports a fit test, use it instead of resetting to the generic starting clearance and change only the fit parameter under review."
+    skillFile: references/lego-parts.md
+    sources: [lego-fit-calibration, model-parameters]
+    locator: "Fit-feedback iteration"
+  - instruction: "For the stump in this project, the first 0.22 mm grooves were not visible after printing."
+    skillFile: references/lego-parts.md
+    sources: [lego-bark-visibility]
+    locator: "Observed first bark texture result"
+  - instruction: "The revised 0.8–1.2 mm wide, 0.4–0.6 mm deep bark grooves have not yet been printed; treat those values as a provisional design and verify their appearance in the slicer or on a test print."
+    skillFile: references/lego-parts.md
+    sources: [lego-bark-visibility]
+    locator: "Revised but not physically tested bark grooves"
+  - instruction: "Attach a `socketArray` acceptance check to expected world XY centers, X/Y opening spans and depth."
+    skillFile: references/lego-parts.md
+    sources: [socket-array-inspection]
+    locator: "Independent socket array dimensions"
+  - instruction: "It does not prove roundness or physical fit; retain a slicer or test-print check for a snap interface."
+    skillFile: references/lego-parts.md
+    sources: [socket-array-inspection]
+    locator: "Socket array check limits"

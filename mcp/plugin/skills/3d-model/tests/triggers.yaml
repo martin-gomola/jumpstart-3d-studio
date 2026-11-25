@@ -1,4 +1,4 @@
-version: 8
+version: 9
 status: not-run
 cases:
   - prompt: "Keep the exact hooks from this original STL and thin the surrounding holder walls in JumpStart."
@@ -86,6 +86,18 @@ cases:
     expected: do-not-invoke
     mode: implicit
   - prompt: "Check clearance and overlap between the tray and lid in JumpStart before applying."
+    expected: invoke
+    mode: implicit
+  - prompt: "Make a round LEGO stump from part 92947 with four underside stud sockets and visible bark."
+    expected: invoke
+    mode: implicit
+  - prompt: "The 5.2 mm sockets printed loose on my X2D; use my fit result and tighten only those sockets."
+    expected: invoke
+    mode: implicit
+  - prompt: "The JumpStart server is running but no editor is connected; continue in the local app."
+    expected: invoke
+    mode: implicit
+  - prompt: "Add a 2 mm thick round tabletop to this stump; choose an editable provisional diameter if I did not give one."
     expected: invoke
     mode: implicit
 

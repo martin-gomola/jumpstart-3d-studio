@@ -59,6 +59,7 @@ const TABS = "In the tool's panel, press <b>Tab</b> to go to the next box. (<b>E
 
 export const TUTORIALS = [
   // ============================================================== BEGINNER
+  /* Retired Lathe UI tutorial (b-top); retained for reversible reactivation.
   {
     id: "b-top", mode: "advanced", level: "Proficient", minutes: "8-10", item: "Spinning Top",
     title: "Spinning top (Lathe)",
@@ -141,6 +142,7 @@ export const TUTORIALS = [
       exportStep(),
     ],
   },
+  */
   {
     id: "b-keychain", mode: "beginner", level: "Easy", minutes: "5-7", item: "Keychain",
     title: "Name keychain",
@@ -1391,6 +1393,7 @@ export const TUTORIALS = [
       exportStep(),
     ],
   },
+  /* Retired Lathe UI tutorial (a-cup); retained for reversible reactivation.
   {
     id: "a-cup", mode: "advanced", level: "Proficient", minutes: "12-15", item: "Turned Cup",
     title: "Turned cup (Lathe)",
@@ -1487,6 +1490,7 @@ export const TUTORIALS = [
       exportStep(),
     ],
   },
+  */
 ];
 
 export { nameStep, saveStep, exportStep, FIELDS, TABS };

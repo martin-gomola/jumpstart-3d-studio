@@ -2,7 +2,7 @@
 name: 3d-model
 description: Creates and revises editable CAD parts, measured drawer layouts, Gridfinity bins, baseplates and custom inserts, household objects, and imported-part assemblies in JumpStart through local MCP. Use for drawer organization, magnet pockets, measured cutouts, trays, brackets, enclosures, hooks, phone holders and cases, spacers, knobs, fit checks, imported STL resizing, dimensioned SVG or PDF drawings, and tutorial models. Avoid generic 3D illustration, rendering, website design, and standalone product comparisons.
 metadata:
-  version: "1.23.3"
+  version: "1.23.4"
 ---
 
 # Model a part in JumpStart
@@ -38,13 +38,12 @@ copy the entire tool catalog into working notes.
 | Printed parts, the default printer profile, print pose, screw, nut and insert holes | [Print setup and hardware](references/print-and-hardware.md) |
 | Acceptance checks, revisions, failures or final export | [Inspection and recovery](references/inspection-and-recovery.md) |
 | Estimating visible geometry from a photo with a ruler or grid | [Photo measurements](references/photo-measurements.md) |
+| LEGO-compatible parts, a named LEGO element, part-number lookup or LEGO System dimensions | [LEGO parts and dimensions](references/lego-parts.md) |
 | Glue- and screw-free joints or splitting oversized parts; a named purchased part (bearing, motor, board) to model around; opening an export in Bambu Studio or Bambu Connect | Companion skills `woodwork-joints-3d`; `step-parts` (downloads the STEP into managed imports); `bambu-handoff` |
 
 ## Inspect
 
-1. Call `jumpstart_list_editors` and select an explicit `editorId`. Ask which
-   editor when the target is ambiguous. After a disconnect, relist and verify
-   the same document; do not switch targets automatically.
+1. Call `jumpstart_list_editors` and select an explicit `editorId`. Ask which editor when the target is ambiguous. If none are listed, open the MCP startup URL in connected Chrome (normally `http://localhost:3210/?mcp=1`) and relist. After reload or disconnect, verify the same document; do not switch targets automatically.
 2. Start with `jumpstart_get_document` and compact capabilities using
    `jumpstart_get_capabilities({includeSchemas:false})`; `planVocabulary` lists type ids (holes and fillets are `modifier` operations).
    Read only the fields the task needs with `schemaPaths`, e.g. `["plan.operations.knurl"]`; generators list only their type in `tools/list`. Use current tool schemas rather than guessing fields or relying on a copied catalog.
@@ -62,7 +61,7 @@ copy the entire tool catalog into working notes.
    and editable. For printed parts, use the print reference's default printer profile.
 2. Write a measurable acceptance checklist before building. Attach supported
    `requirements` to the preview: document body count, preserved body ids, and
-   per-body dimension, world-bound, mesh-component, channel, printability, or native-pair checks. Use the
+   per-body dimension, world-bound, mesh-component, channel, socket-array, printability, or native-pair checks. Use the
    inspection reference for the schema and unsupported checks.
 3. For mounts, establish mating faces, insertion direction, and the side facing
    the user before transforms. For vehicles use X across, +Y toward dashboard,

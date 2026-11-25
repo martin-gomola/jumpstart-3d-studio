@@ -118,7 +118,7 @@ test("stdio MCP discovery and localhost registration work through mcp/server/ser
     assert.match(phoneCradleSchema.properties.topEdgeToward.description, /\+Y means.*toward the dashboard/);
     assert.equal(listing.result.tools.find((tool) => tool.name === "jumpstart_preview_resize_body").inputSchema.properties.size.additionalProperties, false);
     const diagnosticTools = new Set(["jumpstart_inspect_print_project", "jumpstart_get_filament_reference"]);
-    assert.ok(JSON.stringify(listing.result.tools.filter(tool => !diagnosticTools.has(tool.name))).length < 90_000, "existing tool list should stay compact");
+    assert.ok(JSON.stringify(listing.result.tools.filter(tool => !diagnosticTools.has(tool.name))).length < 93_000, "tool list should stay below the compact 93 KB budget, including socket-array inspection");
     assert.ok(JSON.stringify(listing.result.tools.filter(tool => diagnosticTools.has(tool.name))).length < 2_400, "print diagnostics should stay compact");
     const byName = Object.fromEntries(listing.result.tools.map((tool) => [tool.name, tool]));
     assert.ok(listing.result.tools.every((tool) => tool.annotations?.openWorldHint === (tool.name === "jumpstart_get_filament_reference") && typeof tool.annotations.readOnlyHint === "boolean"));

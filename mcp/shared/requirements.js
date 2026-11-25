@@ -6,6 +6,7 @@ const number = { type: "number", minimum: -10000, maximum: 10000 };
 const positive = { type: "number", exclusiveMinimum: 0, maximum: 10000 };
 const tolerance = { type: "number", minimum: 0.00000001, maximum: 1 };
 const axis = { type: "string", enum: ["X", "Y", "Z"] };
+const point2 = { type: "array", minItems: 2, maxItems: 2, items: number };
 const object = (properties, required) => ({ type: "object", additionalProperties: false, properties, required });
 export const geometryCheckSchema = { oneOf: [
   object({ id, kind: { const: "dimension" }, axis, expected: positive, tolerance }, ["id", "kind", "axis", "expected"]),
@@ -13,6 +14,7 @@ export const geometryCheckSchema = { oneOf: [
   object({ id, kind: { const: "components" }, expected: { type: "integer", minimum: 1, maximum: 128 } }, ["id", "kind", "expected"]),
   object({ id, kind: { const: "channels" }, axis: { type: "string", enum: ["X", "Y"] }, crossAt: number, tolerance,
     expected: { ...object({ count: { type: "integer", minimum: 1, maximum: 24 }, width: positive, depth: positive, floor: positive, spacing: positive, symmetric: { type: "boolean" }, openEnds: { type: "boolean" } }, []), minProperties: 1 } }, ["id", "kind", "axis", "crossAt", "expected"]),
+  { description: "Checks requested blind Z-axis socket openings at world XY centers. Measures X/Y spans and depth from mesh intersections; it does not certify roundness or physical fit.", ...object({ id, kind: { const: "socketArray" }, side: { type: "string", enum: ["min", "max"] }, centers: { type: "array", minItems: 1, maxItems: 24, items: point2 }, widthX: positive, widthY: positive, depth: positive, tolerance }, ["id", "kind", "side", "centers", "widthX", "widthY", "depth"]) },
   { description: "Heuristic print check along world +Z, bed at the body's lowest Z. Give maxOverhangArea and/or minWall.", ...object({ id, kind: { const: "printability" },
     overhangAngle: { type: "number", minimum: 0, maximum: 89, description: "Degrees from vertical a downward face may lean without support; default 45." },
     maxOverhangArea: { type: "number", minimum: 0, maximum: 100000000, description: "Allowed unsupported downward area in mm²." },
