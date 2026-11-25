@@ -2,6 +2,7 @@
 // own frame over the work area. Sculpts live in the design as mesh bodies (shown in Beginner and
 // Advanced like an imported STL), each carrying its full sculpt data; only Chisel can sculpt
 // them. Bodies of the design can be copied (or converted) into Chisel to sculpt.
+import { openExpandable } from "./expandui.js";
 import * as THREE from "three";
 import CHISEL_HTML from "./chisel.html";
 import { store, findBody, nextSeq, IDENTITY, regionsFor } from "./store.js";
@@ -124,6 +125,9 @@ export function initChisel(app) {
     // "Convert": the body leaves the design (undo in Beginner / Advanced brings it back)
     removeBody(id) { store.update((doc) => { doc.bodies = doc.bodies.filter((b) => b.id !== id); }, "Convert to sculpt"); },
     save: (name, bytes) => app.projects.saveModel(name, bytes),
+    toolSearch: () => app.toolSearch && app.toolSearch.open(),
+    // Expandable: a sculpt (triangles in mm, Z up) made into sliding rings, in the design's window
+    expandable: (tris, name) => { const I = new Uint32Array(tris.length / 3); for (let i = 0; i < I.length; i++) I[i] = i; return openExpandable(app, { V: tris, I, name, fromChisel: true }); },
     sync: () => sync(),
     // Easy (kids, first time) or Pro (everything)
     level: () => level,
@@ -304,7 +308,9 @@ export function initChisel(app) {
         for (let i = 0; i < V.length; i += 3) { p.set(it.pos[i], it.pos[i + 1], it.pos[i + 2]).applyMatrix4(M); V[i] = p.x; V[i + 1] = p.y; V[i + 2] = p.z; }
         let I = it.idx;
         if (M.determinant() < 0) { I = Uint32Array.from(I); for (let t = 0; t < I.length; t += 3) { const x = I[t + 1]; I[t + 1] = I[t + 2]; I[t + 2] = x; } }
-        const { mesh } = simplify({ V, I: Uint32Array.from(I) }, PREVIEW_TRIS);
+        // action figure parts and joint pieces keep a fine copy, so their balls and sockets print true
+        const fine = / figure(?: \d+)? · |^Joint (ball|housing|socket cutter)/.test(it.name || "");
+        const { mesh } = simplify({ V, I: Uint32Array.from(I) }, fine ? 80000 : PREVIEW_TRIS);
         const prev = packMesh(mesh);
         const raw = packSculpt(it.pos, it.idx, it.paint);
         const z = await gzip(raw);
@@ -426,5 +432,9 @@ export function initChisel(app) {
     // the status bar's snapping changed: Chisel shows it
     snapChanged: () => { const w = win(); if (w && w.snapChanged) w.snapChanged(); },
     get open() { return !!host && !host.hidden; },
+    // for the tutorials: what Chisel is doing, and an element in it (with the frame's offset)
+    tut: () => { const w = win(); try { return w && w.tut ? w.tut() : null; } catch (e) { return null; } },
+    el: (s) => { const w = win(); try { return w && w.el ? w.el(s) : null; } catch (e) { return null; } },
+    frameRect: () => (ifr ? ifr.getBoundingClientRect() : null),
   };
 }

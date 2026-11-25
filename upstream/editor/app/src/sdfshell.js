@@ -151,7 +151,9 @@ export function insideField(G, V, I) {
     for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
       const px = o[0] + i * h + ex, py = o[1] + j * h + ey;
       const l1 = ((by - cy) * (px - cx) + (cx - bx) * (py - cy)) / den, l2 = ((cy - ay) * (px - cx) + (ax - cx) * (py - cy)) / den, l3 = 1 - l1 - l2;
-      if (l1 < 0 || l2 < 0 || l3 < 0) continue;
+      // a little past the edges, so a ray between two triangles hits one of them (the double hits
+      // this gives are merged below)
+      if (l1 < -1e-7 || l2 < -1e-7 || l3 < -1e-7) continue;
       const key = i + nx * j;
       let arr = cols.get(key); if (!arr) cols.set(key, (arr = []));
       arr.push(l1 * az + l2 * bz + l3 * cz);
@@ -160,6 +162,10 @@ export function insideField(G, V, I) {
   for (const [key, arr] of cols) {
     if (arr.length < 2) continue;
     arr.sort((p, q) => p - q);
+    // one crossing where a ray meets an edge shared by two triangles (same height twice)
+    let w = 1; for (let r = 1; r < arr.length; r++) if (arr[r] - arr[w - 1] > 1e-6 * h) arr[w++] = arr[r];
+    arr.length = w;
+    if (arr.length < 2) continue;
     const i = key % nx, j = (key - i) / nx;
     for (let s = 0; s + 1 < arr.length; s += 2) {
       const k0 = Math.max(0, Math.ceil((arr[s] - o[2]) / h)), k1 = Math.min(nz - 1, Math.floor((arr[s + 1] - o[2]) / h));

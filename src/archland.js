@@ -469,7 +469,9 @@ export function objFile(parts, k, off, title) {
   }
   return new TextEncoder().encode(L.join("\n") + "\n");
 }
-export async function threeMFFile(parts, k, off, title) {
+// (groups: optional [{ name, parts: [indexes] }]: each group becomes one object made of those parts, so a
+// slicer loads it as one thing that moves together, each part keeping its own colour)
+export async function threeMFFile(parts, k, off, title, groups) {
   parts = xform(parts, k, off);
   const esc = (t) => String(t).replace(/[<>&"']/g, (ch) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&apos;" })[ch]);
   const colors = [...new Set([...parts.map((p) => p.color.toUpperCase()), ...parts.flatMap((p) => (p.tcol ? [...new Set(p.tcol)].map((c) => c.toUpperCase()) : []))])];
@@ -484,8 +486,15 @@ export async function threeMFFile(parts, k, off, title) {
     for (let t = 0; t < I.length; t += 3) if (I[t] !== I[t + 1] && I[t + 1] !== I[t + 2] && I[t] !== I[t + 2]) out.push(`     <triangle v1="${I[t]}" v2="${I[t + 1]}" v3="${I[t + 2]}"` + (p.tcol ? ` pid="1" p1="${colors.indexOf(p.tcol[t / 3].toUpperCase())}"` : "") + "/>");
     out.push("    </triangles>", "   </mesh>", "  </object>");
   });
+  const top = [];
+  if (groups && groups.length) groups.forEach((g, gi) => {
+    const id = parts.length + 2 + gi;
+    out.push(`  <object id="${id}" type="model" name="${esc(g.name)}">`, "   <components>", ...g.parts.map((i) => `    <component objectid="${i + 2}"/>`), "   </components>", "  </object>");
+    top.push(id);
+  });
+  else parts.forEach((p, n) => top.push(n + 2));
   out.push(" </resources>", " <build>");
-  parts.forEach((p, n) => out.push(`  <item objectid="${n + 2}"/>`));
+  top.forEach((id) => out.push(`  <item objectid="${id}"/>`));
   out.push(" </build>", "</model>");
   const enc = new TextEncoder();
   const z = await zipFiles([

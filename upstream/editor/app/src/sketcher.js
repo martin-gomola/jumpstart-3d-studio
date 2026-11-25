@@ -1,11 +1,12 @@
 // Sketch editing: drawing tools, snapping, typed dimensions, trim, editing.
+import { recognize as recognizeStroke } from "./strokefit.js";
 import * as THREE from "three";
 import { store, findSketch, regionsFor, userLoops, regionOwners } from "./store.js";
 import { planeMatrix, regionGeometry, textOutlines, sketchImageMesh } from "./scene.js";
 import { sketchTexts } from "./store.js";
 import { textBounds } from "./textgeo.js";
 import {
-  resolveSketch, sampleCurve, distToCurve, allIntersections, trimSpan, curvePoint, d2, normAng, angIn, makeSplineCurve, nearestOnCurve,
+  resolveSketch, sampleCurve, distToCurve, intersect, curvePairs, trimSpan, curvePoint, d2, normAng, angIn, makeSplineCurve, nearestOnCurve,
 } from "./regions.js";
 import { uid, parseLength, fmt, round, el } from "./util.js";
 import { getUnit } from "./units.js";
@@ -13,6 +14,13 @@ import { CONSTRAINTS, CONSTRAINT_BADGES, solveSketch, pruneConstraints, pickKind
 import { buildDim, dimGraphics, measureDim } from "./dims.js";
 
 const DEG = Math.PI / 180;
+// a number for each version of a sketch (each edit makes a new sketch object), and region fills
+// kept per region (the regions themselves are cached by content)
+const skVer = new WeakMap();
+let skVerN = 0;
+const sketchVer = (sk) => { let v = skVer.get(sk); if (!v) { v = ++skVerN; skVer.set(sk, v); } return v; };
+const regGeo = new WeakMap();
+const GLYPH_MAX = 300;
 import { theme, sketchColor, sketchScaled } from "./theme.js";
 const C = {
   get line() { return sketchColor(); }, get point() { return sketchColor(); }, cons: 0xc07a12, proj: 0x7d3fb0, hover: 0xe8a317,
@@ -35,6 +43,7 @@ export const SKETCH_TOOLS = {
   arcc: { label: "Center arc", fields: ["Radius", "Sweep"] },
   polygon: { label: "Polygon", key: "P", fields: ["Radius", "Sides"] },
   spline: { label: "Spline", fields: [] },
+  freehand: { label: "Freehand", key: "H", fields: [] },
   point: { label: "Point", fields: [] },
   text: { label: "Text", fields: [] },
   trim: { label: "Trim", key: "T", fields: [] },
@@ -107,8 +116,9 @@ export class Sketcher {
       dblclick: () => this.finishChain(),
       leave: () => { this.cursor = null; this.coord.hidden = true; this.redraw(); },
       // on touch, a drag only belongs to the sketch when it grabs geometry with Select
-      wantsTouch: (e) => { if (this.tool !== "select" || !this.sketch) return false; const raw = this.to2d(e); return !!(raw && this.pickEnt(raw)); },
-      cancel: () => {},
+      wantsTouch: (e) => { if (!this.sketch) return false; if (this.tool === "freehand") return true; if (this.tool !== "select") return false; const raw = this.to2d(e); return !!(raw && this.pickEnt(raw)); },
+      // a second finger came down: a freehand stroke in progress is dropped (that was a pinch)
+      cancel: () => { if (this.free) { this.free = null; this.redraw(); } },
     };
   }
 
@@ -163,7 +173,9 @@ export class Sketcher {
     this.coord.hidden = true;
     this.clearGrid();
     if (this.app.originMarker) this.app.originMarker.visible = true;
-    for (const c of [...this.group.children]) { this.group.remove(c); c.geometry && c.geometry.dispose(); }
+    for (const gg of [this.gS, this.gD]) if (gg) for (const c of [...gg.children]) { gg.remove(c); if (c.geometry && !c.geometry.userData.keep) c.geometry.dispose(); }
+    for (const c of [...this.group.children]) { this.group.remove(c); c.geometry && !c.geometry.userData.keep && c.geometry.dispose(); }
+    this._sKey = null;
     this.vp.request();
   }
 
@@ -174,6 +186,7 @@ export class Sketcher {
     if (t === "rect" || t === "rect3" || t === "rectc") this.rectMode = t;
     this.tool = t;
     this.state = null;
+    this.free = null;
     this.cpicks = [];
     this.dimPicks = []; this.dimPreview = null;
     // a constraint chosen with shapes already selected applies to them straight away
@@ -198,36 +211,61 @@ export class Sketcher {
   }
   px() { return this.vp.pixelSize(new THREE.Vector3(...this.sketch.plane.o)); }
 
+  // Everything a point can snap to in a sketch (points, middles, centers, quadrants, crossings,
+  // shape centers), worked out once per version of the sketch rather than on every pointer move.
+  // It comes from the saved sketch, which stays put while a drag is previewed; each one lists
+  // the points it depends on, so what's being dragged doesn't snap to itself.
+  snapCands(sk) {
+    const base = (this.active && findSketch(store.doc, this.active)) || sk;
+    if (this._snapC && this._snapC.sk === base) return this._snapC.list;
+    const list = [], curves = resolveSketch(base);
+    const deps = (c) => (c.src ? entPts(c.src) : []);
+    for (const p of base.pts) list.push({ p: [p.x, p.y], kind: "point", pr: 5, pid: p.id, deps: [p.id] });
+    for (const c of curves) {
+      const dp = deps(c);
+      if (c.t === "line") list.push({ p: [(c.a[0] + c.b[0]) / 2, (c.a[1] + c.b[1]) / 2], kind: "mid", pr: 3, ent: c.id, deps: dp });
+      if (c.t === "circle" || c.t === "arc") {
+        list.push({ p: c.c, kind: "center", pr: 3, ent: c.id, deps: dp });
+        for (let k = 0; k < 4; k++) {
+          const ang = k * Math.PI / 2;
+          if (c.t === "arc" && !angIn(ang, c.a0, c.a1)) continue;
+          list.push({ p: curvePoint(c, ang), kind: "quad", pr: 2, ent: c.id, deps: dp });
+        }
+      }
+    }
+    const geo = curves.filter((c) => c.t !== "point");
+    curvePairs(geo, (i, j) => { for (const p of intersect(geo[i], geo[j])) list.push({ p, kind: "int", pr: 4, deps: [...deps(geo[i]), ...deps(geo[j])], int: true }); });
+    // centers of closed shapes (rectangles, polygons...)
+    const E = new Map(base.ents.map((e) => [e.id, e]));
+    for (const r of regionsFor(base)) if (r.poly && r.poly.length > 2 && !r.text) list.push({ p: polyCentroid(r.poly), kind: "center", pr: 2, deps: [].concat(...(r.ents || []).map((id) => (E.get(id) ? entPts(E.get(id)) : []))) });
+    this._snapC = { sk: base, list };
+    return list;
+  }
+  liveCurves(sk) {
+    if (this._liveC && this._liveC.sk === sk) return this._liveC.curves;
+    const curves = resolveSketch(sk);
+    this._liveC = { sk, curves };
+    return curves;
+  }
   snap(raw, anchor, opts = {}) {
     const sk = this.sketch;
     const tol = this.vp.tol(9) * this.px();
-    const curves = resolveSketch(sk);
     let best = null;
     const consider = (p, kind, extra = {}, pr = 0) => {
       const d = d2(p, raw);
       if (d < tol && (!best || pr > best.pr || (pr === best.pr && d < best.d))) best = { p: [...p], kind, d, pr, ...extra };
     };
     if (this.snapOn || true) {
-      for (const p of sk.pts) {
-        if (opts.exclude && opts.exclude.has(p.id)) continue;
-        consider([p.x, p.y], "point", { pid: p.id }, 5);
+      const ex = opts.exclude, exE = opts.excludeEnt;
+      for (const q of this.snapCands(sk)) {
+        if (Math.abs(q.p[0] - raw[0]) > tol || Math.abs(q.p[1] - raw[1]) > tol) continue;
+        if (ex && q.deps.some((d) => ex.has(d))) continue;
+        if (exE && (q.int || (q.ent && exE.has(q.ent)))) continue;
+        consider(q.p, q.kind, q.pid ? { pid: q.pid } : {}, q.pr);
       }
       consider([0, 0], "origin", {}, 4);
       if (sk.faceCenter) consider(sk.faceCenter, "face center", {}, 4);
-      for (const c of curves) {
-        if (opts.excludeEnt && opts.excludeEnt.has(c.id)) continue;
-        if (c.t === "line") consider([(c.a[0] + c.b[0]) / 2, (c.a[1] + c.b[1]) / 2], "mid", {}, 3);
-        if (c.t === "circle" || c.t === "arc") consider(c.c, "center", {}, 3);
-        if (c.t === "circle" || c.t === "arc")
-          for (let k = 0; k < 4; k++) {
-            const ang = k * Math.PI / 2;
-            if (c.t === "arc" && !angIn(ang, c.a0, c.a1)) continue;
-            consider(curvePoint(c, ang), "quad", {}, 2);
-          }
-      }
-      if (!opts.excludeEnt) for (const p of allIntersections(curves)) consider(p, "int", {}, 4);
-      // centers of closed shapes (rectangles, polygons...)
-      for (const r of regionsFor(sk)) if (r.poly && r.poly.length > 2 && !r.text) consider(polyCentroid(r.poly), "center", {}, 2);
+      const curves = this.liveCurves(sk);
       // the bodies' corners, edge middles and round-edge centers that lie on the sketch plane
       if (this.app.objectSnap) for (const q of this.bodySnapPts()) consider(q.p, q.kind, {}, q.pr);
       if (!best) {
@@ -455,6 +493,7 @@ export class Sketcher {
     if (t === "trim") { this.doTrim(raw); return true; }
     if (t === "dim") { this.dimClick(raw, e); return true; }
     if (t.startsWith("c-")) { this.constraintPick(this.pickEnt(raw)); return true; }
+    if (t === "freehand") { this.freeDown(raw, e); return true; }
     const s = this.snap(raw, this.state && this.state.anchor);
     this.click(s, e);
     return true;
@@ -466,6 +505,7 @@ export class Sketcher {
     this.cursorPx = this.vp.local(e);
     this.rawCursor = raw;
     if (this.drag) return this.dragMove(raw, e);
+    if (this.tool === "freehand") { this.freeMove(raw, e); return; }
     if (this.tool === "select" || this.tool === "trim" || this.tool === "dim" || this.tool.startsWith("c-")) {
       this.hover = this.pickEnt(raw);
       this.cursor = null;
@@ -480,6 +520,63 @@ export class Sketcher {
   }
   up() {
     if (this.drag) this.dragEnd();
+    if (this.free) this.freeUp();
+  }
+
+  // ------------------------------------------------------------ freehand
+  // Draw with a finger, a pen or the mouse. The stroke is evened out and, with Smart shapes on,
+  // a nearly straight stroke becomes a line, a round one a circle, a rough box a rectangle and a
+  // few straight strokes joined at corners straight lines; anything else becomes a smooth spline
+  // with editable points. Its ends join points already in the sketch when they start or stop on one.
+  freeDown(raw, e) {
+    const s = this.snap(raw, null);
+    this.free = { pts: [s.pid ? s.p : raw], startPid: s.pid || null, pen: e && e.pointerType === "pen" };
+    this.redraw();
+  }
+  freeMove(raw, e) {
+    const f = this.free;
+    this.cursor = null;
+    if (!f) { this.freeHover = raw; this.redraw(); return; }
+    const last = f.pts[f.pts.length - 1];
+    const step = this.px() * 1.5;
+    // pointer events can bunch several samples into one (a pen at 240 Hz): take them all
+    const list = e && e.getCoalescedEvents ? e.getCoalescedEvents().map((c) => this.to2d(c)).filter(Boolean) : [];
+    for (const q of list.length ? list : [raw]) if (Math.hypot(q[0] - last[0], q[1] - last[1]) >= step) { f.pts.push(q); }
+    this.redraw();
+  }
+  freeUp() {
+    const f = this.free;
+    this.free = null;
+    if (!f || f.pts.length < 3) { this.redraw(); return; }
+    const end = this.snap(f.pts[f.pts.length - 1], null);
+    const pts = f.pts.slice();
+    if (end.pid) pts[pts.length - 1] = end.p;
+    const opt = this.freeOpts || (this.freeOpts = { smart: true, smooth: 0.5 });
+    const shape = recognizeStroke(pts, { smart: opt.smart, smooth: opt.smooth, tol: this.px() * 18 });
+    if (!shape) { this.redraw(); return; }
+    const startPid = f.startPid, endPid = end.pid || null;
+    const label = { line: "Freehand line", circle: "Freehand circle", rect: "Freehand rectangle", poly: "Freehand lines", spline: "Freehand curve" }[shape.kind];
+    this.edit(label, (sk) => {
+      const P = (p, pid) => (pid && sk.pts.some((x) => x.id === pid) ? pid : addPt(sk, p));
+      if (shape.kind === "line") sk.ents.push({ id: uid("e"), t: "line", a: P(shape.a, startPid), b: P(shape.b, endPid) });
+      else if (shape.kind === "circle") sk.ents.push({ id: uid("e"), t: "circle", c: addPt(sk, shape.c), r: shape.r });
+      else if (shape.kind === "rect") {
+        const [a, b] = [shape.a, shape.b];
+        const ids = [a, [b[0], a[1]], b, [a[0], b[1]]].map((q) => addPt(sk, q));
+        const L = [0, 1, 2, 3].map((i) => { const e = { id: uid("e"), t: "line", a: ids[i], b: ids[(i + 1) % 4] }; sk.ents.push(e); return e.id; });
+        sk.cons = sk.cons || [];
+        L.forEach((id, i) => sk.cons.push({ id: uid("k"), t: i % 2 ? "vertical" : "horizontal", e1: id }));
+      } else if (shape.kind === "poly") {
+        const n = shape.closed ? shape.pts.length - 1 : shape.pts.length;
+        const ids = shape.pts.slice(0, n).map((q, i) => (i === 0 ? P(q, startPid) : i === n - 1 && !shape.closed ? P(q, endPid) : addPt(sk, q)));
+        for (let i = 0; i < n - (shape.closed ? 0 : 1); i++) sk.ents.push({ id: uid("e"), t: "line", a: ids[i], b: ids[(i + 1) % n] });
+      } else {
+        const ids = shape.pts.map((q, i) => (i === 0 && !shape.closed ? P(q, startPid) : i === shape.pts.length - 1 && !shape.closed ? P(q, endPid) : addPt(sk, q)));
+        sk.ents.push({ id: uid("e"), t: "spline", pts: ids, closed: !!shape.closed && ids.length >= 3 });
+      }
+    });
+    this.redraw();
+    this.app.status && this.app.status();
   }
 
   pickEnt(raw) {
@@ -574,7 +671,9 @@ export class Sketcher {
         st.lastPid = b;
       });
       st.segs = (st.segs || 0) + 1;
-      if (closes) { this.state = null; this.hideInput(); this.redraw(); return; }
+      // one line each time: the Line tool puts itself down; press L (or pick Line) for the next
+      void closes;
+      return this.done();
       st.anchor = p;
       this.locked = [false, false];
       for (const f of this.input.fields) f.inp.value = "";
@@ -667,9 +766,12 @@ export class Sketcher {
     }
   }
   done() {
+    const wasLine = this.tool === "line" && this.state && this.state.segs > 0;
     this.state = null;
     this.hideInput();
     this.vp.canvas.focus();
+    // a finished line puts the Line tool down: pick it again (or press L) for the next one
+    if (wasLine) { this.setTool("select"); this.app.status && this.app.status(); return; }
     this.redraw();
     this.app.status && this.app.status();
   }
@@ -968,7 +1070,14 @@ export class Sketcher {
   drawGlyphs(force) {
     const sk = this.sketch;
     this.selCons = this.selCons || new Set();
-    const spots = sk && sk.cons ? glyphSpots(sk) : [];
+    let spots = sk && sk.cons ? glyphSpots(sk) : [];
+    // a big sketch: only the constraints of what's selected get badges (hundreds of badges cover
+    // the drawing and slow every frame down)
+    if (spots.length > GLYPH_MAX) {
+      const on = new Set([...this.sel].map((k) => (k.startsWith("pt:") ? k.slice(3) : k)));
+      for (const k of this.sel) { const e = sk.ents.find((x) => x.id === k); if (e) for (const q of entPts(e)) on.add(q); }
+      spots = on.size ? spots.filter((q) => Object.values(q.c).some((v) => typeof v === "string" && on.has(v))) : [];
+    }
     const sig = JSON.stringify(spots.map((q) => [q.c.id, q.at.map((v) => +v.toFixed(4))])) + [...this.selCons].join();
     if (!force && sig === this.glyphSig) return;
     this.glyphSig = sig;
@@ -1319,35 +1428,56 @@ export class Sketcher {
     this.locked = [false, false];
     if (this.active) this.redraw();
   }
+  // The sketch is drawn in two layers: what's drawn in it (rebuilt only when the sketch, the
+  // selection, the hover or the zoom changes) and what follows the pointer (the shape being
+  // drawn, the snap marker and guides; rebuilt on every move). Rebuilding everything on every
+  // pointer move made big sketches lag.
   redraw() {
-    if (this.active) this.drawGlyphs();
-    const g = this.group;
-    for (const c of [...g.children]) { g.remove(c); c.geometry && c.geometry.dispose(); c.material && c.material.dispose(); }
+    const root = this.group;
+    if (!this.gS || this.gS.parent !== root) { this.gS = new THREE.Group(); this.gD = new THREE.Group(); root.add(this.gS, this.gD); this._sKey = null; }
+    const clear = (gg) => { for (const c of [...gg.children]) { gg.remove(c); if (c.geometry && !c.geometry.userData.keep) c.geometry.dispose(); c.material && c.material.dispose(); } };
     const sk = this.sketch;
     // the 3D origin marker would show up off-plane while sketching on a face
     if (this.app.originMarker) this.app.originMarker.visible = !sk;
-    if (!sk) { this.vp.request(); return; }
+    if (!sk) { clear(this.gS); clear(this.gD); this._sKey = null; this.vp.request(); return; }
     const px = this.px();
-    const curves = resolveSketch(sk);
+    this._sTick = (this._sTick || 0) + 1;
+    const sKey = [sketchVer(sk), sk.pts.length, sk.ents.length, (sk.cons || []).length, [...this.sel].join(), this.tool === "trim" ? this.hover : "", px.toPrecision(6), sketchColor(), sketchScaled(1), theme.name, this.tool === "trim" || this.tool === "dim" || this.dimPreview ? this._sTick : 0, [...(this.selCons || [])].join(), this.active].join("|");
+    const full = sKey !== this._sKey;
+    if (full) { clear(this.gS); this._sKey = sKey; if (this.active) this.drawGlyphs(); }
+    clear(this.gD);
+    let g = this.gS;
+    const curves = this.liveCurves(sk);
     const segs = { line: [], cons: [], proj: [], hover: [], sel: [], preview: [] };
+    const dyn = { cons: [], preview: [] };
     const pushPoly = (arr, pts) => { for (let i = 0; i < pts.length - 1; i++) arr.push(pts[i][0], pts[i][1], 0, pts[i + 1][0], pts[i + 1][1], 0); };
-    for (const c of curves) {
+    // (the hovered shape is drawn over the rest in the pointer's layer, except while trimming)
+    const hv = this.tool === "trim" ? this.hover : null;
+    if (full) for (const c of curves) {
       if (c.t === "point") continue;
       const pts = sampleCurve(c);
-      const k = this.sel.has(c.id) ? "sel" : this.hover === c.id ? "hover" : c.proj ? "proj" : c.cons ? "cons" : "line";
+      const k = this.sel.has(c.id) ? "sel" : hv === c.id ? "hover" : c.proj ? "proj" : c.cons ? "cons" : "line";
       pushPoly(segs[k], pts);
     }
-    for (const { id, pts } of textOutlines(sk)) pushPoly(segs[this.sel.has(id) ? "sel" : this.hover === id ? "hover" : "line"], pts);
-    if (sk.image) { const im = sketchImageMesh(sk.image, () => this.vp.request()); im.material.depthTest = false; im.renderOrder = 4; g.add(im); }
+    if (full) for (const { id, pts } of textOutlines(sk)) pushPoly(segs[this.sel.has(id) ? "sel" : hv === id ? "hover" : "line"], pts);
+    const dynHover = [];
+    if (this.hover && !hv && !this.hover.startsWith("pt:") && !this.sel.has(this.hover)) {
+      const c = curves.find((q) => q.id === this.hover);
+      if (c && c.t !== "point") pushPoly(dynHover, sampleCurve(c));
+      else if (!c) for (const { id, pts } of textOutlines(sk)) if (id === this.hover) pushPoly(dynHover, pts);
+    }
+    if (full && sk.image) { const im = sketchImageMesh(sk.image, () => this.vp.request()); im.material.depthTest = false; im.renderOrder = 4; g.add(im); }
     // profiles
-    const regs = regionsFor(sk);
+    const regs = full ? regionsFor(sk) : [];
     for (const r of regs) {
-      const m = new THREE.Mesh(regionGeometry(r), new THREE.MeshBasicMaterial({ color: 0x9fbfec, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false }));
+      let rg = regGeo.get(r);
+      if (!rg) { rg = regionGeometry(r); rg.userData.keep = true; regGeo.set(r, rg); }
+      const m = new THREE.Mesh(rg, new THREE.MeshBasicMaterial({ color: 0x9fbfec, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false }));
       m.renderOrder = 5;
       g.add(m);
     }
     // trim preview
-    if (this.tool === "trim" && this.hover && !this.hover.startsWith("pt:") && this.rawCursor) {
+    if (full && this.tool === "trim" && this.hover && !this.hover.startsWith("pt:") && this.rawCursor) {
       const span = trimSpan(curves.filter((c) => !c.cons || c.id === this.hover), this.hover, this.rawCursor);
       if (span) {
         const c = span.c;
@@ -1359,6 +1489,8 @@ export class Sketcher {
         pushPoly(segs.preview, pts);
       }
     }
+    // a freehand stroke being drawn
+    if (this.free && this.free.pts.length > 1) pushPoly(dyn.preview, this.free.pts);
     // tool preview
     const st = this.state, cur = this.cursor;
     if (st && cur) {
@@ -1368,25 +1500,25 @@ export class Sketcher {
         const fit = [...st.fit];
         if (d2(fit[fit.length - 1], p) > 1e-6) fit.push(p);
         const c = makeSplineCurve(fit, false);
-        if (c) pushPoly(segs.preview, c.poly); else pushPoly(segs.preview, [st.start, p]);
-      } else if (t === "line") pushPoly(segs.preview, [st.anchor, p]);
+        if (c) pushPoly(dyn.preview, c.poly); else pushPoly(dyn.preview, [st.start, p]);
+      } else if (t === "line") pushPoly(dyn.preview, [st.anchor, p]);
       else if (t === "rect3") {
-        if (st.step === 1) pushPoly(segs.preview, [st.start, p]);
-        else { const q = this.rect3Corners(st, p); if (q) pushPoly(segs.preview, [...q, q[0]]); else pushPoly(segs.preview, [st.start, st.end]); }
+        if (st.step === 1) pushPoly(dyn.preview, [st.start, p]);
+        else { const q = this.rect3Corners(st, p); if (q) pushPoly(dyn.preview, [...q, q[0]]); else pushPoly(dyn.preview, [st.start, st.end]); }
       } else if (t === "rect" || t === "rectc") {
         const [a, b] = this.rectCorners(st.start, p);
-        pushPoly(segs.preview, [a, [b[0], a[1]], b, [a[0], b[1]], a]);
-      } else if (t === "circle") pushPoly(segs.preview, sampleCurve({ t: "circle", c: st.start, r: d2(st.start, p) }));
-      else if (t === "polygon") { const pts = this.polyPts(st.start, p); if (pts) pushPoly(segs.preview, [...pts, pts[0]]); }
+        pushPoly(dyn.preview, [a, [b[0], a[1]], b, [a[0], b[1]], a]);
+      } else if (t === "circle") pushPoly(dyn.preview, sampleCurve({ t: "circle", c: st.start, r: d2(st.start, p) }));
+      else if (t === "polygon") { const pts = this.polyPts(st.start, p); if (pts) pushPoly(dyn.preview, [...pts, pts[0]]); }
       else if (t === "arc3") {
-        if (st.step === 1) pushPoly(segs.preview, [st.start, p]);
-        else { const a = arcFrom3(st.start, st.end, p); if (a) pushPoly(segs.preview, sampleCurve({ t: "arc", c: a.c, r: a.r, a0: a.a0, a1: a.a1 })); }
+        if (st.step === 1) pushPoly(dyn.preview, [st.start, p]);
+        else { const a = arcFrom3(st.start, st.end, p); if (a) pushPoly(dyn.preview, sampleCurve({ t: "arc", c: a.c, r: a.r, a0: a.a0, a1: a.a1 })); }
       } else if (t === "arcc") {
-        if (st.step === 1) pushPoly(segs.preview, [st.start, p]);
+        if (st.step === 1) pushPoly(dyn.preview, [st.start, p]);
         else {
           const end = this.arcEnd(st, p), c = st.start;
-          pushPoly(segs.preview, sampleCurve({ t: "arc", c, r: d2(c, st.a), a0: Math.atan2(st.a[1] - c[1], st.a[0] - c[0]), a1: Math.atan2(end[1] - c[1], end[0] - c[0]) }));
-          pushPoly(segs.cons, [c, st.a]);
+          pushPoly(dyn.preview, sampleCurve({ t: "arc", c, r: d2(c, st.a), a0: Math.atan2(st.a[1] - c[1], st.a[0] - c[0]), a1: Math.atan2(end[1] - c[1], end[0] - c[0]) }));
+          pushPoly(dyn.cons, [c, st.a]);
         }
       }
     }
@@ -1424,7 +1556,7 @@ export class Sketcher {
     };
     // dimensions (only while this sketch is being edited)
     const dimSegs = [];
-    if (this.active) this.drawDims(px, dimSegs);
+    if (full && this.active) this.drawDims(px, dimSegs);
     // thin lines, so small and narrow profiles stay easy to see and click
     // (the width and colour of sketch lines are set in the theme menu)
     const SW = sketchScaled;
@@ -1434,7 +1566,7 @@ export class Sketcher {
     mk(segs.sel, C.sel, { w: Math.max(SW(2.4), SW(1.5) + 0.8) }); mk(segs.hover, C.hover, { w: Math.max(SW(2.4), SW(1.5) + 0.8) }); mk(segs.preview, C.preview, { w: SW(1.5) });
     // points
     const pp = [], ps = [];
-    for (const p of sk.pts) (this.sel.has("pt:" + p.id) || this.hover === "pt:" + p.id ? ps : pp).push(p.x, p.y, 0);
+    if (full) for (const p of sk.pts) (this.sel.has("pt:" + p.id) || hv === "pt:" + p.id ? ps : pp).push(p.x, p.y, 0);
     const pts = (arr, color, size) => {
       if (!arr.length) return;
       const geo = new THREE.BufferGeometry();
@@ -1446,6 +1578,11 @@ export class Sketcher {
     // points with a white halo so they show on any background
     pts(pp, 0xffffff, 13); pts(pp, C.point, 9);
     pts(ps, 0xffffff, 17); pts(ps, C.hover, 12);
+    // (the pointer's layer)
+    g = this.gD;
+    mk(dyn.cons, C.cons, { dashed: true }); mk(dyn.preview, C.preview, { w: SW(1.5) });
+    mk(dynHover, C.hover, { w: Math.max(SW(2.4), SW(1.5) + 0.8) });
+    if (this.hover && !hv && this.hover.startsWith("pt:") && !this.sel.has(this.hover)) { const q = sk.pts.find((x) => "pt:" + x.id === this.hover); if (q) { pts([q.x, q.y, 0], 0xffffff, 17); pts([q.x, q.y, 0], C.hover, 12); } }
     // snap marker + guides
     if (cur && this.tool !== "select") {
       const sp = this.applyTyped(cur.p);
@@ -1463,6 +1600,10 @@ export class Sketcher {
       }
       mk(guide, 0x6d8fbf, { dashed: true });
     }
+    // (the pointer's layer is drawn over everything else)
+    for (const c of this.gD.children) c.renderOrder += 4;
+    g = this.gS;
+    if (!full) { this.vp.request(); return; }
     // origin: faint axis lines across the sketch, bold arrows and a dot at the center
     const L0 = 4000;
     mk([-L0, 0, 0, L0, 0, 0], 0xd9534f, { dashed: true });

@@ -1,0 +1,507 @@
+{
+  "version": "2.9.9.9.14",
+  "source": "User-supplied full-source archive, app/src",
+  "manifestSha256": "4c154e99754ae84927461ec77adc7f0fe61096edc7450df6fa1dcb4ee367587d",
+  "files": [
+    {
+      "path": "advanced.js",
+      "sha256": "b0bec997ab4de28a77764150b7011590df2bc41a8bdbade9655ae12de6fe912e"
+    },
+    {
+      "path": "app.js",
+      "sha256": "a362d183bec706f4f52d38bac284ee9696fd17155261d1c95a6c1df39189acc1"
+    },
+    {
+      "path": "appearance.js",
+      "sha256": "41d145f1e436c7f85c68adac3bd739202090d488bbf54c59efbcacf2cd1ceaee"
+    },
+    {
+      "path": "arch.js",
+      "sha256": "120efe2362f0802ee0c01dea09d7b3598ab4b6483ccfc5fcf84b55c46d512f52"
+    },
+    {
+      "path": "archanimals.js",
+      "sha256": "1d8bfe7a6329c49d812c668c2d01a731ae01437fbda9703664e1ffbbae1b67fe"
+    },
+    {
+      "path": "archextras.js",
+      "sha256": "ab2817f9eb97f36c380d482aaf7db33d6b8dec246057f7c89d5ccdac8a52d339"
+    },
+    {
+      "path": "archflood.js",
+      "sha256": "d51c8a9821cf212d4f596ec0e544dd58c58e69bdcb7566db93da0ab1a5bb03b3"
+    },
+    {
+      "path": "archfurn.js",
+      "sha256": "8b9fc8b0e433085ea027a2145beedaa8007977c7e96e63cd76ef1fe74b17bcdc"
+    },
+    {
+      "path": "archland.js",
+      "sha256": "1a73dc5a1197e2a935ab41244a656ed32b0cf218d1e4e6cea493f16f3afbdfa0"
+    },
+    {
+      "path": "archmore.js",
+      "sha256": "6d584a4f11effed3c183114354d9b3a3eb606ef6164c435e13fd9252361e2b15"
+    },
+    {
+      "path": "archplan.js",
+      "sha256": "fb1f7fcd00384ea01f843805114e166102a9d139e0ffac4bc36009b072b72570"
+    },
+    {
+      "path": "archweather.js",
+      "sha256": "124095f475955f331b642fc6f0115a3d70fac354bbd905f00591a6f6b094008e"
+    },
+    {
+      "path": "archwin.js",
+      "sha256": "acf5a9d010c3b492611b7df3b3cec195420d7903f691b4f9cbb60e08a05dc3dc"
+    },
+    {
+      "path": "beginner.js",
+      "sha256": "4e84962892a8fafb2d9b43273a14c2ac5e871b345d52c836d0837b6b5a159fb5"
+    },
+    {
+      "path": "bins.js",
+      "sha256": "fed47c8e5f6f1ea5e9677ae7c2197119c120817ae7ceeaa606f2a3e8f58173d0"
+    },
+    {
+      "path": "bricks.js",
+      "sha256": "3cd7d10582881f5f4765d9e1dc0d498df0dbe82cd4c08c83e1477be65244b436"
+    },
+    {
+      "path": "cam.js",
+      "sha256": "cd8d8850fe6fedd86bf72548374078360c224fce79e34e7f442a02a0eabfe1d9"
+    },
+    {
+      "path": "camcore.js",
+      "sha256": "e7d481ec5d514f7e9c3e508c969c4755e853ff8d1de7aaab3ea7834296f8c087"
+    },
+    {
+      "path": "camworker.bundle.txt",
+      "sha256": "cdcd24230dd59745f98d072f55eaef267288b5cd577eb62a4cbd15520bfe9359"
+    },
+    {
+      "path": "camworker.js",
+      "sha256": "98eef0c0dfbf21fb1c336f4f1dd4d66e7fe9c75e9a2fc027547a1f65d865507f"
+    },
+    {
+      "path": "carve.js",
+      "sha256": "caa96f782c344ee9e560a25f25e62ecc8ef81099b84cd21bf7376af9568c3199"
+    },
+    {
+      "path": "chisel.html",
+      "sha256": "5789ec4294e3c58f4e9f3d2baca9bcccf7e52b06141ada57063252b5cf4c1db7"
+    },
+    {
+      "path": "chisel.js",
+      "sha256": "a083a7f3396e3ce7363979c0dac72b07eb95b0addb229982d67e5887a0016a4b"
+    },
+    {
+      "path": "colorlitho.js",
+      "sha256": "c502238914668516d5385a8937695c27777b8b484e96954e3700791ca985fb65"
+    },
+    {
+      "path": "constraints.js",
+      "sha256": "6c146d2c65a6ff3fdced60325abcfa862746eb30309d1fe5182407010cde23e4"
+    },
+    {
+      "path": "cosbody.js",
+      "sha256": "0b5fa6a1e76c75b853d140582aaa1b0079c76896077d1e683dd1a61277be6dea"
+    },
+    {
+      "path": "coscut.js",
+      "sha256": "50f5fef7b578f10f790a4ce33e210ccd06db91221cc240a179cb7169c7f20ebc"
+    },
+    {
+      "path": "cosforge.js",
+      "sha256": "5d09c96993c54ba97fdc0af454b64a1479cd5da6140993005c4e75302a01d848"
+    },
+    {
+      "path": "cosmesh.js",
+      "sha256": "c86d15672b08a1971dd928b510779a2c1d7acdfd900aa162b7a685ce1af57ef4"
+    },
+    {
+      "path": "cosparts.js",
+      "sha256": "24377ff1095c88798297cb4ff84344b3827d8535acf366cda05e2ef315ab29bf"
+    },
+    {
+      "path": "dims.js",
+      "sha256": "7b4773c3a4683e37fc4ed481e009bc1dcf33fd3a89db04e7585609edebad9717"
+    },
+    {
+      "path": "dxf.js",
+      "sha256": "a671a7fb6ec9990246fa0e5403ce67bc24434a0217c2fa57b67d5ba519847aba"
+    },
+    {
+      "path": "expand.js",
+      "sha256": "0a5be36ee129e2f0036731ad335b869c512dfdcb2f3c38e207d3721b42998bce"
+    },
+    {
+      "path": "expandui.js",
+      "sha256": "3482cb9036732256e1d50ab9bb09864d7a60ae3a8aef361b1dba83f67f299eb4"
+    },
+    {
+      "path": "facepat.js",
+      "sha256": "7951ed24684ead064f9e78ab1ccd805c4d0cdd339d13de35624aee08d675d3cf"
+    },
+    {
+      "path": "fasteners.js",
+      "sha256": "eeb98e684e52d71551cfc24f4ac1aad5017ec91cf0875347de40fc943b1252ef"
+    },
+    {
+      "path": "fea.js",
+      "sha256": "e64b6927a9f879520e1ba01f44f94b749cb21144384766fdb528f86c5907952d"
+    },
+    {
+      "path": "flat2d.js",
+      "sha256": "9e56a47771cdd8f893f0a2ce1afba07003e68b23d1d9625fe6eb11b0de7b9273"
+    },
+    {
+      "path": "flexigen.html",
+      "sha256": "b638ba87c971278e82a217dde7eda76ebc14b43040e9e0cdadc876ec7c90d60e"
+    },
+    {
+      "path": "flexigen.js",
+      "sha256": "f48a36d6efe779bed4860e15a7c13fe70397c425ccf92a6a609e2f546d01f6c7"
+    },
+    {
+      "path": "floorplan.html",
+      "sha256": "b38659520bc611986057647631fdb311ea55102440ad071c7ebffa91e1008379"
+    },
+    {
+      "path": "floorplan.js",
+      "sha256": "273f2ee2ed987e7833d2ab466c0bbb0b9ec91be7bc94f2570897a6ea305b1e76"
+    },
+    {
+      "path": "flowerpdf.js",
+      "sha256": "6d4a270ab3f0987917bd274de3ba8c8918ae77d0c841bd859f231abb065a0b70"
+    },
+    {
+      "path": "flowers.js",
+      "sha256": "8e56e1ac40f21f4b40ab0624332f19ff7baa53dcf7179d948307f92ef05a8817"
+    },
+    {
+      "path": "flowerui.js",
+      "sha256": "ee7182ca74eec65dac4663e5eedcde6315156be1229f3892a45e26d4820d8eb5"
+    },
+    {
+      "path": "fonts.js",
+      "sha256": "1409e4a59db0b4a9bcb37515bc599ace9fd6f96193557bb6fee97a67c6438d13"
+    },
+    {
+      "path": "fonts_more.js",
+      "sha256": "7589c064c18cd555acdf8e4b594d59259facb5ac087c3ebf1852bbb5dc3931ca"
+    },
+    {
+      "path": "gcode.js",
+      "sha256": "0c3e2adbe4b42acdf82ba7c8b9407db2d177a28d956cd2dbb0f5aa46e1be04c0"
+    },
+    {
+      "path": "gears.js",
+      "sha256": "493a1d1320dc882297c07d3cbe6bb7347d89b0676c6045b2093a66c22020c2c8"
+    },
+    {
+      "path": "helmethull.js",
+      "sha256": "991c6a9e58b4910a1ad0bacaaf02924dbbe4f04555111c57bfdb9d28de270514"
+    },
+    {
+      "path": "hinges.js",
+      "sha256": "b791b7d066d0aeb5ea9ac3b117f2bb113406f64a387dd25c9d596e7583c33dbd"
+    },
+    {
+      "path": "icons.js",
+      "sha256": "7a9f3f6764868ebe0c6da13763b845539805a55861ee6eff073905bd946e957e"
+    },
+    {
+      "path": "importers.js",
+      "sha256": "5259785a3e30a06f574e77ae8bf8707ecf02c1d381e580ed90e1eaed03e88af2"
+    },
+    {
+      "path": "index.html",
+      "sha256": "fe88138ea5ab1ec6ba0db06b2c137c68535390f4e46bccaa36052c8c0d16ee90"
+    },
+    {
+      "path": "inflate.js",
+      "sha256": "c32a4b7bfa87600c3261a3b33faaabe2a7aa00d12c350b55f861864179c24318"
+    },
+    {
+      "path": "jigs.js",
+      "sha256": "df573150c7140958b0dbfdea3b5a115d1a8941c8535819d076037fc669d1fd0b"
+    },
+    {
+      "path": "kernel.js",
+      "sha256": "1b8a5e511238fe3d7dd4f98d6c59dc4be2a2e20c1d4767fa78650a706641cd2c"
+    },
+    {
+      "path": "kernelClient.js",
+      "sha256": "0cba706ab20128b67873c81377d0fd8d77e71932d9aea98b7f2c0966f2cc8d7e"
+    },
+    {
+      "path": "laser.js",
+      "sha256": "ba81d6a94663a555279b5da54f5f49c8bb1868edbb8b967fd8ed055318410753"
+    },
+    {
+      "path": "lathe.js",
+      "sha256": "c4467fd65351789159ad2b789499c45c69d56c86548ac62085c6b272314af6cb"
+    },
+    {
+      "path": "layerscape.html",
+      "sha256": "504f0edc3f45933b6dc7b5dad096342ef6b17756ae97085c630dbed562b4bd73"
+    },
+    {
+      "path": "layerscape.js",
+      "sha256": "6b86764f55164284c6e720d43a83bf2765fa7f7766a2d76ad7a2b1d636acb621"
+    },
+    {
+      "path": "licenses.js",
+      "sha256": "c95948914a0bf3ee10740864e5d071513dcaf54c38b319098879cb54d10ef430"
+    },
+    {
+      "path": "lsimport.js",
+      "sha256": "711b70d55fbf5d6532984cde84f134332c57aadbad31528824bf9a9eac8f9c81"
+    },
+    {
+      "path": "machines.js",
+      "sha256": "4d201e57deefaa97840d603108ed62148dd8b98d2fc299fa676d381bbc7e7aad"
+    },
+    {
+      "path": "measure.js",
+      "sha256": "275e85f8092dd9e8008e9fb9aa666b36e19a3e9db95d9d4bf7d2c0ebb8566475"
+    },
+    {
+      "path": "media.js",
+      "sha256": "9ca06a4cb0f7e92a9c6afd11888dc3160f817cc8d1fe4f143fcb40369516a0d3"
+    },
+    {
+      "path": "meshcache.js",
+      "sha256": "317ec3c22c0873c6dc960069f71e6686d8ead6be5a04b21535696b9044b04b2a"
+    },
+    {
+      "path": "meshimport.js",
+      "sha256": "587d51df6a1b477724b8adf6d2bdee4be986320a8ea5263069fb470919b38885"
+    },
+    {
+      "path": "meshpack.js",
+      "sha256": "7c52025d7a042d9d41a991023803185a790c1f5caff324460aa22938b7905835"
+    },
+    {
+      "path": "meshstep.html",
+      "sha256": "47a5fd84e2bb887e239bf9cd828805855eb6ed7635d3b67cd68a15c834a15ad3"
+    },
+    {
+      "path": "meshstep.js",
+      "sha256": "0f7023c984b1470d42dd730c970362f1d3dad3848854990d92295b45b6fcad01"
+    },
+    {
+      "path": "motion.js",
+      "sha256": "7e7aa53de8f954acbf18611189c60223f0393bac83980b667301f4abb08bbbe1"
+    },
+    {
+      "path": "neon.html",
+      "sha256": "f82b975ffbb54689e057c7e6f6d6e7a2aabfe91501068e059d5aa441eb9446db"
+    },
+    {
+      "path": "neon.js",
+      "sha256": "a134ea244ce5326cb83bbfe01af967ef545a0afb9c5fbbc1a17a26413e412d23"
+    },
+    {
+      "path": "ops.js",
+      "sha256": "1f66a83ace2b2761d6137738f5a481101bd1187726b51fce3deba43cbcc0f64e"
+    },
+    {
+      "path": "photo3d.js",
+      "sha256": "a69394325a04babc45fde5a8e0a36e0baae6c58435b6622011b0e453a3006e55"
+    },
+    {
+      "path": "pipecoil.js",
+      "sha256": "c10fb8b2c5bea3011f6db61fe1b43f51c0978c7414e073ba59ea313ef92054fb"
+    },
+    {
+      "path": "printsim.js",
+      "sha256": "a04dec2119b0c64bc1ac01740f2218c9e2494957c2445bc004ed910f0d7e26ba"
+    },
+    {
+      "path": "projector.js",
+      "sha256": "7045bb056aa948ce17ff276f83c814f82213a959cd994b35e2278648ea8c7778"
+    },
+    {
+      "path": "projects.js",
+      "sha256": "5960b7a687b07a83dca2f6be089647270422a258db2d0d85eb25fcfbba1a6e80"
+    },
+    {
+      "path": "puffy.js",
+      "sha256": "d1d401c4d101ab1f5cad729d3ab3313ae5bcb9f5cbc4bfcf30f9a687fddad95b"
+    },
+    {
+      "path": "recovery.js",
+      "sha256": "62744173e058cb1632e7e4d992a67421c331657cca5486833d68c7fbd0579294"
+    },
+    {
+      "path": "regions.js",
+      "sha256": "b17d6d1774f24b50a863ecf94f646f741c48e7a2e305268568aabd648e089de3"
+    },
+    {
+      "path": "render.js",
+      "sha256": "3787d7eaffb3e4e26d27ce25e3e62cf7b7e63f134cb2d9cb32acc37c01c7c39e"
+    },
+    {
+      "path": "ribkey.js",
+      "sha256": "41cce04ce3ba23f2511bbdd60b59c3179de74e0c6f9ae6bec6d07c8cf1d865d8"
+    },
+    {
+      "path": "scene.js",
+      "sha256": "05dd8d791d00fc4a4d5398e567b0c36e5cbbe27c28dee111410c6376118c1486"
+    },
+    {
+      "path": "sdfshell.js",
+      "sha256": "13587f6ebe78e91c9318a09d83c22e107c5a467c18edafa63679c3c78cb2257e"
+    },
+    {
+      "path": "section.js",
+      "sha256": "99c6e810a7f18a08d255fe8bec1d352aad4549844ab668341461a39de224b81b"
+    },
+    {
+      "path": "sglass.js",
+      "sha256": "54ae3de524755b4bac739cfbf422ccb41b0e68323d93e8d225f9f16c5203c27c"
+    },
+    {
+      "path": "simexport.js",
+      "sha256": "ecf43b8de9f14bf7eae22d85bd718a9f40f89685e8f423f9e5bb77af75318cfe"
+    },
+    {
+      "path": "simimport.js",
+      "sha256": "0d0fd9f947490f448e43fd9a2b04413fee0a235f680929dd27315825516b4f33"
+    },
+    {
+      "path": "simulate.js",
+      "sha256": "5c7dd2e96c177b0a8a49c7961b8ea01c06a0f4cf363bf75f5dc93ab6c0d83c04"
+    },
+    {
+      "path": "sketch3d.js",
+      "sha256": "0a49de47d0945d4154523d96cf4a99a435319606bd83856f7d7a757f274a27f1"
+    },
+    {
+      "path": "sketcher.js",
+      "sha256": "3cec54820cd2cb5bcbb1e721b60efb1980e6e082a41e78c7fd1364792bb3771f"
+    },
+    {
+      "path": "stainedglass.js",
+      "sha256": "bcdb6744ea6f1f209f176386a20bcb172d2f432f2ad4f6a716dad133f1e9b6ea"
+    },
+    {
+      "path": "storage.js",
+      "sha256": "4733c11789ef8dffe293c095a8c5e74b4887b6a0f3096667aaec3ae362beb5f1"
+    },
+    {
+      "path": "store.js",
+      "sha256": "b18d37ac27377aadec434f45832f78826e39fc0b0aa602e75755f0379e059e49"
+    },
+    {
+      "path": "strokefit.js",
+      "sha256": "48e3f09691a637458bcc42a2cfcb993d879b51e3bd52e6535ad3c322db885e5a"
+    },
+    {
+      "path": "textgeo.js",
+      "sha256": "6c2178c08ef013e5b52609340ac629b881f5e8405a9d403b8427b6ac0893ff74"
+    },
+    {
+      "path": "texture.js",
+      "sha256": "48781ec170bda63a8a69acec022663ebc8a83b0a172af2b82a00e0e5e335b76c"
+    },
+    {
+      "path": "texture_themes.js",
+      "sha256": "f82e17d5a85b504a39aaf439f6932b5ddc9bf2e124434dd98e1ce6a9fb2498dd"
+    },
+    {
+      "path": "theme.js",
+      "sha256": "4a0d417895802f62cdeaf6338f8e16aa5e7dcb7d4b57847672917b76c40bd61a"
+    },
+    {
+      "path": "thickline.js",
+      "sha256": "d57e91b34928962229fa4ea2abd18c7c91d85e5e89a5f7334387c9729fd37919"
+    },
+    {
+      "path": "toolindex.js",
+      "sha256": "c42a697bf8b98a4e110d4e0fb88fb62f3cd582542bb34d023a7b577f55e2b65b"
+    },
+    {
+      "path": "toolsearch.js",
+      "sha256": "806151911c4b22b2363e5a39d700a4785d76bfd1f9429339df16bf2edf6cf6dd"
+    },
+    {
+      "path": "trace.js",
+      "sha256": "62dcdb8f55675bf058bf1add3b796a52c05dc5753ca12eb590d48308c9c1d895"
+    },
+    {
+      "path": "trees.js",
+      "sha256": "6bc0ea37381b1be7bb53ee49c4b6888b62328147e5289d088b18c37a567a66ef"
+    },
+    {
+      "path": "tutorial_anims.js",
+      "sha256": "6d8c06c1471fc6264bb5dd131fcd1610c99ad85bd9f4cb2251aaba2a5b0a0e33"
+    },
+    {
+      "path": "tutorial_arch.js",
+      "sha256": "40c9f82d2add24805bbb877fd13d8016c89ad5a1eb20a98dbc044373d29f505e"
+    },
+    {
+      "path": "tutorial_chisel.js",
+      "sha256": "0d8c850e1f596dda1f14af5c3deb4a2d67f2f8fc4d8d7ec1c19fb550b9b3ece1"
+    },
+    {
+      "path": "tutorial_data.js",
+      "sha256": "3f00c89827be2ba6f4283dbbd5b96df74ece9aefd84ff0a011d500a77be028fb"
+    },
+    {
+      "path": "tutorial_data_more.js",
+      "sha256": "f9adfbd7516997af59aff406933db0008bc43a832372d611c61dc22ee600d339"
+    },
+    {
+      "path": "tutorial_lamps.js",
+      "sha256": "fe938af7a9e5969fbbde6f0b0523897a11fe807b3e46a0206411fd7cf08c0d3b"
+    },
+    {
+      "path": "tutorial_pro.js",
+      "sha256": "f0d9a18d4c69592237c2579f7e902d0c97555c97dced0eb5cd1259e15a5fa4b1"
+    },
+    {
+      "path": "tutorial_projects.js",
+      "sha256": "4bdd7bfb163bb8e045626d001e7cc8146a5b17332c85a7bb4473be65c5f644dc"
+    },
+    {
+      "path": "tutorial_tools.js",
+      "sha256": "55872300c30718d5d19ceb2489b023c8c1ad888b7924da7ec2c61da71492f6aa"
+    },
+    {
+      "path": "tutorials.js",
+      "sha256": "2fec7580fd58b825d18478f8d3edb22ae294aed65e8ec15f280597e26ad60e60"
+    },
+    {
+      "path": "units.js",
+      "sha256": "7924f6c1492d9a4720972853a349eb8601b0659830c92fcca2b9441c40e7c17a"
+    },
+    {
+      "path": "util.js",
+      "sha256": "cab57e1f2b442d4fa1be39ddbc97757d0fd0434a903272d63d311a8c7e9cbcbd"
+    },
+    {
+      "path": "version.js",
+      "sha256": "cac1f783dc08cbfb17b424ed494be19f8fe84b30518f540895b71be2f10953a2"
+    },
+    {
+      "path": "viewport.js",
+      "sha256": "7359bfbda89ff53d3664ec722a9890d4dae8fea1254b778116865e696da0b594"
+    },
+    {
+      "path": "views3d.js",
+      "sha256": "a89e50ace8ed8e754ae79e3bb65a53564669049011edad24a3c0fcbe74bd0cb0"
+    },
+    {
+      "path": "voxel.js",
+      "sha256": "9d61d6d795fbe65692aa2f2d65bc06e82bbe94218348a0ccd7e2f405eeaf88bc"
+    },
+    {
+      "path": "worker.js",
+      "sha256": "5e8af4a7225a6616761d309ed84a857ada733767abfe19941c69e8c4199969d5"
+    }
+  ]
+}

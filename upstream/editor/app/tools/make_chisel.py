@@ -918,5 +918,58 @@ function applyHollow() {
 function applyBoolean(op) {""")
 R("</style>", """.hrow{display:flex;align-items:center;gap:8px;margin:8px 0}.hrow label{flex:1}.hrow input{width:76px}
 </style>""")
+# ================= tutorials: what Chisel is doing (for the tutorial checks) =================
+R("function endStroke() { if (stroke) { const o = stroke.o; stroke = null;", "function endStroke() { if (stroke) { const o = stroke.o; stroke = null; TUT_STROKES++; const tk = S.tool + (S.tool === 'standard' && S.invert ? '-' : ''); TUT_BY[tk] = (TUT_BY[tk] || 0) + 1;")
+R("async function saveBytes(name, bytes) {\n", "async function saveBytes(name, bytes) {\n  if (/\\.(stl|obj|3mf)$/i.test(name)) TUT_EXP++;\n")
+R("window.__chisel = {", """var TUT_EXP = 0, TUT_STROKES = 0, TUT_BY = {};
+window.__chisel = {
+  tut: () => ({ tool: S.tool, invert: !!S.invert, symX: !!S.symX, easy: !!S.easy, hist: undoStack.length, strokes: TUT_STROKES, by: { ...TUT_BY }, exported: TUT_EXP,
+    pup: typeof PUP !== 'undefined' && !!PUP.on, figSets: typeof FIG !== 'undefined' ? FIG.sets() : [], figLaid: typeof FIG !== 'undefined' ? !!FIG.st.laid : false,
+    objs: objects.map((o) => ({ name: o.name, tris: (o.idx.length / 3) | 0, rev: o.rev || 0, painted: typeof hasPaint === 'function' ? !!hasPaint(o) : false, skel: !!(o.skel && o.skel.bones && o.skel.bones.length), keys: o.anim && o.anim.keys ? o.anim.keys.length : 0, visible: o.visible !== false, jsId: o.jsId || null, y: o.mesh.position.y })) }),
+  el: (s) => document.querySelector(s),""")
+# ================= Action figures (ball-jointed, printable) =================
+s = s.replace(open(ROOT + '/tools/chisel_puppet.js').read(), open(ROOT + '/tools/chisel_puppet.js').read() + '\n' + open(ROOT + '/tools/chisel_figure.js').read(), 1)
+R('''      <div class="shapes chars" id="charShapes"></div>''', '''      <div class="shapes chars" id="charShapes"></div>
+      <div id="figSec"></div>''')
+R("  renderChars(); TEX._sel = undefined;", "  renderChars(); FIG.renderSec(); TEX._sel = undefined;")
+R("function refreshAll() { ", "function refreshAll() { if (typeof FIG !== 'undefined' && FIG._n !== objects.length) { FIG._n = objects.length; FIG.renderSec(); } ")
+R("</style>", """.fig-row{display:flex;flex-wrap:wrap;gap:5px;margin:6px 0}.fig-row select{flex:1 1 100%;min-width:0}
+.fig-dlg{position:fixed;z-index:60;left:50%;top:50%;transform:translate(-50%,-50%);width:min(440px,94vw);max-height:90vh;overflow:auto;background:var(--panel);border:1px solid var(--line-2);border-radius:10px;box-shadow:0 16px 50px rgba(0,0,0,.5);padding:14px 16px}
+.fig-dlg h3{margin:0 0 8px;font:600 13px/1 var(--cond);letter-spacing:.14em;text-transform:uppercase}
+.fig-tpls,.fig-seg{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin:6px 0}
+.fig-dlg .chip.on{border-color:var(--accent);color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.fig-dlg .chip.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.fig-sl{display:grid;grid-template-columns:110px 1fr 40px;gap:8px;align-items:center;margin:6px 0}.fig-sl input[type=number]{width:80px}
+.fig-note{color:var(--muted);font-size:12px;line-height:1.4;margin:6px 0}
+.fig-btns{display:flex;justify-content:flex-end;gap:8px;margin-top:10px}
+</style>""")
+
+# v2.9.9.2: Expandable (a sculpt made into sliding rings, in the design's window with a
+# simulation) and the tool search (the design's Ctrl+K lists Chisel's tools; Ctrl+K here opens it)
+XICON = '<rect x="5" y="2.5" width="10" height="4" rx="1.5"/><rect x="4" y="8" width="12" height="4" rx="1.5"/><rect x="3" y="13.5" width="14" height="4" rx="1.5"/><path d="M10 6.5v1.5M10 12v1.5" stroke-dasharray="1 1"/>'
+R("  { id: 'slice', g: 'cut', name: 'Plane slice'", "  { id: 'expand', g: 'cut', name: 'Expandable', hint: 'Click a model, then make it expandable: a hollow stack of rings that slide, twist or spin out of each other, and stay together, snap apart or come apart (fidget toys), printed in one piece. A window shows it moving (Play).', icon: '" + XICON + "' },\n  { id: 'slice', g: 'cut', name: 'Plane slice'")
+R("  { id: 'e-combine', tool: 'combine',", "  { id: 'e-expand', tool: 'expand', name: 'Expandable', icon: '" + XICON + "', hint: 'Click your model, then make it into rings that stretch, twist or spin, like a fidget toy.' },\n  { id: 'e-combine', tool: 'combine',")
+R("  if (hit && t === 'hollow' && hit.obj !== sel) {", "  if (hit && (t === 'hollow' || t === 'expand') && hit.obj !== sel) {")
+R("  if (S.tool === 'hollow') { renderHollowSec(); return; }", "  if (S.tool === 'hollow') { renderHollowSec(); return; }\n  if (S.tool === 'expand') { renderExpandSec(); return; }")
+R("function renderHollowSec() {", """function renderExpandSec() {
+  const sec = $('#toolSec');
+  const t = toolById('expand');
+  let h = `<h2><span class="dot"></span>Expandable</h2><p class="hint">${t.hint}</p>`;
+  h += `<button class="action" id="expandGo" ${sel && host && host.expandable ? '' : 'disabled'}>Make ${sel ? esc(sel.name) : 'the model'} expandable…</button>`;
+  h += `<p class="hint">${host && host.expandable ? 'Choose the rings, wall, clearance and stretch in the window, press Play to watch it move, then add the rings to your design.' : 'Expandable works when Chisel runs inside JumpStart 3D.'} Shapes with fairly upright sides work best: ghosts, pumpkins, bottles.</p>`;
+  sec.innerHTML = h;
+  const go = $('#expandGo', sec);
+  if (go) go.addEventListener('click', () => {
+    const o = sel; if (!o) { toast('Click a model first', true); return; }
+    host.expandable(Core.transformTris(worldTris(o), C2J.elements), o.name || 'Sculpt');
+  });
+}
+function renderHollowSec() {""")
+R("  setLevel: (level) => setLevel(level),\n", """  setLevel: (level) => setLevel(level),
+  // the tool search in the design's top bar: every tool, and picking one
+  tools: () => TOOLS.map((t) => ({ id: t.id, name: t.name, hint: t.hint || '', cat: t.cat || ({ sculpt: 'Brush', edit: 'Edit', cut: 'Cut', easy: 'Edit' })[t.g] || '' })),
+  pickTool: (id) => { if (!toolById(id)) return false; if (S.easy && !EASY.some((e) => e.tool === id)) return 'pro'; setTool(id); return true; },
+""")
+R("window.addEventListener('keydown', e => {\n", "window.addEventListener('keydown', e => {\n  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key === 'k' || e.key === 'K') && host && host.toolSearch) { e.preventDefault(); host.toolSearch(); return; }\n")
 open(ROOT + '/src/chisel.html', 'w').write(s)
-print('chisel.html (puppet)', len(s))
+print('chisel.html (puppet, figures)', len(s))

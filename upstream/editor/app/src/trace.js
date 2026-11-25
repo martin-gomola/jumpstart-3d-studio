@@ -4,6 +4,9 @@
 //    "ink" and "paper"
 // 3. the borders between ink and paper pixels are followed into closed loops
 // 4. loops are simplified (fewer points), tiny specks dropped
+//    (v2.9.9.9.10: each point sits where the brightness actually crosses the threshold, between
+//    the two pixels, not on the pixel's edge: no staircase, and accurate to a fraction of a pixel;
+//    or trace each colour of a logo as its own shapes)
 // 5. each loop becomes straight lines where it is straight or has corners and smooth splines
 //    where it curves
 // Everything here works in picture pixels (y down); curvesFor maps to sketch coordinates.
@@ -47,19 +50,34 @@ export function otsu(L) {
 }
 
 // closed loops along the borders of the "ink" pixels; each point is the middle of a pixel edge
-export function contours(mask, W, H) {
+// sub: { L, thr } = move each point to where the brightness L crosses thr between the two pixels
+export function contours(mask, W, H, sub = null) {
   const ink = (x, y) => x >= 0 && y >= 0 && x < W && y < H && mask[y * W + x];
+  // how far from the ink pixel's centre towards the paper pixel's the border really is (0.5 = the edge)
+  const cross = (x, y, nx, ny) => {
+    if (!sub) return 0.5;
+    const qx = x + nx, qy = y + ny;
+    if (qx < 0 || qy < 0 || qx >= W || qy >= H) return 0.5;
+    const a = sub.L[y * W + x], b = sub.L[qy * W + qx];
+    if (Math.abs(b - a) < 1e-6) return 0.5;
+    return Math.max(0.05, Math.min(0.95, (sub.thr - a) / (b - a)));
+  };
+  const px = [], py = [];
   // directed pixel edges with ink on the left: from lattice point (x, y) to the next
   const VW = W + 1, out = new Map(); // start vertex -> list of edge ids
   const ex = [], ey = [], edx = [], edy = [];
-  const add = (x, y, dx, dy) => { const id = ex.length; ex.push(x); ey.push(y); edx.push(dx); edy.push(dy); const k = y * VW + x; const l = out.get(k); if (l) l.push(id); else out.set(k, [id]); };
+  const add = (x, y, dx, dy, cx, cy, nx, ny) => {
+    const id = ex.length; ex.push(x); ey.push(y); edx.push(dx); edy.push(dy);
+    const t = cross(cx, cy, nx, ny); px.push(cx + 0.5 + nx * t); py.push(cy + 0.5 + ny * t);
+    const k = y * VW + x; const l = out.get(k); if (l) l.push(id); else out.set(k, [id]);
+  };
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     if (!mask[y * W + x]) continue;
     // y grows downward; walking with ink on the left goes counter-clockwise on screen
-    if (!ink(x, y - 1)) add(x + 1, y, -1, 0); // top edge, right to left
-    if (!ink(x - 1, y)) add(x, y, 0, 1); // left edge, downward
-    if (!ink(x, y + 1)) add(x, y + 1, 1, 0); // bottom edge, left to right
-    if (!ink(x + 1, y)) add(x + 1, y + 1, 0, -1); // right edge, upward
+    if (!ink(x, y - 1)) add(x + 1, y, -1, 0, x, y, 0, -1); // top edge, right to left
+    if (!ink(x - 1, y)) add(x, y, 0, 1, x, y, -1, 0); // left edge, downward
+    if (!ink(x, y + 1)) add(x, y + 1, 1, 0, x, y, 0, 1); // bottom edge, left to right
+    if (!ink(x + 1, y)) add(x + 1, y + 1, 0, -1, x, y, 1, 0); // right edge, upward
   }
   const used = new Uint8Array(ex.length), rings = [];
   for (let s = 0; s < ex.length; s++) {
@@ -68,7 +86,7 @@ export function contours(mask, W, H) {
     let e = s;
     while (!used[e]) {
       used[e] = 1;
-      ring.push([ex[e] + edx[e] / 2, ey[e] + edy[e] / 2]);
+      ring.push([px[e], py[e]]);
       const nx = ex[e] + edx[e], ny = ey[e] + edy[e];
       const cand = out.get(ny * VW + nx);
       if (!cand) break;
@@ -120,9 +138,73 @@ export function simplifyRing(r, tol) {
   return h1.slice(0, -1).concat(h2.slice(0, -1));
 }
 
+// smooth a closed loop without shrinking it (Taubin: a step in, a slightly bigger step out)
+export function smoothRing(r, passes = 1) {
+  let P = r;
+  const n = r.length;
+  if (n < 5) return r.slice();
+  for (let k = 0; k < passes * 2; k++) {
+    const f = k % 2 ? -0.53 : 0.5, Q = new Array(n);
+    for (let i = 0; i < n; i++) { const a = P[(i - 1 + n) % n], b = P[i], c = P[(i + 1) % n]; Q[i] = [b[0] + f * ((a[0] + c[0]) / 2 - b[0]), b[1] + f * ((a[1] + c[1]) / 2 - b[1])]; }
+    P = Q;
+  }
+  return P;
+}
+// the picture's main colours (k-means on a sample of pixels, see-through counts as white)
+export function mainColours(img, k) {
+  const { data, width: W, height: H } = img, n = W * H, step = Math.max(1, Math.floor(n / 24000)), S = [];
+  for (let i = 0; i < n; i += step) { const a = data[i * 4 + 3] / 255; S.push([data[i * 4] * a + 255 * (1 - a), data[i * 4 + 1] * a + 255 * (1 - a), data[i * 4 + 2] * a + 255 * (1 - a)]); }
+  // start from colours far apart, then settle
+  const C = [S[0]];
+  while (C.length < k) { let best = null, bd = -1; for (const p of S) { let d = Infinity; for (const c of C) d = Math.min(d, (p[0] - c[0]) ** 2 + (p[1] - c[1]) ** 2 + (p[2] - c[2]) ** 2); if (d > bd) { bd = d; best = p; } } if (bd < 1) break; C.push(best.slice()); }
+  for (let it = 0; it < 10; it++) {
+    const sum = C.map(() => [0, 0, 0, 0]);
+    for (const p of S) { let bi = 0, bd = Infinity; C.forEach((c, i) => { const d = (p[0] - c[0]) ** 2 + (p[1] - c[1]) ** 2 + (p[2] - c[2]) ** 2; if (d < bd) { bd = d; bi = i; } }); const q = sum[bi]; q[0] += p[0]; q[1] += p[1]; q[2] += p[2]; q[3]++; }
+    sum.forEach((q, i) => { if (q[3]) C[i] = [q[0] / q[3], q[1] / q[3], q[2] / q[3]]; });
+  }
+  return C;
+}
+const hex = (c) => "#" + c.map((v) => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, "0")).join("");
+// each colour's shapes (the background's left out): rings with their colour
+function traceColours(img, opts) {
+  const W = img.width, H = img.height, { data } = img, k = Math.max(2, Math.min(10, opts.colours || 4));
+  const C = mainColours(img, k), lab = new Uint8Array(W * H);
+  for (let i = 0; i < W * H; i++) {
+    const a = data[i * 4 + 3] / 255, r = data[i * 4] * a + 255 * (1 - a), g = data[i * 4 + 1] * a + 255 * (1 - a), b = data[i * 4 + 2] * a + 255 * (1 - a);
+    let bi = 0, bd = Infinity; for (let j = 0; j < C.length; j++) { const d = (r - C[j][0]) ** 2 + (g - C[j][1]) ** 2 + (b - C[j][2]) ** 2; if (d < bd) { bd = d; bi = j; } }
+    lab[i] = bi;
+  }
+  // tidy: each pixel takes the most common colour around it (the soft edges between two colours
+  // would otherwise make thin slivers of a third)
+  const L2 = lab.slice(), cnt = new Uint16Array(C.length);
+  for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+    cnt.fill(0); let bi = lab[y * W + x], bc = 0;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const l = lab[(y + dy) * W + x + dx], c = ++cnt[l]; if (c > bc) { bc = c; bi = l; } }
+    if (bc >= 5) L2[y * W + x] = bi;
+  }
+  // the background: the colour most of the picture's border is
+  const bcount = new Array(C.length).fill(0);
+  for (let x = 0; x < W; x++) { bcount[L2[x]]++; bcount[L2[(H - 1) * W + x]]++; }
+  for (let y = 0; y < H; y++) { bcount[L2[y * W]]++; bcount[L2[y * W + W - 1]]++; }
+  const bg = bcount.indexOf(Math.max(...bcount));
+  const minA = (opts.minArea ?? 0.002) * W * H, rings = [], colours = [];
+  for (let j = 0; j < C.length; j++) {
+    if (j === bg && !opts.keepBackground) continue;
+    const m = new Uint8Array(W * H); for (let i = 0; i < m.length; i++) m[i] = L2[i] === j;
+    for (let r of contours(m, W, H)) {
+      if (Math.abs(ringArea(r)) < Math.max(minA, 2)) continue;
+      r = simplifyRing(smoothRing(r, 2), opts.tol ?? 1);
+      if (r.length >= 3 && Math.abs(ringArea(r)) >= Math.max(minA, 2)) { rings.push(r); colours.push(hex(C[j])); }
+    }
+  }
+  const idx = rings.map((_, i) => i).sort((a, b) => Math.abs(ringArea(rings[b])) - Math.abs(ringArea(rings[a])));
+  const max = opts.maxRings ?? 400;
+  return { rings: idx.slice(0, max).map((i) => rings[i]), colours: idx.slice(0, max).map((i) => colours[i]), dropped: Math.max(0, rings.length - max), threshold: null, palette: C.map(hex), background: hex(C[bg]), W, H };
+}
 // the whole trace, in picture pixels: { rings, threshold, W, H }
 // opts: thr (0..255 or null = automatic), part ("dark" | "light"), tol (px), minArea (fraction of the picture)
 export function traceImage(img, opts = {}) {
+  if (opts.part === "colours") return traceColours(img, opts);
   const W = img.width, H = img.height;
   const L = blur(luminance(img), W, H);
   const thr = opts.thr == null ? otsu(L) : opts.thr;
@@ -130,8 +212,9 @@ export function traceImage(img, opts = {}) {
   const light = opts.part === "light";
   for (let i = 0; i < mask.length; i++) mask[i] = light ? L[i] > thr : L[i] < thr;
   const minA = (opts.minArea ?? 0.002) * W * H;
-  let rings = contours(mask, W, H).filter((r) => Math.abs(ringArea(r)) >= Math.max(minA, 2));
-  rings = rings.map((r) => simplifyRing(r, opts.tol ?? 1)).filter((r) => r.length >= 3 && Math.abs(ringArea(r)) >= Math.max(minA, 2));
+  const sub = opts.subpixel === false ? null : { L, thr };
+  let rings = contours(mask, W, H, sub).filter((r) => Math.abs(ringArea(r)) >= Math.max(minA, 2));
+  rings = rings.map((r) => simplifyRing(sub ? smoothRing(r, 1) : r, opts.tol ?? 1)).filter((r) => r.length >= 3 && Math.abs(ringArea(r)) >= Math.max(minA, 2));
   rings.sort((a, b) => Math.abs(ringArea(b)) - Math.abs(ringArea(a)));
   const max = opts.maxRings ?? 400, dropped = Math.max(0, rings.length - max);
   return { rings: rings.slice(0, max), dropped, threshold: thr, W, H };

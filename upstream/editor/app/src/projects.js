@@ -3,6 +3,8 @@ import { store, newDoc, IDENTITY } from "./store.js";
 import { el, uid, debounce, makeZip, fmt } from "./util.js";
 import { ICON } from "./icons.js";
 import { initRecovery } from "./recovery.js";
+import { texturedMesh, textureSig } from "./scene.js";
+import { packMesh, unpackMesh } from "./meshpack.js";
 
 const LS_INDEX = "workplane.index.v1";
 const LS_DOC = "workplane.doc.v1.";
@@ -131,11 +133,41 @@ export function initProjects(app) {
     app.onVersion && app.onVersion(v);
     return v;
   }
+  // Save (and Ctrl+S) also downloads the project file, so the work is in Downloads even when the
+  // browser's own storage is wiped (school Chromebooks clear it when a student signs out).
+  // It can be turned off in Open/Export; the choice is kept on this computer.
+  const SAVE_DL_KEY = "jumpstart.saveDownload";
+  const saveDownloads = () => { try { return localStorage.getItem(SAVE_DL_KEY) !== "off"; } catch (e) { return true; } };
+  function renderSaveDl() {
+    const b = document.getElementById("save-dl-toggle");
+    if (b) { b.setAttribute("aria-checked", String(saveDownloads())); b.querySelector("small").textContent = saveDownloads() ? "on" : "off"; }
+  }
+  // The text of a project file. Bodies that took 10 s or more to build (spiral cuts, many offset
+  // curved faces) go in with their built shape, so the file opens at once on any computer.
+  async function projectFileText() {
+    const out = { app: "jumpstart-3d", version: 1, doc: store.doc };
+    try {
+      const { resolveNode, bodyKey } = await import("./store.js");
+      const keys = [];
+      for (const b of store.doc.bodies || []) { try { keys.push(bodyKey(resolveNode(b.node, store.doc))); } catch (e) {} }
+      const slow = app.kernel && app.kernel.slowMeshes ? app.kernel.slowMeshes(keys) : [];
+      if (slow.length) {
+        const items = [];
+        for (const it of slow) items.push({ key: it.key, ms: it.ms, data: await packMesh(it.mesh) });
+        out.built = { note: "Built shapes of slow bodies, so the design opens quickly. Safe to delete.", items };
+      }
+    } catch (e) {}
+    return JSON.stringify(out, null, 1);
+  }
   async function saveVersion() {
     const v = bumpVersion();
     await saveNow();
-    app.toast(`Saved as "${versionName(store.doc, v)}"`);
     app.onSaved && app.onSaved(v);
+    if (saveDownloads()) {
+      const fn = safeName() + ".json";
+      app.toast(`Saved as "${versionName(store.doc, v)}" and downloaded ${fn}`);
+      await offer(fn, await projectFileText());
+    } else app.toast(`Saved as "${versionName(store.doc, v)}"`);
     return v;
   }
 
@@ -329,14 +361,58 @@ export function initProjects(app) {
       return b;
     };
     box.append(opt("sel", "Selected", nSel, !nSel), opt("all", "All bodies", nAll, false));
+    // how finely STL and 3MF files follow curves (STEP is always exact)
+    box.append(el("div", { class: "exhead" }, "STL / 3MF quality"));
+    for (const [v, label, hint] of EXPORT_Q) {
+      const b = el("button", { role: "radio", class: "exopt", id: "export-q-" + v, title: hint, "aria-checked": exportQ() === v ? "true" : "false", "data-q": v }, label, el("small", {}, hint.split(":")[0]));
+      b.onclick = (e) => { e.stopPropagation(); try { localStorage.setItem(EXPORT_Q_KEY, v); } catch (err) {} renderScope(); };
+      box.append(b);
+    }
   }
-  function stlBytes() {
-    const tris = [];
+  // STL / 3MF quality: the view's mesh is kept light for speed, so files are meshed again from
+  // the exact shapes (kernel.js meshForExport). Fine is the default.
+  const EXPORT_Q_KEY = "jumpstart.exportQuality";
+  const EXPORT_Q = [
+    ["standard", "Standard", "0.05 mm: smaller files, quick"],
+    ["fine", "Fine", "0.02 mm: smooth curves (best for most prints)"],
+    ["extra", "Extra fine", "0.008 mm: smoothest, larger files"],
+  ];
+  const exportQ = () => { let v = null; try { v = localStorage.getItem(EXPORT_Q_KEY); } catch (e) {} return EXPORT_Q.some((q) => q[0] === v) ? v : "fine"; };
+  // the bodies to export with their print meshes: [{ b, data, m }]
+  async function exportItems() {
+    const items = [];
     for (const b of exportBodies()) {
       const v = app.scene.views.get(b.id);
-      if (!v || !v.data) continue;
-      tris.push({ data: v.data, m: v.group.matrix });
+      if (v && v.data) items.push({ b, data: v.data, m: v.group.matrix });
     }
+    if (!items.length || !app.kernel || !app.kernel.exportMesh) return items;
+    const level = exportQ();
+    const { resolveNode } = await import("./store.js");
+    let res = null, timer = null;
+    const busy = setTimeout(() => app.toast("Making a smooth mesh for printing…"), 400);
+    try {
+      const work = app.kernel.exportMesh(items.map(({ b }) => ({ id: b.id, node: resolveNode(b.node, store.doc) })), level);
+      // a body that takes too long keeps the view's mesh rather than holding up the file
+      const late = new Promise((r) => { timer = setTimeout(() => r(null), 240000); });
+      res = await Promise.race([work, late]);
+    } catch (e) { res = null; }
+    clearTimeout(busy); clearTimeout(timer);
+    if (!res) { app.toast("Couldn't make the finer mesh, so the file uses the view's mesh.", "err"); return items; }
+    const byId = new Map(res.map((r) => [r.id, r]));
+    let kept = 0;
+    for (const it of items) {
+      const r = byId.get(it.b.id);
+      if (!r || !r.ok || !r.mesh.triangles.length) { kept++; continue; }
+      let mesh = r.mesh;
+      // same shape, same faces in the same order: the view's face facts (for textures) still fit
+      mesh.faceInfo = it.data.faceInfo; mesh.bbox = it.data.bbox; mesh.volume = it.data.volume;
+      if (textureSig(it.b)) { try { mesh = texturedMesh((it.b._key || it.b.id) + "|export|" + level, mesh, it.b.textures); } catch (e) {} }
+      it.data = mesh;
+    }
+    if (kept) app.toast(kept + (kept === 1 ? " body uses" : " bodies use") + " the view's mesh in this file.");
+    return items;
+  }
+  function stlBytes(tris) {
     const count = tris.reduce((s, t) => s + t.data.triangles.length / 3, 0);
     if (!count) return null;
     const buf = new ArrayBuffer(84 + count * 50);
@@ -366,18 +442,26 @@ export function initProjects(app) {
     return new Uint8Array(buf);
   }
   async function exportSTL() {
-    const bytes = stlBytes();
+    const bytes = stlBytes(await exportItems());
     if (!bytes) { app.toast("Nothing to export yet. Holes on their own aren't exported."); return; }
     await offerModel(exportName() + ".stl", bytes);
     app.onExport && app.onExport("stl");
   }
+  // laser cut files from flat parts (the selection, or everything shown)
+  async function exportLaser(fmt) {
+    const items = (await exportItems()).map((it) => ({ name: it.b.name, data: it.data, m: it.m }));
+    if (!items.length) { app.toast("Nothing to export yet: make or select a flat part (like a 3 mm acrylic panel)."); return; }
+    const { laserParts, laserSVG, laserDXF } = await import("./laser.js");
+    const parts = laserParts(items);
+    const thick = parts.filter((p) => p.thick > 12);
+    const text = fmt === "svg" ? laserSVG(parts, versionName()) : laserDXF(parts);
+    await offerModel(exportName() + " laser." + fmt, new TextEncoder().encode(text));
+    const eng = parts.reduce((n, p) => n + p.engrave.length, 0);
+    app.toast(`Laser file: ${parts.length} part${parts.length > 1 ? "s" : ""}, cut in red${eng ? ", engrave in black" : ""}.` + (thick.length ? " Some parts are thick: laser files are for flat parts like 3 mm acrylic." : ""));
+    app.onExport && app.onExport("laser");
+  }
   // 3MF: one object per body with its color, vertices shared so slicers see closed meshes
-  function threeMFBytes() {
-    const objs = [];
-    for (const b of exportBodies()) {
-      const v = app.scene.views.get(b.id);
-      if (v && v.data) objs.push({ b, data: v.data, m: v.group.matrix });
-    }
+  function threeMFBytes(objs) {
     if (!objs.length) return null;
     const esc = (t) => String(t).replace(/[<>&"']/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&apos;" })[c]);
     const hex = (c) => { const m = /^#?([0-9a-f]{6})$/i.exec(c || ""); return "#" + (m ? m[1] : "A7B0BA").toUpperCase() + "FF"; };
@@ -427,7 +511,7 @@ export function initProjects(app) {
   }
   async function makeZipBytes(files) { return new Uint8Array(await makeZip(files).arrayBuffer()); }
   async function export3MF() {
-    const bytes = threeMFBytes();
+    const bytes = threeMFBytes(await exportItems());
     if (!bytes) { app.toast("Nothing to export yet. Holes on their own aren't exported."); return; }
     await offerModel(exportName() + ".3mf", await bytes);
     app.onExport && app.onExport("3mf");
@@ -447,15 +531,21 @@ export function initProjects(app) {
     bumpVersion();
     saveNow();
     app.onSaved && app.onSaved(verOf());
-    await offer(safeName() + ".json", JSON.stringify({ app: "jumpstart-3d", version: 1, doc: store.doc }, null, 1));
+    await offer(safeName() + ".json", await projectFileText());
   }
   function importJSON(file) {
     const r = new FileReader();
-    r.onload = () => {
+    r.onload = async () => {
       try {
         const j = JSON.parse(r.result);
         const doc = j.doc || j;
         if (!Array.isArray(doc.bodies) || !Array.isArray(doc.sketches)) throw new Error("not a JumpStart 3D project");
+        // built shapes saved with the file: those bodies don't need building again
+        if (j.built && Array.isArray(j.built.items) && app.kernel && app.kernel.seed) {
+          const list = [];
+          for (const it of j.built.items) { try { list.push({ key: it.key, ms: it.ms, mesh: await unpackMesh(it.data) }); } catch (e) {} }
+          app.kernel.seed(list);
+        }
         doc.id = uid("d");
         // an opened file carries on from its version number
         const vm = /\sv(\d+)\.json$/i.exec(file.name);
@@ -470,6 +560,8 @@ export function initProjects(app) {
   }
   const menu = $("menu-export");
   $("btn-export").onclick = () => {
+    // files hold the finished design: leave the stepped-back timeline view first
+    if (store.rollTo != null) { app.timelineRoll && app.timelineRoll.stop(); store.setRoll(null); app.toast("Back to the last step: files hold the finished design."); }
     menu.hidden = !menu.hidden;
     // default: just the selection if something is selected, otherwise every body
     if (!menu.hidden) { exportScope = selectedSolids().length ? "sel" : "all"; renderScope(); }
@@ -482,9 +574,17 @@ export function initProjects(app) {
     if (a === "3mf") export3MF();
     if (a === "step") exportSTEP();
     if (a === "dxf") app.advanced.exportSketchesDXF(null);
+    if (a === "laser-svg" || a === "laser-dxf") exportLaser(a === "laser-svg" ? "svg" : "dxf");
     if (a === "json") exportJSON();
     if (a === "import") $("file-import").click();
+    if (a === "savedl") {
+      const on = !saveDownloads();
+      try { localStorage.setItem(SAVE_DL_KEY, on ? "on" : "off"); } catch (e) {}
+      renderSaveDl();
+      app.toast(on ? "Save (Ctrl+S) also downloads a project file. Open it later with Open/Export → Open a project file." : "Save keeps your work in this browser only. Use Open/Export → Save Project File to download a copy.");
+    }
   });
+  renderSaveDl();
   $("file-import").onchange = (e) => { const f = e.target.files[0]; if (f) importJSON(f); e.target.value = ""; };
   $("btn-projects").onclick = () => openModal();
   window.addEventListener("beforeunload", () => { if (dirty) saveNow(); });

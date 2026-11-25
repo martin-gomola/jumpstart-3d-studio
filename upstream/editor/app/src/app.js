@@ -7,6 +7,7 @@ import { initSketch3D } from "./sketch3d.js";
 import { initLathe } from "./lathe.js";
 import { initCarve } from "./carve.js";
 import { initStainedGlass } from "./stainedglass.js";
+import { initColorLitho } from "./colorlitho.js";
 import { VERSION } from "./version.js";
 import { initBricks } from "./bricks.js";
 import { initVoxel } from "./voxel.js";
@@ -34,8 +35,12 @@ import { initProjects } from "./projects.js";
 import { initFlexiGen } from "./flexigen.js";
 import { initFloorPlan } from "./floorplan.js";
 import { initMeshStep } from "./meshstep.js";
+import { initNeon } from "./neon.js";
+import { initLayerscape } from "./layerscape.js";
 import { initCosForge } from "./cosforge.js";
 import { initChisel } from "./chisel.js";
+import { initToolSearch } from "./toolsearch.js";
+import { openFlowers } from "./flowerui.js";
 
 /* global __WASM_PARTS__ */
 const WASM_PARTS = typeof __WASM_PARTS__ !== "undefined" ? __WASM_PARTS__ : [{ url: "occt.wasm.gz", gz: true }];
@@ -135,9 +140,11 @@ function boot() {
     },
   }));
   kernel.onBusy = () => app.status();
+  kernel.onSlowFallback = () => app.toast("This device ran short of memory for a second geometry engine, so slow bodies now build one after another in the main engine. Other changes wait until they finish.");
   for (const [k, b] of extraFonts()) kernel.addAsset("font:" + k, "font", b);
   kernel.start();
   const scene = (app.scene = new SceneSync(vp, kernel));
+  scene.onNotes = (b, notes) => app.toast(`${b.name}: ${notes.join(" ")}`, "err");
   vp.zoomTargets = () => scene.meshes();
   app.sketcher = new Sketcher(app);
   scene.onRefresh = () => app.onSceneRefresh && app.onSceneRefresh();
@@ -166,6 +173,7 @@ function boot() {
 app.lathe = initLathe(app);
 app.carve = initCarve(app);
 app.stainedGlass = initStainedGlass(app);
+app.colorLitho = initColorLitho(app);
 { const sv = document.getElementById("sp-ver"); if (sv) sv.textContent = "Version " + VERSION; }
 app.bricks = initBricks(app);
 app.voxel = initVoxel(app);
@@ -176,8 +184,12 @@ app.voxel = initVoxel(app);
   app.flexigen = initFlexiGen(app);
   app.floorplan = initFloorPlan(app);
   app.meshstep = initMeshStep(app);
+  app.neon = initNeon(app);
+  app.layerscape = initLayerscape(app);
   app.cosforge = initCosForge(app);
+  app.flowers = { open: () => openFlowers(app) };
   app.chisel = initChisel(app);
+  app.toolSearch = initToolSearch(app);
   app.arch = initArch(app);
   app.cam = initCam(app);
 
@@ -187,6 +199,8 @@ app.voxel = initVoxel(app);
     app.sel = app.sel.filter((id) => findBody(doc, id));
     if (app.sketcher.active && !doc.sketches.some((s) => s.id === app.sketcher.active)) app.exitSketch();
     scene.state.hideSketch = app.sketcher.active;
+    // a picked face belongs to the design as it was: after a change it's dropped
+    if (app.selFace && app.selFace.doc !== store.doc) { app.selFace = null; scene.state.faces = new Map(); }
     scene.sync(doc);
     // a command can show its own picks as the selection (Combine's target)
     scene.setSelected(app.command && app.command.sceneSel ? app.command.sceneSel() : app.sel);
@@ -256,7 +270,7 @@ app.voxel = initVoxel(app);
   // theme menu
   const tmenu = $("menu-theme");
   $("btn-theme").onclick = () => { tmenu.hidden = !tmenu.hidden; };
-  tmenu.addEventListener("click", (e) => { const b = e.target.closest("button"); const t = b?.dataset.theme, pf = b?.dataset.perf; if (t) { app.setTheme(t); tmenu.hidden = true; } else if (pf) { app.setPerf(pf); tmenu.hidden = true; } });
+  tmenu.addEventListener("click", (e) => { const b = e.target.closest("button"); const t = b?.dataset.theme, pf = b?.dataset.perf, ly = b?.dataset.layout, dv = b?.dataset.device; if (t) { app.setTheme(t); tmenu.hidden = true; } else if (pf) { app.setPerf(pf); tmenu.hidden = true; } else if (ly) { app.setLayout(ly); tmenu.hidden = true; } else if (dv) { app.setTabletMode(!app.tabletOn); tmenu.hidden = true; } });
   window.addEventListener("pointerdown", (e) => { if (!tmenu.hidden && !tmenu.contains(e.target) && !e.target.closest("#btn-theme")) tmenu.hidden = true; });
   // sketch line width and colour (the menu stays open so choices can be compared)
   const hex = (n) => "#" + n.toString(16).padStart(6, "0");
@@ -307,6 +321,8 @@ app.voxel = initVoxel(app);
   $("btn-about").onclick = () => app.showAbout();
   loadPrefs();
   vp.onContext = (e) => app.contextMenu && app.contextMenu(e);
+  // Tablet & Pencil mode: a two-finger tap undoes, a three-finger tap redoes
+  vp.onFingerTap = (n) => { if (n === 2) app.undo(); else if (n >= 3) app.redo(); };
 
   document.addEventListener("keydown", onKey);
   window.addEventListener("pointerdown", (e) => {
@@ -458,7 +474,7 @@ function gridFromSnap() {
 }
 function readPrefs() { try { return JSON.parse(localStorage.getItem("workplane.ui.v1") || "{}"); } catch (e) { return {}; } }
 function savePrefs() {
-  try { localStorage.setItem("workplane.ui.v1", JSON.stringify({ skw: sketchStyle.width, skc: sketchStyle.color, theme: app.themePref, snap: app.snapOn, obj: app.objectSnap, grid: snapPick.mm, gridIn: snapPick.in, lightOn: app.vp.realistic, appear: app.scene.state.appearance !== false })); } catch (e) {}
+  try { localStorage.setItem("workplane.ui.v1", JSON.stringify({ skw: sketchStyle.width, skc: sketchStyle.color, theme: app.themePref, layout: app.layoutPref, tablet: !!app.tabletOn, tabletPrevLayout: app.tabletPrevLayout || null, snap: app.snapOn, obj: app.objectSnap, grid: snapPick.mm, gridIn: snapPick.in, lightOn: app.vp.realistic, appear: app.scene.state.appearance !== false })); } catch (e) {}
 }
 function loadPrefs() {
   const p = readPrefs();
@@ -471,6 +487,11 @@ function loadPrefs() {
   app.setSnap(p.snap !== false, true);
   app.setSketchStyle({ width: p.skw || "thin", color: p.skc || "theme" }, true);
   app.setTheme(p.theme || "system", true);
+  app.setLayout(p.layout || "default", true);
+  app.tabletPrevLayout = p.tabletPrevLayout || null;
+  app.setTabletMode(!!p.tablet, true);
+  // an iPad (or other tablet) that hasn't chosen yet: suggest Tablet & Pencil mode once
+  if (p.tablet === undefined && isTablet()) setTimeout(() => app.toast("On an iPad or tablet? Turn on Tablet & Pencil mode in the theme menu (◐): fingers move the view, the Apple Pencil draws and picks precisely."), 4000);
   // realistic lighting starts off (faster); it stays on only for someone who turned it on themselves
   app.setLighting(p.lightOn === true, true);
   app.setAppearances(p.appear !== false, true);
@@ -563,6 +584,90 @@ app.setSketchStyle = function (patch, quiet) {
   try { app.chiselTheme && app.chiselTheme(); } catch (e) {}
   if (!quiet) savePrefs();
 };
+
+// Layouts: where the tool bars sit. Default (top), Simplified (big labelled buttons on top), Clean
+// (an icon rail on the left), Classic CAD (a labelled palette on the right) and Tablet (big tools at
+// the bottom). Only CSS changes (html[data-layout]); every tool is the same in each.
+const LAYOUTS = { default: "Default", simple: "Simplified", clean: "Clean", classic: "Classic CAD", tablet: "Tablet" };
+app.layoutPref = "default";
+app.setLayout = function (name, quiet) {
+  if (!LAYOUTS[name]) name = "default";
+  app.layoutPref = name;
+  if (name === "default") delete document.documentElement.dataset.layout;
+  else document.documentElement.dataset.layout = name;
+  document.querySelectorAll("#menu-theme button[data-layout]").forEach((b) => b.setAttribute("aria-checked", b.dataset.layout === name));
+  document.getElementById("ribbon-menu")?.remove();
+  // the view and the panels size themselves to the new space
+  requestAnimationFrame(() => { window.dispatchEvent(new Event("resize")); app.vp && app.vp.request(); });
+  if (!quiet) {
+    savePrefs();
+    app.toast(LAYOUTS[name] + " layout: " + ({ default: "tools across the top.", simple: "bigger buttons with names.", clean: "icons down the left side (hover for names).", classic: "a tool palette down the right side.", tablet: "big tools along the bottom." })[name] + " Change it any time in the theme menu (◐).");
+  }
+};
+
+// Tablet & Pencil mode, for iPad and other tablets (html[data-device="tablet"]): the Tablet layout
+// with big touch targets, the pencil as a precise pointer and fingers for the view (viewport.js
+// penMode), keys on screen (Undo, Redo, Shift, Delete, Esc, Enter, Fit), finger taps for undo and
+// redo, a long press for the right-click menu, and no page zoom or text pop-ups when tapping.
+function isTablet() {
+  const ua = navigator.userAgent || "";
+  return /iPad|Android(?!.*Mobile)|Tablet/i.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+}
+app.tabletOn = false;
+app.setTabletMode = function (on, quiet) {
+  on = !!on;
+  const was = app.tabletOn;
+  app.tabletOn = on;
+  if (on) document.documentElement.dataset.device = "tablet";
+  else delete document.documentElement.dataset.device;
+  if (app.vp) { app.vp.penMode = on; if (!on) { app.vp.shiftDown = false; } }
+  // the Tablet layout goes with it; turning the mode off brings back the layout from before
+  if (on && !was && app.layoutPref !== "tablet") { app.tabletPrevLayout = app.layoutPref; app.setLayout("tablet", true); }
+  if (!on && was && app.layoutPref === "tablet" && app.tabletPrevLayout && app.tabletPrevLayout !== "tablet") { app.setLayout(app.tabletPrevLayout, true); app.tabletPrevLayout = null; }
+  const b = document.querySelector('#menu-theme button[data-device="tablet"]');
+  if (b) b.setAttribute("aria-checked", on);
+  tabletKeys(on);
+  requestAnimationFrame(() => { window.dispatchEvent(new Event("resize")); app.vp && app.vp.request(); });
+  if (!quiet) {
+    savePrefs();
+    app.toast(on ? "Tablet & Pencil mode: draw and pick with the Apple Pencil, move the view with your fingers (one to orbit, two to pan and zoom). Two-finger tap: undo, three-finger tap: redo, long press: menu. The keys on the left of the view stand in for a keyboard." : "Tablet & Pencil mode is off.");
+  }
+};
+// the on-screen keys, down the left edge of the view
+function tabletKeys(on) {
+  let bar = document.getElementById("tabkeys");
+  if (!on) { if (bar) bar.remove(); return; }
+  if (bar) return;
+  const vpEl = document.getElementById("viewport");
+  if (!vpEl) return;
+  const key = (k) => document.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true }));
+  const svg = (d) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+  const keys = [
+    ["tk-undo", "Undo", svg('<path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/>'), () => app.undo()],
+    ["tk-redo", "Redo", svg('<path d="m15 14 5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h3"/>'), () => app.redo()],
+    ["tk-shift", "Shift: the next tap adds to the selection (tap twice to keep it on)", svg('<path d="M12 4 4 12h4v7h8v-7h4z"/>'), null],
+    ["tk-del", "Delete the selection", svg('<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>'), () => key("Delete")],
+    ["tk-esc", "Esc: cancel or step out", '<b>Esc</b>', () => key("Escape")],
+    ["tk-ok", "Enter: OK or finish", svg('<path d="M5 12l5 5L20 7"/>'), () => { if (app.command && document.getElementById("cmd-ok")) app.submitCommand ? app.submitCommand() : document.getElementById("cmd-ok").click(); else key("Enter"); }],
+    ["tk-fit", "Fit everything in the view", svg('<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>'), () => app.fit()],
+  ];
+  bar = document.createElement("div");
+  bar.id = "tabkeys"; bar.className = "tabkeys"; bar.setAttribute("role", "toolbar"); bar.setAttribute("aria-label", "Keys for tablets");
+  for (const [id, title, icon, fn] of keys) {
+    const b = document.createElement("button");
+    b.id = id; b.title = title; b.setAttribute("aria-label", title); b.innerHTML = icon;
+    if (fn) b.onclick = (e) => { e.preventDefault(); fn(); };
+    bar.append(b);
+  }
+  // Shift: one tap = for the next pick, a second tap = stays on (locked), a third = off
+  const sh = bar.querySelector("#tk-shift");
+  let state = 0;
+  const show = () => { sh.setAttribute("aria-pressed", state > 0); sh.classList.toggle("locked", state === 2); if (app.vp) app.vp.shiftDown = state > 0; };
+  sh.onclick = (e) => { e.preventDefault(); state = (state + 1) % 3; show(); };
+  if (app.vp) app.vp.endShift = () => { if (state === 1) { state = 0; show(); } };
+  show();
+  vpEl.append(bar);
+}
 
 // Light, dark and high-contrast interface. "system" follows the device setting.
 app.setTheme = function (pref, quiet) {
@@ -680,7 +785,8 @@ async function checkForUpdates(btn) {
 
 // keyboard shortcuts sheet
 app.showAbout = function () {
-  const sec = (title, items) => el("section", {}, el("h3", {}, title), el("ul", {}, ...items.map(([b, t]) => el("li", {}, el("b", {}, b), " " + t))));
+  // (an item is [bold heading, text], or a plain sentence)
+  const sec = (title, items) => el("section", {}, el("h3", {}, title), el("ul", {}, ...items.map((it) => (typeof it === "string" ? el("li", {}, it) : el("li", {}, el("b", {}, it[0]), " " + it[1])))));
   const back = el("div", { class: "modal-back", onclick: (e) => { if (e.target === back) back.remove(); } });
   const logo = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 16.5 12 21l9-4.5L12 12z" fill="#2d63c8"/><path d="M3 12 12 16.5 21 12 12 7.5z" fill="#6f98d8"/><path d="M3 7.5 12 12l9-4.5L12 3z" fill="#c9d3df"/></svg>';
   const modal = el("div", { class: "modal about", role: "dialog", "aria-label": "About JumpStart 3D" },
@@ -689,8 +795,354 @@ app.showAbout = function () {
       el("div", { class: "ab-head", html: logo }, el("div", {}, el("b", {}, "JumpStart 3D ", el("span", { class: "ab-hver" }, "Version " + VERSION)), el("span", {}, "3D design for the browser: start simple, grow into real CAD, then 3D print it."))),
       el("div", { class: "ab-update ab-top" },
         el("button", { class: "btn", id: "ab-check", onclick: (e) => checkForUpdates(e.currentTarget) }, "Check for updates"),
+        el("button", { class: "btn", id: "ab-slow", onclick: () => app.showSlowHelp() }, "Slow bodies"),
+        el("button", { class: "btn", id: "ab-tablet", title: "For iPad and other tablets: the Apple Pencil draws and picks, fingers move the view. Also in the theme menu (◐) under Device.", onclick: (e) => { app.setTabletMode(!app.tabletOn); e.currentTarget.textContent = app.tabletOn ? "Tablet & Pencil mode: on" : "Tablet & Pencil mode: off"; } }, app.tabletOn ? "Tablet & Pencil mode: on" : "Tablet & Pencil mode: off"),
         el("a", { class: "btn primary", id: "ab-site", href: SITE_URL, target: "_blank", rel: "noopener" }, "Visit classyapps.org")),
       el("p", { class: "ab-upmsg", id: "ab-upmsg", role: "status", hidden: true }),
+      sec("New in version 2.9.9.9.14", [
+        ["Lattice on curved surfaces:", "a new Lattice shell choice (the default on a curved face): a solid body is hollowed to a skin you choose and the cells go through the skin only, following the surface, so a solid cylinder becomes a lattice vase or lamp shade with solid ends. A body already thin there (a tube, a shelled part) is left as it is. Cut right through is still there."],
+        ["Lattice on spheres:", "balls, domes and hollow spheres get a geodesic lattice, even all over like a football: honeycomb (hexagons with twelve pentagons), triangles, circles or a square mesh, centered where you click and turned by Direction. Every rib stays the same width right through the skin, and on a dome the cells are trimmed cleanly at the frame round its edge."],
+      ]),
+      sec("New in version 2.9.9.9.13", [
+        ["Views to 3D:", "add up to six pictures of an object (front, back, left, right, top, bottom): photos, scans or your own drawings, with or without dimensions. Each outline is traced into a sketch on the right plane (lines where it is straight, smooth curves where it bends, true circles for round holes), sized to the width, depth and height you type, or worked out from the pictures. Make the 3D object straight away, or make the sketches first, fix them with the sketch tools (the picture stays behind each one), then Build from my view sketches. The object stays linked to the sketches: change one and it follows. Advanced → Advanced Create, and Beginner → Draw."],
+        ["Freehand sketch tool (H):", "draw with a finger, Apple Pencil or other stylus, or the mouse. Smart shapes turns a nearly straight stroke into a line, a round one into a circle, a rough box into a rectangle (with its constraints) and a few straight strokes into clean lines; anything else becomes a smooth spline you can reshape by its points. Light, Medium or Strong smoothing. Strokes that start or end on a point join it. In Tablet & Pencil mode, once the pencil is used, fingers move the view."],
+        ["Freehand Router:", "cut a groove into any face, flat or curved, from any side, by drawing on it with a finger, pen or mouse. Ball (round bottom), flat or V / scalpel bit, any width and depth; the depth can stay the same, follow pen pressure, or taper from one depth to another. SMART clean-up evens out the hand and, on a flat face, makes true lines, circles and rectangles. Undo stroke, turn the view between strokes, edit it later from the timeline. Advanced → Advanced Modify, and Beginner → Shape it."],
+        ["Freeform fillet:", "a new Freeform radius type: click along the picked edges to drop radius points, then drag each one along the edge or drag its handle (or type) to set the radius there. The fillet blends smoothly from point to point, round corners and along whole tangent chains, so one edge can be thin in one place and wide in another. Spread 3 or Spread 5 places points evenly. Constant, Chord length and Variable stay as they were."],
+        ["Fillet refinements:", "when a fillet can't be made in one go, the edges that can be rounded are rounded and a note says which were left sharp and why (before, nothing was rounded); results that come out broken are caught and never kept; the radius type has a row of its own."],
+        ["Circular pattern fixes:", "copies now go around a round edge or face you click (the side of a cylinder or cone, a circular edge, a round flat face), and features on a round body find its center line by themselves, so a ring of holes on a flange that isn't at the origin lands in the right place. Origin and the object's own center are still there, and a warning shows when every copy would land on top of the original."],
+      ]),
+      sec("New in version 2.9.9.9.12", [
+        ["G-code made for each printer:", "Export G-code now writes each printer's own start, end and tool changes, under the model name its firmware and screen check (for example Snapmaker U1, Prusa MK4S, Creality K1). Before, every printer of a kind got the same generic start, and the file named the printer by JumpStart's own label, so a Snapmaker U1 said it wasn't the right machine."],
+        ["Snapmaker U1:", "Snapmaker's PRINT_START and PRINT_END, feeding, flow calibration and nozzle cleaning for each head the print uses, its tool change (lift, heat the next head, swap, prime), the layer counter, and the filaments, colours, nozzles and flow types its screen reads, written the way OrcaSlicer writes them. Checked with Snapmaker's own Moonraker file reader."],
+        ["Other printers:", "Prusa printers check the nozzle and (where the name is certain) the model with M862; MK3 printers level with G80. Voron calls PRINT_START (not START_PRINT), Creality K1 / K2 end with END_PRINT, Elegoo Centauri Carbon files carry the model line its firmware reads, and the Flashforge Adventurer 5M's G-code is centred on its bed (its 0, 0 is in the middle). Tool changers heat the next tool first, and Klipper printers get SET_VELOCITY_LIMIT instead of M201."],
+        ["Pictures and details on the printer's screen:", "the G-code carries pictures of the plate in the sizes each printer's screen shows, and the time, layers and filament per colour at the end, like OrcaSlicer. Bed sizes now match the printers' official profiles (Bambu Lab P1S / X1 250 mm tall, Voron 2.4 350 325 mm, FLSUN QQ-S 260 mm)."],
+      ]),
+      sec("New in version 2.9.9.9.11", [
+        ["Two new Beginner tutorials for the JumpStart 3D curriculum:", "Get it ready to print (Easy): build a small wall shelf, then use the 3D Print Sim like a maker: find the overhang, compare tree supports with Auto orient, set wall loops and layer height, read the time and filament, and save a 3MF project with every setting. Clearance test gauge (Proficient): a plate with five holes from 10.2 to 11.0 mm and a 10 mm peg, to find how much clearance your printer needs for parts that fit together."],
+        ["Plant marker tutorial:", "the stake now sits at Y -22, so it overlaps the sign by 2 mm and joins it (at Y -24 it only touched)."],
+      ]),
+      sec("New in version 2.9.9.9.10", [
+        ["Helmet Maker → Photos takes as many photos as you have:", "up to 24, from any angle: the front, the back, both sides, the corners in between, from above. Add several at once (or take them with the camera); each one's angle is guessed, and you set it with a tap (Front, Front-left, Left side … Top) or exactly with the Round the helmet and Camera height sliders."],
+        ["A more accurate helmet:", "the photos together carve the helmet's shape (everything that looks right from every photo), and between them each slice is filled in smoothly from how far the helmet reaches in each photo, so it's round where the helmet is round and flat or pointed where the photos say so. In tests against a known helmet shape, eight photos round it came out about 40% closer than front, side and back alone (within 1.5% of its height), and twelve with some from above within 1.2%."],
+        ["Auto-align and matching:", "photos from above are lined up and sized to what the others agree on, and a side photo marked as the wrong side is turned round. Same on both sides (on by default) counts each photo mirrored too, so one side photo covers both sides. Forgiving sets how far out a photo must be before it trims the helmet. After building, each photo shows how well it matches; a low match means its angle or cut-out needs a look."],
+        ["Auto trace is more accurate:", "outlines are placed where the picture's edge really is, to a fraction of a pixel, instead of on the pixel steps (about three times closer on curves), and the picture is read bigger (up to 1400 pixels at High detail)."],
+        ["Auto trace → Each colour:", "a logo or drawing with several colours is traced colour by colour (2 to 8 colours): each colour's shapes become their own outlines, ready to extrude to different heights or print in different filaments; the background colour is left out."],
+      ]),
+      sec("New in version 2.9.9.9.9", [
+        ["3D Print Sim works like Orca Slicer:", "Save project (.3mf) keeps the plate as it prints (objects turned, scaled, moved and copied), every filament, the colour painting and every setting. Open it again here and it comes back exactly as you left it, brush strokes and all; open it in Orca Slicer or Bambu Studio and it has the objects, the painting and the settings under Orca's own names (layer height, walls, infill, supports, brim, seam, ironing and the rest)."],
+        ["Export plate as STL:", "everything on the plate as one STL, placed as it prints. (STL has no colours or settings: save the project for those.)"],
+        ["Opening a slicer project:", "3MF projects from Orca Slicer and Bambu Studio now bring their settings into the sim as well as their models and colours."],
+        ["More Orca settings, in the same tabs:", "Quality: first layer height, seam position (Aligned, Nearest, Back, Random), ironing (type, flow, line spacing, speed) and wall generator. Strength: thin walls, top and bottom surface patterns, one wall on top. Support: top Z distance and raft. Others: skirt loops, distance and height, brim type (Auto, Mouse ear, Outer only, No brim), brim width and gap, plate type, print sequence, spiral vase and fuzzy skin."],
+        ["In the G-code too:", "first layer height, seam position, ironing (;TYPE:Ironing), brims with mouse ears, skirt distance and height, and spiral vase (one wall climbing smoothly, no seam) are printed, timed and shown; the file ends with Orca's CONFIG_BLOCK of settings. Settings the sim can't draw are saved for Orca and say so."],
+      ]),
+      sec("New in version 2.9.9.9.8", [
+        ["3D Print Sim: Open STL / 3MF:", "open model files straight into the sim to slice them, like a slicer, without adding them to your design (or drop them on the view). Several STL files are set out side by side. 3MF projects from Bambu Studio, Orca Slicer and PrusaSlicer keep their objects, their filament colours, each part's filament and their colour painting; plain 3MF files keep their colours. Back to my design returns to your own model."],
+        ["Paint can:", "pour a filament over the area you click: it spreads over everything of that colour and stops exactly at other colours, even half way across a triangle. Outline a detail (an eye, a stripe, a logo) with the Brush, then pour inside it. It can also stop at sharp edges."],
+        ["A more precise brush:", "Circle (now the default) paints only the surfaces facing you, so it no longer bleeds through ears, fins and thin walls; Sphere still paints right through. Sizes go down to 0.2 mm, and Alt + scroll changes the size as you paint."],
+        ["Smart fill for rounded shapes:", "it stops at other colours, and can measure the angle from the spot you click so it stays on one side of an organic shape instead of running all the way round."],
+        ["Painting is easier to fix:", "Ctrl+Z (or Undo) takes back the last stroke or fill, and Pick colour (or Ctrl-click) picks up the filament already on the model."],
+      ]),
+      sec("New in version 2.9.9.9.7", [
+        ["All 40 new tutorials checked step by step:", "each one was followed through in the app, exactly as written, and every step that can tick itself does. Steps that didn't match the app were rewritten: Beginner's Fillet, Shell, Hinge, Mirror and Pattern are found under their menus (Shape it ▾, Arrange ▾), Shell uses Type: Openings, text becomes a hole with the Hole button, the Line tool draws one line at a time, and Extrude from a sketch picks the shape for you."],
+        ["Some projects changed so they work for real:", "a Lighthouse (Paraboloid and a ring of window holes) instead of a second rocket, a Flower pot with a rolled lip, a Hollow egg (Chisel's Hollow keeps the inside closed), a Hex charm (Chisel's Sketch draws rectangles, circles and polygons) and a Fidget capsule (Expandable needs fewer rings on a small shape). The tablet stand's plane angle, the Advanced primitive sizes (Width, Depth, Height), the gear settings, the porch (drag its outline), the stairs (start on Level 1) and the roofs (Cover the whole level) now match the app."],
+        ["Pipe:", "the Start from the other end option now appears as soon as you set Distance below 1."],
+      ]),
+      sec("New in version 2.9.9.9.6", [
+        ["40 new tutorials:", "ten more in each section (Beginner, Advanced, Chisel and Architect), each built round tools the others didn't teach: the Pyramid, Gem, Arrow, Round roof and Paraboloid, Mirror, Copy and Paste, Fillet, Shell, Measure and Lock, Sketch and Extrude, the Hinge maker; Pipe and Sweep round bodies, Gears, Quick Hinge, Plane at angle, Offset face, Pattern on face, Split face and Appearance, Torus and 3D text; the polyhedron dice, Bunny, Fish, Tentacle and Cyclops aliens, Hollow, Sketch, Expandable, Torus knot and the Head; Floor hole, Stairs, Railing, Porch, Furniture, the Staging camera, Finishes, the Wall tool, Floor plan drawings and an island in the Landscape."],
+        ["Pipe, like Fusion 360:", "Chain selection (one click takes the sketch curves, or the body edges that run on smoothly from the one clicked), click a face to run round its whole outer edge, Distance to go only part of the way (and from either end), and Section thickness for hollow pipes."],
+        ["Around a body:", "Pipe and Sweep can follow any body's outline at the height you click, pushed out or in with Offset: rims, bands, bumpers and grips round mugs, bowls and odd shapes."],
+        ["Sweep along nearly anything:", "click a face for its outline, take whole chains of edges in one click, and Snap the profile to the path so a profile drawn anywhere jumps to the start of the path, square to it. When the geometry engine can't sweep a tight or wobbly path, the sweep is now built another way instead of failing."],
+      ]),
+      sec("New in version 2.9.9.9.5", [
+        ["3D Print Sim: color painting like Orca Slicer 2.5:", "new Brush (pick the size), Smart fill (fills a surface up to a sharp edge), Height range (a band all the way round, great for stripes), as well as Faces, Whole body and Erase. Hold Shift to erase with any tool. Paint stays on the part when you turn, scale or copy it, and the layer preview, filament use, changes and G-code follow it."],
+        ["Mixed filaments:", "blend new colors from the filaments you have loaded, as in Orca Slicer 2.5. Pick two or three filaments and a ratio (or a gradient from bottom to top); the mix gets its own F number to paint or print with, and prints as its filaments in alternating layers. Recommended mixes and Decompose color (the closest mix to any color) help you choose."],
+        ["Auto color mix:", "one click matches every body's color to the filaments loaded in the printer, and makes a mix when none is close (on a two-nozzle printer, a purple part becomes a red and blue mix)."],
+        ["Process > Multimaterial:", "filament for walls, sparse infill and solid infill (Default prints with the object's own filament, as in Orca 2.5), prime tower on or off and its width, a flush multiplier and the table of flushing volumes between your filaments."],
+      ]),
+      sec("New in version 2.9.9.9.3", [
+        ["Extrude picks exactly the face you click:", "its outline now comes from that face's own edges (and, if those don't close it exactly, from the face itself), not from every edge that happens to lie in the same plane, which made wrong or oversized outlines on designs with many cuts. A flat face left in pieces by earlier cuts or joins, with no edge you can see between them, is picked whole, like Fusion 360."],
+        ["Faces win over hidden sketches:", "a sketch profile behind a body (say a sketch on the bottom face, seen from above) no longer takes the click from the face in front of it. A visible sketch lying right on a face is still picked first, as in Fusion 360."],
+        ["The view stays put:", "clicking a face or profile in Extrude no longer tilts the camera, so your next click lands where you aimed. (It still tilts once when Extrude opens on a sketch you're looking straight down on.)"],
+        ["Checked on a real design:", "on a real jig design with 20 sketches and 17 cuts, every visible flat face from six views (72 clicks) picks the right face, up from 21; faces pushed in 1 mm remove exactly their area."],
+      ]),
+      sec("New in version 2.9.9.9.2", [
+        ["Extrude and Sketch on faces, like Fusion 360 and Inventor:", "click a flat face of a body (it turns blue), then press E to push or pull it straight away, or S to start a sketch on it."],
+        ["Press and drag:", "in Extrude, press on a flat face (or a sketch profile) and drag: it pulls out or pushes in as you move, no hunting for the arrow. A click without dragging just picks it. The arrow is bolder, easier to grab along its whole length, and stands out even before you've dragged."],
+        ["Several faces at once:", "click more faces of the same body on the same plane to add them (they all move together); click a picked face again to drop it. Clicking another body's face picks that one instead. Extruding up to a face is now only in Extent → To object, so a click never changes the extent by surprise."],
+        ["Quicker sketching:", "snapping is worked out once per change instead of on every pointer move, crossings are found without testing every line against every other, and the sketch redraws only what follows the pointer. In a sketch with 2,500 lines, moving the Line tool went from almost a second per move to under a millisecond. Very big sketches show constraint badges only for what's selected."],
+        ["Snappier picking:", "faces under the pointer are found without re-reading every body's recipe on each move, and Create sketch only redraws its highlight when the face under the pointer changes."],
+      ]),
+      sec("New in version 2.9.9.9.1", [
+        ["Flower Studio, in pieces: everything snaps together.", "Stems and leaves are flat strips with a springy two-prong fork at each end that clicks through a slot (0.2 mm fit). Heads sit on a flat star and snap onto their stem; petal layers slide sideways onto the head's neck and a lip holds them. Stands and holders print upside down, the basket handle snaps into the rim."],
+        ["No supports in pieces:", "every piece lies on a flat side and nothing hangs out more than 45 degrees (only short bridges over slots), so pieces print faster and cleaner. Stems lean at most 30 degrees and are spaced so each goes in on its own."],
+        ["Miniature trees:", "a new tab in Flower Studio for model scenery and tabletop games: 22 trees (oak, maple, birch, beech, elm, willow, baobab, pine, spruce, fir, cedar, cypress, cherry blossom, apple, orange, palm, bushes, topiary, dead, spooky, crystal and a giant mushroom), lifelike or mechanical, in all four seasons, at 28 mm, 32 mm, 15 mm, 6 mm, OO, HO and N scales or any size, on round, square, hex or rocky bases. Make one tree or a grove."],
+        ["Trees in pieces:", "the trunk stands on its base with branches leaning no more than 45 degrees; flat foliage layers (or conifer tiers and palm fronds) snap onto necks on the branches. No supports. Export as 3MF or STL with PDF instructions, or send to the 3D Print Sim."],
+      ]),
+      sec("New in version 2.9.9.9", [
+        ["Assembly instructions (PDF):", "Flower Studio now saves a PDF with every 3MF export (and puts one in the STL .zip): what you'll need and the filament colours, how to print it, and each step with a picture of the flower or arrangement so far. There's also an Assembly instructions button."],
+        ["Petals are always one piece:", "every petal is now one closed solid. A mechanical petal's rib and studs are part of its surface, and a snap-in petal and its tab are one shape (mechanical ones get two rivet holes), so a slicer can't split them into little parts. Checked on all 1,120 petal shapes."],
+        ["3MF files load as whole pieces:", "each printable piece is one object made of its coloured parts (a whole flower is one object), so nothing comes apart when you move it in the slicer."],
+        ["About:", "the lists of what's new show in full again."],
+      ]),
+      sec("New in version 2.9.9.8", [
+        ["Flower Studio, snap-in petals:", "each petal prints flat (1.6 mm, no supports) with a two-prong tab; the flower's hub is a crown of slotted panels. Push a tab into its slot (0.2 mm bigger all round) until it clicks. Print petals in any colours, or replace one that breaks. Checked on every flower that can take them: each petal clears the hub and its neighbours."],
+        ["Flower Studio, wreaths:", "choose Wreath as the container (or an Autumn, Spring or Robot wreath idea): a flat ring that prints lying down with a loop to hang it by, flowers snug on the ring and greenery lying along it, as a full ring or a crescent. In pieces, the ring has a socket for every stem and the flowers are spaced (and sized) so none touch as you push them in."],
+      ]),
+      sec("New in version 2.9.9.7", [
+        ["Flower Studio → Print & export:", "print a flower (or a whole arrangement) whole, or in pieces that push together. Pieces lie flat on the plate the way they print best; stems have 3 mm pegs that go into sockets 0.2 mm bigger all round. Arrangements get a holder that drops into the container, with a socket for every stem."],
+        "Export flowers as 3MF (each part in its own colour) or STL (one file, or one per piece in a .zip with how to put it together), or send them straight to the 3D Print Sim.",
+        ["Hinged petals really swing now:", "the hinges were remade and checked flower by flower: 0.4 mm round every pin and knuckle, 0.5 mm between petals, nothing touching the hub. Every hinged petal swings at least 12° (most 25–60°)."],
+        ["3D Print Sim:", "right on the Beginner toolbar. New printers: Prusa i3 MK3, MK3S, MK3S+, MK3.5, MK3.5S, MK3.9 and MK3.9S, and the FLSUN QQ-S / QQ-S Pro delta (round bed, G-code from the bed's centre)."],
+        ["3D Print Sim:", "shells that overlap inside one part are joined into one solid (like Orca Slicer) instead of leaving gaps or walls inside."],
+      ]),
+      sec("New in version 2.9.9.6", [
+        ["Search tools finds everything now:", "every Beginner menu item, the Chisel action figure builder, Flower Studio's flowers, print sim settings and the maker tools."],
+        ["3D Print Sim follows Orca Slicer 2.5.1:", "sparse infill patterns (rectilinear, aligned, grid, triangles, cross hatch), the sparse infill smooth factor, and Space opens tool search."],
+        ["New printer:", "Bambu Lab H3C with its 9-tool Swaptek changer (tool 9 takes 2.85 mm TPU)."],
+        ["A tidier Beginner toolbar:", "similar tools sit in Draw, Arrange, Shape it, Check and Makers drop-down menus. Lattice and Expandable are now in Beginner too."],
+        ["Flower Studio (Makers menu):", "62 flowers, realistic or mechanical, with fixed, hinged (print-in-place) or flexible petals, a bloom animation, and arrangements in vases and pots."],
+        ["Sketch:", "the line tool draws one line, then stops. Press L again for the next one."],
+        ["9 new project tutorials (25-35 min) for ages 7 to 13+:", "tic-tac-toe, rubber-band racer, bobble-head robot, Ferris wheel, stretchy ghost, honeycomb lantern, flower pot, robot bouquet and a basketball catapult."],
+      ]),
+      sec("New in version 2.9.9.5", [
+        ["Smoother Expandable rings:", "the rings' surfaces are cleaned up: the outside of each ring now sits exactly on the original shape's surface (so a sphere stays a smooth sphere), the inside surfaces are smoothed and put back on their true positions, and stray specks from the shape's mesh are removed. The cut edges, lips and tabs come out clean instead of jagged."],
+      ]),
+      sec("New in version 2.9.9.4", [
+        ["Patterns and lattices on curved faces:", "Pattern on face and Lattice now work on curved faces as well as flat ones: the sides of cylinders, tubes and cones, spheres and domes, fillets and freeform surfaces. The shapes follow the surface and wrap all the way round with no seam (the cell size is nudged so a whole number fits round). Turn the side of a tube into a honeycomb, circle or screen-mesh lattice, or raise hexagons on a sphere. Ribs and “lines between” stay for flat faces."],
+      ]),
+      sec("New in version 2.9.9.3", [
+        ["Expandable fidget toys:", "the Expandable tool has new Motion choices: Slide, Twist (tabs on each ring run in spiral grooves in the next, so the rings screw out as you pull; set the twist per ring and the number of tabs) and Slide & spin (every ring also spins freely all the way round, like fidget rings)."],
+        ["Parts that come apart:", "choose Stay together, Snap apart (a small ridge stops the rings; pull harder and they pop past it, and push back together the same way) or Come apart freely (the rings slide or unscrew right off)."],
+        ["Fidget styles and more settings:", "one-click styles (Classic stretch, Slanted bands, Twist fidget, Spinner rings, Snap apart, Unscrew apart) and Ring heights (even, or taller toward the wide end). The simulation shows the twisting and spinning, and for rings that come apart the slider goes past 100% to take them apart."],
+      ]),
+      sec("New in version 2.9.9.2", [
+        ["Search tools:", "a Search tools button in the top bar (or Ctrl+K / Cmd+K, or / when you aren't typing). Type what you want to do, like fillet, round edges, honeycomb, helmet or stretch, and press Enter to start the tool. It finds every tool in Advanced (Design, 3D Print Sim and Simulate), Beginner, Architect and Chisel's brushes and tools, and switches mode or workspace for you."],
+        ["Expandable:", "Advanced → Modify → Advanced Modify → Expandable (and the Expandable tool in Chisel, Easy and Pro) turns a solid into a hollow stack of rings that slide out of each other and catch, printed in one piece, like the expandable ghosts. Choose the rings, wall, clearance, how far they stretch, tilted cuts for slanted bands, and an open or closed bottom. Its window plays a simulation of the rings stretching out and folding back (Play, a slider to stretch it by hand, and a cut-away view that shows the lips and feet), then adds the rings to the design."],
+        ["Lattice:", "Advanced → Modify → Advanced Modify → Lattice turns a solid body into a honeycomb, triangle, circle or screen-mesh lattice right through it, inside a solid frame. Set the cell size, rib width, frame width, direction and whether cells are trimmed at the frame or only whole cells are kept. It stays editable in the timeline."],
+        ["32 new helmets:", "the Helmet Maker has two new libraries inspired by today's popular cosplay builds (all original designs): Space explorers (16, from EVA and exploration helmets to void marines, knights and miners) and Future military (16, from drop troopers and recon to heavy siege and medic helmets), with six new visor shapes: Narrow V, Hexagon, Triangle, Twin lenses, Split slits, and Slit and grille."],
+      ]),
+      sec("New in version 2.9.9.1", [
+        ["Honeycomb cells that lock together:", "separate honeycomb cells (Bin & Box Maker → Honeycomb → Separate cells) now join with Dovetail slides (rails on three sides slide into grooves on the next cell from the open end and stop flush) or Pegs (two pegs on three sides press into holes in the next cell), as well as Screw holes. The walls get thick enough to hold the grooves or holes, and Fit clearance sets how tight they are."],
+      ]),
+      sec("New in version 2.9.9", [
+        ["Bin & Box Maker styles always show:", "the Style choices are a grid of buttons that wraps onto more rows, so Carousel, Round drawers, Swivel trays and Honeycomb are never cut off in a narrow window or on a phone or tablet."],
+      ]),
+      sec("New in version 2.9.8.9.9", [
+        ["Chamfer by angle:", "Chamfer now has three types: Equal distance, Distance and angle (type the angle in degrees; 45° is the same as equal), and Two distances. The distance runs along the upper face at each edge; Flip measures it from the other face."],
+        ["Bin & Box Maker → Carousel:", "wedge bins round a centre cup on a round tray, with hand holes, and a base the tray spins on."],
+        ["Bin & Box Maker → Round drawers:", "round cases that stack (each one's foot sits in the case below), each with a curved drawer whose front is part of the cylinder and a round finger hole, and a top to close the stack."],
+        ["Bin & Box Maker → Swivel trays:", "a tower of D-shaped trays that swing out of the front on a rod at the front-left corner, in a case with a rounded back, with a label panel on each tray."],
+        ["Bin & Box Maker → Honeycomb:", "hexagon cells as honeycomb shelves lying on their side (open at the front) or upright cups, in one piece or as separate cells with a hole in each side to join them."],
+        ["Storage from Shape:", "turn any solid into storage that keeps its outside: stacked bins that lock together with a lip (the top piece can be a lid, or open), or a case with shelves and drawers that pull out of the front, each drawer's front being the shape's own front with a finger hole. In Advanced (Simulate → Makers) and Beginner (Shape Storage)."],
+      ]),
+      sec("New in version 2.9.8.9.8", [
+        ["Layerscape → 3D building kit → From my design:", "turn your own JumpStart 3D design into a building kit. Boxes become buildings with walls and a roof, cylinders and prisms become round towers, a cone or pyramid on top becomes a spire and a roof shape on top a pitched roof; anything else (a dome, a wedge, text...) is cut as stacked layers in wood or folded as a low-poly shell in card. It uses the selected objects, or all that are shown."],
+        ["Looks:", "print it in each object's own colour, or as a stone castle, a brick town, modern glass or a cottage, with or without windows and a door, in wood (tabs, slots and living hinges) or card (fold and glue)."],
+      ]),
+      sec("New in version 2.9.8.9.7", [
+        ["Layerscape → 3D building kits:", "build a printed model kit like the wooden and foam ones in toy shops: a castle with spires, a football stadium, a lighthouse and cottage, a cathedral, a city block, a cottage or a clock tower, every wall, roof and tower printed (stone, brick, slate, windows, crowds, scoreboard...)."],
+        ["Wood or card:", "wood kits are cut on a laser with finger-jointed walls, tabs and slots, bendy living-hinge walls for round towers and stands, and cross-slotted spires; card kits are unfolded into nets with fold lines, numbered edges and glue tabs."],
+        ["Layerscape → Low-poly papercraft:", "any template, your design or an STL / OBJ file becomes a faceted low-poly model (like the 4D card kits), each panel in the model's own colours, one colour or the picture's, numbered and unfolded into nets to print, cut, fold and glue."],
+        ["Faster puzzle maker:", "switching between puzzle kinds shows the new tab straight away, models are measured once, and puzzles you've already made come back instantly."],
+        ["Sketch → Line:", "finishing a line (closing it, Esc, Enter or a double-click) puts the Line tool down, so a stray click doesn't start another line. Press L or pick Line to draw the next one."],
+      ]),
+      sec("New in version 2.9.8.9.6", [
+        ["Layerscape → Puzzle maker:", "a new mode at the top of Layerscape turns a picture or a 3D model into a puzzle you can laser cut, print on paper or 3D print."],
+        ["Jigsaw puzzles:", "any picture (your photo or an example scene) as a jigsaw: rectangle, rounded, circle, egg, heart or star shaped, with the number of pieces, knob size and wobble you choose, and a frame tray to hold it."],
+        ["3D slot-together puzzles:", "a model sliced into flat ribs that slot into each other, from a template, your JumpStart 3D design or an STL / OBJ file; put the open picture on the ribs if you like."],
+        ["3D stacked-layer puzzles:", "the model cut into layers one sheet thick, with peg holes so the layers line up as you stack them."],
+        ["Puzzle templates:", "22 ready-made models to puzzle: animals (dinosaur, whale, turtle, cat, teddy, penguin), holidays (heart, star, Christmas tree, snowman, pumpkin, ghost, egg, bunny, bell, gingerbread man, dreidel) and things (rocket, globe, house, tower, car)."],
+        ["Every puzzle exports:", "a laser cut kit (.zip of SVG sheets), printable pages with the steps (.pdf), a 3D print kit (.3mf and STLs), or straight into your JumpStart 3D design as objects."],
+        ["16 new example scenes:", "holiday scenes (Winter village, Halloween night, Valentine's garden, Easter meadow, Autumn harvest, Festival of lights, New Year fireworks, Lucky clover, Birthday party) and more (Coral reef, Arctic friends, Desert oasis, Outer space, Dinosaur valley, Camping night, City lights), sorted by category."],
+      ]),
+      sec("New in version 2.9.8.9.5", [
+        ["Picture to 3D model, much closer to the real thing:", "each part of the subject gets its own round thickness (legs, arms, tails, stems and the body each as thick as they are wide), instead of one puffed-up outline. Presets for an animal, a person or figure, a plant or flower, a round object and flat art (a flat back with raised detail), and every setting to refine it: the cross-section (round, pillow, thin leaves, flat with a round edge, ridged), thickness, a maximum thickness, back depth, a flat back, surface detail from the picture's shading, smoothing, edge rounding and four levels of detail. A turning 3D preview shows the model before you make it."],
+        ["More pictures:", "add a side, back and top picture of the same subject and the model is carved to match each view too (so a dog photographed from the side gets its real width from a front photo, and its four legs in the right places)."],
+        ["A better cut-out:", "find the subject automatically, by tapping its colours (several for a multi-coloured subject), or by brightness; tap the background to tell it what to leave out; paint with Keep and Remove brushes; grow or shrink and smooth the edge; keep holes (handles, the gap between legs) and every piece if you want them."],
+        ["Helmet Maker → Photos:", "a new step: take or choose up to 4 photos of a helmet (front, side, back and top) and the helmet's shape is built from them, sized to fit your head (it is only ever pushed outward, so it still fits). Set the head's height and position inside it, round or boxy, smoothing, a little extra size and how strongly the photos shape it. \"Visor from the front photo\" finds the dark visor and uses its shape. Then Visor, Details, Look and Cut & Join work as before."],
+      ]),
+      sec("New in version 2.9.8.9.4", [
+        ["Color Lithophane Studio", "A new app in the 3D Print Sim (Color lithophane on its ribbon, or the Color lithophane button on its Plate card, in Beginner too). Open a photo and it becomes a full-colour lithophane printed with white, cyan, magenta and yellow filament (black too, if you like): a thin white plate, then under every colour pixel a stack of thin layers of those filaments whose mix sets its colour, then a white texture on top, thicker where the picture is darker, for the brightness and the detail. The colours are worked out the way light really passes through the plastic, from each filament's colour and its TD (transmission distance), so you can set your own filaments. See it lit from behind, the colour layers on their own, or the 3D parts. Choose the width, shape (rectangle, rounded, oval, heart, hexagon), a white frame, brightness, contrast and colour, dithering, layer height, how many colour layers, pixel sizes and the white's thickness; it shows the grams of each filament. Export a 3MF (one object with a part per filament, set up for Orca Slicer and Bambu Studio) or a ZIP of STLs with a preview and the settings, or press Print in 3D Print Sim."],
+        ["Full-colour printing in the 3D Print Sim", "The lithophane goes straight onto the sim's plate with each part on its own filament (white, cyan, magenta, yellow in AMS slots 1 to 4) at its layer height and 100% infill. Slice it and the layers show the colours going down, the filament changes and purges are counted (with a prime tower), the time is worked out like Orca Slicer, and Export G-code saves a real multi-colour .gcode with the tool changes. Back to my design puts your own bodies back on the plate."],
+        ["3D Print Sim looks like Orca Slicer", "The sim now has Orca Slicer's layout and teal accents: the settings down the left in Printer, Filament and Process cards, the Process settings in Quality, Strength, Speed, Support, Others and Objects tabs (new: 0.08 and 0.10 mm layers, top and bottom shell layers, and the printer's own speeds and accelerations), Prepare and Preview tabs and a Slice plate button on the ribbon, a dark textured PEI plate with a 10 mm grid, the plate number and the printer's name, the layer slider up the right with the layer number and height, a slider along the bottom for the moves within the layer, and a Line Type legend with the time and share of each kind of line, the total time and the filament."],
+      ]),
+      sec("New in version 2.9.8.9.3", [
+        ["Jigs made of honeycomb", "The Jig Maker's honeycomb now covers the whole jig, not just patches inside it: every wall, side, floor, plate, cheek and ear is a honeycomb from edge to edge, with as many cells as fit, spread evenly so the frame round them is the same all round. Blocks that hold guide holes or a slot (dowel jig, drill guide, mortise guide, pocket-hole jig) get honeycomb pockets in their sides that stop short of the holes, so the guides stay true. Only the strips the saw, chisel or drill rides on stay solid. Cells in upright walls are pointy-topped, so they print without supports. Cell size (8 mm to start) and cell walls are at the bottom of the Jig Maker, and you can still turn the honeycomb off."],
+      ]),
+      sec("New in version 2.9.8.9.2", [
+        ["Honeycomb jigs", "Every jig from the Jig Maker (Advanced → Workshop) is now a honeycomb inside: hexagonal holes through its walls, floors, blocks and plates, so it uses less plastic and prints faster while staying stiff. The faces that guide a saw, chisel or drill and the edges that locate on the board stay solid, with a solid rim round each honeycomb. Turn it off, or change the cell size and the cell walls, at the bottom of the Jig Maker."],
+        ["Joint jigs", "Four new jigs for the joints on a woodworking joints chart. Dovetail: a marking template with the tails and half pins at 1:5, 1:6, 1:7 or 1:8 (or any slope), for your board's width and thickness and number of tails, and a saw guide leaning at the same slope. Box joint: a finger template (fingers and gaps the same width, 1/4 to 3/4 inch or mm) and an indexing key for a saw or router sled. Mortise & tenon: a guide that straddles the board with a slot for the chisel or router (centred or off centre) and a tenon gauge. Lap joint: a bridge across the board whose window guides the saw, chisel or router for the shoulders, and a step gauge for half the thickness."],
+      ]),
+      sec("New in version 2.9.8.9.1", [
+        ["Layerscape: layered files", "Open picture in Layerscape now also opens layered files: Photoshop PSD and PSB (also saved by Procreate, Affinity, Photopea, Krita and GIMP), SVG (Inkscape, Illustrator and Figma layers or groups) and OpenRaster ORA (Krita, GIMP, MyPaint), or several pictures picked at once (one layer each, the first name at the back, so number them 01, 02…). A Layers found window lists every layer with a preview: choose Piece, Cross-slot piece, Backdrop or Leave out for each, put them in order with the arrows, and press Make pieces. The bottom layer that fills the picture becomes the backdrop and hidden layers are left out to start with. Each piece keeps all of its layer, even the parts hidden behind other layers, and the backdrop layers are used as they are, so nothing needs filling in. How far back each piece stands follows the layer order (top at the front). Photoshop groups come in as one piece, clipped layers join the layer under them, and layer masks and opacity count. The layers are saved with the project."],
+        ["Layerscape models in JumpStart 3D", "Import (Beginner) or Insert → STL / 3MF / STEP model (Advanced) now takes a Layerscape 3D print kit: the .zip or the .3mf inside it. It comes in as one object per part, named and coloured from the picture. Kits made with this version come in put together as the finished diorama; older kits come in laid out flat as on the print plate."],
+      ]),
+      sec("New in version 2.9.8.9", [
+        ["Layerscape updated", "The newest Layerscape replaces the one in 2.9.8.8.1: Undo and Redo buttons, Duplicate, Copy and Paste for pieces, move a selected piece anywhere on the deck by dragging it in the 3D view (Shift + drag to move only forward or back) or with the arrow keys, resize it with its corner handle or the [ and ] keys, and a Keyboard shortcuts list (press ?). It still keeps the diorama with your design, saves files through JumpStart 3D, and Add to my design puts the finished diorama in your design."],
+      ]),
+      sec("New in version 2.9.8.8.1", [
+        ["Layerscape", "Turn a photo into a layered, slot-together diorama. Beginner: the Layerscape button in the toolbar (it takes the Helmet Maker's place there; the Helmet Maker is still in CosForge and in Advanced → Simulate). Advanced: Simulate → Layerscape. Paint, wand, lasso or horizon-select the pieces, check the build in a 3D preview, set the size, material thickness, kerf, stage and backdrop shapes, then export a laser cut kit (SVG sheets), printable art with an assembly guide (PDF) or a 3D print kit (3MF and STL). Comes with example scenes and its own tutorials."],
+        ["Part of your design", "Layerscape keeps the diorama with your JumpStart 3D design, so it's there when you open the design again (it's saved when you press Save in Layerscape or go back to JumpStart 3D). Add to my design puts every part in your design, assembled as the finished diorama and coloured from the photo, ready to move, change and export. Its files save the same way as everything else in JumpStart 3D, on an iPad too, and it follows the app's light or dark look. It works offline."],
+      ]),
+      sec("New in version 2.9.8.8", [
+        ["Helmet Maker", "A new guided mode in CosForge for building a contemporary sci-fi helmet (Helmet Maker in Beginner's toolbar, Simulate → Helmet Maker in Advanced, or the Helmet Maker button inside CosForge). Size: pick a head size or type the distance around the head, and for a closer fit front to back, ear to ear and chin to crown; choose room for padding (snug, comfort, foam pads or headset) and the shell thickness, and see the inside and outside sizes, whether it fits your printer, and whether a head gets through the bottom. Split front / back or Auto-cut to fit in one click. Style: a library of 12 new original helmets (Nova Explorer, Vector Racer, Orbit Pilot, Specter Recon, Titan Heavy, Cyber Runner, Drift Trooper, Aegis Guard, Abyss Diver, Mech Jockey, Stealth Ops, Astro Scout), plus every other sci-fi helmet, free to print; your size stays when you change style. Add a reference picture behind the head from the front or side to match a design. Visor: full, eye, wraparound, V, split eyes, T, slit, open or closed, sized with sliders, with an optional separate lens; or draw your own visor with a finger, mouse or Pencil, or trace one from a picture (auto trace, with Simplify and Make both sides match). Details: ear pods, antennas, a top crest, chin and cheek vents, side lights and a brow camera in one tap, plus panel lines, light lines, ridge, edge, texture, emblem and rivets. Look: colours and a finish (paint, gloss, matte, PLA, PETG, silk, rainbow or two-tone silk, chrome, brushed metal, gunmetal, titanium, gold, carbon fibre), glowing or metal accents and a tinted lens, then Render a photo-style picture and save it as a PNG. Form, Sculpt, Cut & Join and Export work as in CosForge."],
+        ["13 new tutorials", "Beginner: an LED push-light lamp with its own laser-cut acrylic name panel (made for the round 69 mm push lights sold at dollar stores), an LED strip lamp (10 mm strips), a hanging lamp, a holiday ornament, a stacking bin set and a planter with a saucer. Advanced: the same three LED lamps built with sketches and features (including a traced picture engraved in the acrylic), a key rack with hooks, ribs and keyhole slots, a shelf bracket with gussets and countersunk holes, woodworking jigs, and a drawer cabinet with dovetail rails, plates and clips."],
+        ["Laser cutting files", "Export → Laser cut (SVG) or (DXF) turns flat parts (an acrylic panel, a sign, a stencil) into files for a laser cutter: outlines and holes as red cut lines, recesses on top (text, pictures) as black engraving."],
+        ["Pattern features", "Advanced Pattern features now repeats ribs (gussets) and keyhole slots too."],
+      ]),
+      sec("New in version 2.9.8.7.3", [
+        ["Jig Maker", "Workshop → Jig Maker makes woodworking jigs ready to print. There are six kinds. A miter box has saw kerfs at 90°, 45° (both ways) and 22.5°, sized to your stock and saw, with optional ears to screw it down. A self-centring dowel jig fits over the board, with guide holes for 6, 8 or 10 mm or inch dowels, spacing you choose and an end stop. A pocket-hole jig has 15° guides for 1/2 to 1-1/2 inch boards and tells you where to set the bit's depth collar. A try square has a ruled blade in mm or inches and a 45° shoulder. Angle templates come with a fence for setting saws and marking. A drill guide has labelled holes and a V groove for round stock. Dowel and pocket-hole guides can be sized for steel bushings. Double-click a jig to change it later."],
+      ]),
+      sec("New in version 2.9.8.7.2", [
+        ["Box Maker dovetail fit", "When boxes join with dovetail rails, stacked or side by side, choose how they fit. Snug leaves a 0.15 mm gap around each rail: a firm push, very little wobble. Normal (0.25 mm) slides easily on most printers. Loose (0.4 mm) slides freely, for printers that run tight or for PETG. Plates in grooves follow the fit you choose, so they still fit with their own Plate fit."],
+      ]),
+      sec("New in version 2.9.8.7", [
+        ["Rib tool", "Advanced Create has a Rib tool for reinforcing parts. Click where the rib starts and where it ends on a flat face. Straight ribs stiffen a floor or wall. Gussets are triangles that brace a corner, so start one against the wall. You set the height, thickness and count, plus the spacing for several side by side. Double-click it in the timeline to change it later."],
+        ["Keyhole slot", "Advanced Create has a Keyhole slot tool for hanging parts on screws. Click a flat face (usually the back) where the screw head goes in. Each keyhole has a round head hole and a slot running up from it, with a hidden channel behind a lip that the screw head hooks behind. There are sizes for M3 / #6, M4 / #8 and M5 / #10 screws or custom sizes, the slot can point up, down, left or right, and you can place several at once."],
+        ["Box Maker: plates on all four sides", "One click puts joining plates on every side: over the rails on top and the right, and in the grooves underneath and on the left. Click it again to remove them all."],
+      ]),
+      sec("New in version 2.9.8.6", [
+        ["Box Maker plates in grooves", "Box Maker now offers both kinds of joining plate. Plates over rails have dovetail grooves and slide over the open rails, on top of cases side by side or up the right side of a stack. Plates in grooves are new: they have dovetail rails and slide into the open grooves, under two cases side by side (lifting them 2.4 mm) or up the left side of a stack. Both kinds slide on from the back, stop at the front, use the same snug Plate fit (Tight, Snug or Loose) and print flat."],
+      ]),
+      sec("New in version 2.9.8.5", [
+        ["Box Maker rail plates", "A new Rail plates option joins boxes using their open dovetail rails. A plate with two dovetail grooves slides on from the back over a rail of each of two boxes and stops flush with the front. Choose On top (across the tops of cases side by side, when they stack with dovetails), On the side (up the right side of a stack, when boxes join side by side with dovetails), or Both. The grooves fit snugly by default, with about 0.12 mm around each rail, so a plate slides on with a firm push and stays put. Plate fit lets you pick Tight (0.08 mm) or Loose (0.2 mm) to suit your printer. The plates are separate parts that print flat, grooves up."],
+      ]),
+      sec("New in version 2.9.8.4", [
+        ["Box Maker lock clips", "When boxes join with dovetail rails (stacked cases, or bins and cases side by side), turn on Lock clips. Small plates press onto the backs across each dovetail join, with a peg in each box, so the boxes can't slide apart along the rails when you grab one. The clips are made as separate parts that print flat with their pegs up. Pull a clip off to slide the boxes apart."],
+      ]),
+      sec("New in version 2.9.8.3", [
+        ["Box Maker door pins", "The pin on top of a Box Maker door is 0.8 mm shorter, so the door is easier to snap into the case, and both door pins have rounded tips."],
+        ["3D-print filament appearances", "Appearance has a new 3D-print filament group: PLA, PLA matte, PETG, PETG translucent, TPU (flexible) and Silk PLA. Silk rainbow shows the colors running up the part in bands, repeating 1 to 4 times. Silk two-tone gradient fades from a bottom color to a top color that you pick. Like all appearances, these only change how parts look on screen and in rendered pictures."],
+      ]),
+      sec("New in version 2.9.8.2", [
+        ["Seasonal & holiday textures", "The Texture tool has four new groups with 50 picture textures: Seasons (snowflakes, fall leaves, acorns, suns, spring flowers, rain, beach), Holidays (snowmen, Christmas trees, nutcrackers, candy canes, ornaments, gingerbread people, holly, reindeer, jack-o'-lanterns, ghosts, bats, spider webs, turkeys, Valentine hearts, Easter eggs and bunnies, shamrocks, fireworks, dreidels), Celebrations (birthday cakes, balloons, gifts, confetti, anniversary rings and hearts, graduation caps, baby) and Animals (squirrels, chipmunks, rabbits, birds, owls, deer, butterflies, fish, cats, paw prints, woodland mix). The pictures stand up from the surface and repeat seamlessly; use Tile size to make them bigger or smaller, Depth to set how far they stand up, and Engrave to cut them in instead."],
+      ]),
+      sec("New in version 2.9.8.1", [
+        ["Box Maker door catch:", "small round bumps on the case beside the door's free edge hold the door shut, so it doesn't swing open by itself: it clicks closed and needs a little pull to open. Pick None, Light or Firm."],
+        ["Fixed:", "the door stop strips added in 2.9.8 were being cut away with the inside of the case, so they weren't really there; they are now."],
+      ]),
+      sec("New in version 2.9.8", [
+        ["Box Maker grids:", "set how many across as well as how many high, to build a grid of bins or cases (up to 8 × 8). Side by side they join with dovetail rails on the right side that slide into grooves in the next one's left side from the front and stop flush, or with pegs, or not at all. Each one is named by its place in the grid (A1, B2…)."],
+        ["Doors open outwards only:", "a stop strip runs just behind the door along the case floor, ceiling and far side, so the door can't swing back into the box."],
+      ]),
+      sec("New in version 2.9.7.1", [
+        ["Box Maker doors:", "pick the door's pull: a knob, a finger hole through the door, or a bar. The back of the door is now completely flat (the knob no longer pokes out the back, and the hinge pins are no thicker than the door), so it prints lying on its back; Laid out to print lays it that way."],
+      ]),
+      sec("New in version 2.9.7", [
+        ["Box Maker fixes:", "placing a set no longer climbs onto its own drawers and cases and tips over; typing a size waits until you pause before rebuilding (no more flashing \"too small\" errors); the panel keeps your place when it redraws; making a set smaller (fewer cases, no lid, another style) now really removes the extra parts."],
+        ["Box Maker sets in Beginner:", "a click picks the whole set (cases, drawers, bins, doors and lid) so it moves and deletes as one, the side panel shows it as one set with Edit in Box Maker (instead of a Group button that would have merged it), and double-clicking it opens the Box Maker to change it."],
+      ]),
+      sec("New in version 2.9.6", [
+        ["Beginner toolbar:", "Neon Sign and Box Maker are on the Beginner toolbar now, in place of Chip Carve, Lathe and Stained Glass. Those three are still in Advanced (Design ribbon → Workshop, and the Simulate tab), and the Spinning top lathe tutorial has moved to the Advanced tutorials."],
+      ]),
+      sec("New in version 2.9.5", [
+        ["Bin & Box Maker styles:", "besides open bins, make a case with a drawer (with compartments and a bar, knob or finger-notch pull), a case with a tilt-out bin that tips forward on two pins and stops at about 30°, or a case with a door that swings on pins top and bottom (hinged left or right)."],
+        ["Stacking:", "make up to 8 units stacked one on another. Cases interlock with dovetail rails that slide into grooves under the case above and stop flush, or with pegs; open bins lock with a rim and foot. Show them assembled or laid out to print. Each case and each drawer, bin or door is its own body, and double-clicking any of them opens the maker again."],
+      ]),
+      sec("New in version 2.9.4", [
+        ["Architect, Show:", "a menu next to See-through (or the A key) picks how the house is shown: this level with the others faded (as before), the whole house solid with nothing see-through, or cut away above this level, with no roof and no floors above, so you look down into the rooms."],
+        ["Staging camera (C):", "stand inside the house at eye height. Drag to look around, walk with W A S D or the arrow keys (or the on-screen pad on a tablet), step with the wheel or a pinch, and double-click a floor to walk there. The level menu takes you up or down a floor. Pick a lens (extra wide to close) and an eye height (child, seated, standing, tall)."],
+        ["Photos of the inside:", "Take photo (or Space) renders the view at the size you pick (this window, HD, 4K, square or portrait) without the grid or handles; photos collect in the panel to save as PNG pictures, one at a time or all at once."],
+      ]),
+      sec("New in version 2.9.3", [
+        ["Neon Sign Builder projects:", "Save project keeps the whole sign (words, shapes, traced pictures, tubes, backing, printer and light show) in a file you can Open again; New starts fresh. Your last sign also comes back by itself the next time you open the builder in the same browser."],
+        ["Undo, redo, cut, copy, paste and delete:", "buttons at the top and the usual shortcuts: Ctrl/⌘ Z, Ctrl/⌘ Shift Z or Ctrl Y, Ctrl/⌘ X, C, V, D (duplicate), S (save), O (open), Delete, and the arrow keys to nudge a part (Shift for 10 mm)."],
+        ["Light show fix:", "the builder no longer freezes with Strobe (or other patterns) running: the glow is drawn in a few pieces instead of three per tube, at about 30 frames a second, and a steady sign isn't redrawn at all. Strobe now flashes at most 3 times a second, a safer rate for people sensitive to flashing light."],
+      ]),
+      sec("New in version 2.9.2", [
+        ["Greenhouses (Architect → Furniture → Greenhouses):", "glass greenhouses 8' × 10' and 12' × 16', a hoop house, a Victorian conservatory, a lean-to that backs up to a wall and a cold frame, each with benches and plants inside, plus potting benches, seedling shelves, raised beds, a lemon tree, orchids, hanging baskets, a rain barrel, a wheelbarrow and a compost bin."],
+        ["Luxury:", "a four-poster canopy bed, Chesterfield sofas, a chaise, crystal chandeliers, a white concert grand, a marble fireplace, a stone tub, a gold rain shower, a waterfall marble island, a pro range, a wine wall and wine fridge, a library wall with a ladder, home theater seats, a sauna, a pool, a fountain, a statue and gold mirrors. Finishes adds luxury picks (marble, black marble, chevron parquet, travertine, cut stone, mosaic, fluted, coffered, wainscot, walnut, copper and gold) and an All floors button."],
+        ["Food & table:", "26 small things (place settings, pizza, a birthday cake, a turkey, sushi, a cheese board, wine and more) that sit on top of whatever table, counter or shelf you put them on, and move with the table when it moves."],
+        ["People:", "men, women, children and a toddler standing, walking, waving and sitting, an older man with a cane and a person in a wheelchair, with a range of skin tones."],
+      ]),
+      sec("New in version 2.9.1", [
+        ["Neon Sign Builder:", "Advanced → Simulate → Neon Sign Builder opens in its own window with a neon theme. Type words (the Neon '80s script and 11 more fonts, centre-line tubes or outlines, several lines), add shapes (hearts, stars, lightning, palm trees, cocktails and more) or trace an image."],
+        ["Shells for LED strips:", "each line becomes a rounded, glass-tube-like shell sized for the LED strip you pick (neon flex 6 × 12 or 8 × 16, COB 5 or 8 mm, RGB 10 mm or RGBW 12 mm, or your own), with a snap-fit ridge and a warning where a bend is too tight for the strip."],
+        ["Backing that the shells snap into:", "follows the design like acrylic, or a rounded rectangle, circle, oval, pill, arch, hexagon, cloud, speech bubble or a shape from your design, with grooves for the shells, wire holes and hanging holes."],
+        ["Bigger than the bed:", "pick your printer: a big sign is cut into pieces that each fit, with dovetail joints in the backing. Export the shells and backing as STL or 3MF, all at once or piece by piece."],
+        ["Light show:", "turn the sign on in a dark room: any colour or RGB, steady, breathe, blink, old neon flicker, chase, one at a time, writes itself on, strobe, rainbow and colour wave."],
+      ]),
+      sec("New in version 2.9.0", [
+        ["Stairs and steps:", "Architect → Stairs (K): straight, L-shaped with a landing, U-shaped (switchback), spiral, grand and outdoor steps, with or without a railing. They climb to the level above and cut its floor for you; Q turns them."],
+        ["Floor openings:", "Architect → Floor hole (H): drag across the floor of the 2nd or 3rd floor (or any level) to cut an opening: a stairwell or a two-storey hall. Floors with openings go to Beginner and Advanced with the holes cut."],
+        ["Railings:", "Architect → Railing (J): wood or black metal balusters, glass panels, cable rail, modern bars, colonial spindles, wrought iron or a pipe handrail, at 36\" or 42\". Stairs and porches use the same styles."],
+        ["Porches:", "Architect → Porch (Y): drag a porch beside the house. It gets a deck, posts (square, round columns, craftsman, slim metal or log), beams, a railing, steps down at the front and its own roof (shed, gable, hip or flat) that is separate from the house's roof."],
+        ["Arched doors:", "arched interior, front and double doors and arched openings (4' and 8') with round-topped frames and leaves, in Architect and in the Floor Planner."],
+        ["Floor Planner:", "a third floor; floor openings; L-shaped, U-shaped and spiral stairs and outdoor steps; a Railings and a Porches catalog; arched doors and round archways; all of these go across to Architect, Beginner and Advanced. Its side panels can be dragged anywhere (Move …) and docked again."],
+        ["Movable panels:", "drag the Architect panel by its title bar (or its ⠿ grip, or the arrow keys on the grip) to anywhere over the view; double-click the title bar (or Home) puts it back."],
+      ]),
+      sec("New in version 2.8.2.9", [
+        ["Floor Planner houses everywhere:", "in the Floor Planner, 🏠 Use this house in ▾ (top right, and under the 3D view) takes the house into Architect, Beginner or Advanced. Every floor becomes a level, the room outlines become walls (shared walls become one), doors, windows and openings are cut into their walls, furniture becomes the matching piece from Architect's catalog, and the roof goes over the top floor, with roofs of their own on rooms that stick out below it."],
+        ["Architect, Beginner or Advanced:", "in Architect the house is ready to edit, furnish, landscape or flood-test. Beginner and Advanced get it as shapes (walls, doors, window frames, floors and roofs on each level), scaled to fit the build plate, and it stays in Architect with its furniture. Sending again replaces the house in Architect (after asking); Undo brings the old one back."],
+      ]),
+      sec("New in version 2.8.2.8", [
+        ["No more jumping:", "adding or removing an animal (or picking a region) no longer sends the Architect panel back to the top. The panel, and the animal list in it, stay where you scrolled to, and the button you pressed keeps the focus. The same goes for every other Architect panel that redraws itself."],
+      ]),
+      sec("New in version 2.8.2.7", [
+        ["Animals from around the world:", "Landscape → Animals now has 94 animals in eight regions: Pets & farm, North America, Tropical rainforest, African savanna, Asia, Europe, Australia, and Arctic & Antarctic. Each region lists its animals, birds, water animals and fish, and the region tabs show how many are in the yard."],
+        ["New animals:", "horses, cows, sheep, goats, pigs and chickens; black bears, moose, coyotes, skunks, bald eagles and hummingbirds; toucans, macaws, parrots, spider monkeys, jaguars, sloths, capybaras, tapirs, dart frogs, iguanas and piranhas; lions, cheetahs, elephants, giraffes, zebras, wildebeest, hippos, warthogs, meerkats, ostriches, flamingos, crocodiles and tilapia; giant and red pandas, tigers, snow monkeys, peacocks, cranes, mandarin ducks and koi; red deer, hedgehogs, badgers, wild boar, wolves, European robins, storks and trout; kangaroos, koalas, wombats, platypuses, dingoes, kookaburras, cockatoos, emus and barramundi; polar bears, arctic foxes, reindeer, emperor penguins, snowy owls, seals and arctic char."],
+        ["How they live:", "elephants and giraffes eat leaves from the trees, pandas eat bamboo, koalas and sloths stay up in the trees, monkeys and red pandas climb onto the roof, flamingos, storks and cranes wade in the shallows, hummingbirds drink from flowers, eagles catch fish, and the hunters (lions, tigers, wolves, dingoes…) stalk the animals that run from them. The Ohio backyard mix button is gone: add the animals you want from each region."],
+      ]),
+      sec("New in version 2.8.2.6", [
+        ["Full color (CMYK) printing:", "in the 3D Print Sim, Full color (CMYK) mixes any color from cyan, magenta, yellow, black and white filament (4, 6 or 8 layers to a mix): the walls change ink layer by layer and the skins line by line, so each body comes out as its own color. It shows each body's mix, the filament changes and the grams purged, and the G-code changes tools to match."],
+        ["Animals in Architect:", "Landscape → Animals: pets (a cat and a dog) and Ohio wildlife (white-tailed deer, cottontails, chipmunks, gray and fox squirrels, red fox, raccoon, groundhog, opossum, cardinals, blue jays, robins, goldfinches, mourning doves, a woodpecker and a red-tailed hawk), plus mallards, Canada geese, bullfrogs, box turtles and fish (largemouth bass, bluegill, catfish and yellow perch) in the ponds. They walk over the hills, stop to eat grass and plants, climb trees and the house, fly from perch to perch and run from the dog and the fox. Real size, or ×2 and ×3 to spot them."],
+        ["Roofs keep the rain out:", "the flood test now checks the roof. Rain falls straight into a house with no roof, or where the roof doesn't reach over the walls or a level has none of its own, and a pitched roof flatter than 2 in 12 leaks; the water shows on the floor. Fix it puts a roof over the whole house."],
+      ]),
+      sec("New in version 2.8.2.5", [
+        ["Action figures in Chisel:", "under Action figures, pick Hero, Heroine, Kid, Chibi, Robot, Alien or Mannequin, set the height, build, head size, shoulders and arm and leg length, and get a figure of 15 parts joined by 14 snap-fit ball joints (neck, shoulders, elbows, wrists, waist, hips, knees and ankles). Each part is its own sculpt to shape and paint."],
+        ["Joints that print:", "every ball sits in a socket a little bigger than it (Tight 0.1, Standard 0.15 or Loose 0.25 mm), behind a mouth narrower than the ball so it snaps in and holds a pose, and the parts never touch at rest. Lay out to print puts the parts side by side on the floor; figure parts keep their full detail in the design and in exported files."],
+        ["Ball joint kit:", "a ball on a peg, a housing and a socket cutter, to join parts you sculpt yourself (with Combine → Join and Subtract)."],
+        ["12 Chisel tutorials:", "Tutorials now has a Chisel tab: pebble pet, monster head, snowman, mountain, cat, alien, an animated dog, a bird, a planet, and three for action figures (a first figure, a custom one, and one jointed from scratch). Show me points at the tools inside Chisel."],
+      ]),
+      sec("New in version 2.8.2.4", [
+        ["Gears:", "Advanced → Insert → Gears (also in Workshop and Simulate): accurate involute spur gears, gear pairs, ring gears with a pinion, rack and pinion, and planetary sets (sun, planets and ring), in module sizes 0.8-3 with any number of teeth, 14.5°, 20° or 25° pressure angle, round, D-shaft, hex or keyway bores, hubs and lightening holes. Backlash for printing is built in."],
+        ["Gears move:", "each gear gets a joint linked to its neighbour by the tooth ratio, so Simulate → Motion study turns the whole train (and slides the rack) from any one gear, and checks the teeth for collisions."],
+        ["Folders in the Browser:", "+ Folder puts the selected bodies in a folder. Drag bodies onto a folder (or out of it), open and close it, double-click to rename, hide or show it all at once, and click it to select everything in it."],
+        ["Copy and place sketches:", "select a sketch in the Browser, Ctrl+C then Ctrl+V (or Copy & place…), and click any flat face, plane or the ground to put a copy there, turned by Spin. Place as many as you like."],
+      ]),
+      sec("New in version 2.8.2.3", [
+        ["Furniture in Architect:", "a new Furniture tool (U) with over 200 things to place in the rooms: sofas, beds, dressers and desks, kitchen cabinets, sinks, ranges and fridges, toilets, vanities, tubs and showers, washers and dryers, lamps, rugs, plants, outdoor and garage things, stairs and more, in 15 groups with a search box. Everything in the Floor Planner's catalog is there at the same sizes."],
+        ["It finds the wall:", "beds, sofas, cabinets, toilets, tubs and other things that stand against a wall turn and back up to the nearest wall by themselves (hold Shift to put one anywhere). Q turns a piece, arrow keys nudge it, and each piece can be recoloured, duplicated or deleted."],
+        ["Furniture on the plan and in the print:", "the Floor plan drawing (PDF, SVG, DXF) draws the furniture from above, and Export puts it in the 3MF, OBJ or STL with the house and landscape."],
+      ]),
+      sec("New in version 2.8.2.2", [
+        ["Clearance picks bodies:", "click or tap bodies while Clearance is open to choose which ones to check (again to drop one), drag a box around several, or click them in the Browser. The chosen bodies stay highlighted."],
+        ["Safari:", "the downloaded app also opens in older Safari on iPad and Mac (before 16.4). Built shapes saved in a project file or remembered by the browser are found again in any browser, Safari and Chrome alike."],
+        ["Tablet & Pencil mode:", "turn it on from the theme menu (◐) under Device, or the Tablet & Pencil mode button in About."],
+        ["Slow bodies show sooner:", "while a very slow body builds (many curved cuts or offset curved faces), it is shown see-through as it was a step or two earlier, usually within seconds, and the finished shape takes its place when it is ready. Save once it has built: the saved file carries the built shape, so it opens in seconds on any computer or iPad."],
+      ]),
+      sec("New in version 2.8.2.1", [
+        ["Tablet & Pencil mode:", "for iPad and other tablets, in the theme menu (◐) under Device. The Apple Pencil works like a precise mouse: tap to pick, draw sketch lines, drag handles and selection boxes, and on iPads with pencil hover, shapes light up as the pencil comes near. Fingers move the view: one finger orbits, two pan and pinch to zoom, and a tap still picks; a hand resting on the screen while you draw is ignored. A two-finger tap undoes, a three-finger tap redoes and a long press opens the right-click menu. Keys on the left of the view stand in for a keyboard: Undo, Redo, Shift (the next pick adds to the selection; tap twice to keep it on), Delete, Esc, OK and Fit. It uses the Tablet layout with bigger buttons, and turning it off brings back your layout. Tablets suggest it the first time."],
+      ]),
+      sec("New in version 2.8.2.0", [
+        ["Step through the timeline:", "the Advanced timeline has ⏮ ◀ ▶ ▶ ⏭ buttons. Step back and forward to see the design as it was after any step (later steps are dimmed and the current one is outlined), click a step to jump to it, or press Play to watch the design being built step by step. Only the view changes: your design isn't touched, and opening a tool or exporting goes back to the finished design."],
+        ["Slow bodies no longer stop:", "a body with many curved cuts or offset curved faces builds in the background with no time limit (a slower computer just takes longer), and you can keep working meanwhile. Stop and Why so slow? appear in the status bar while it builds, and About → Slow bodies has tips for making such bodies quicker."],
+      ]),
+      sec("New in version 2.8.1.9", [
+        ["Designs open faster:", "a body with several cuts in a row has them all cut in one step instead of one after another (the spiral fidget cone's five spiral cuts: 30 s down to 15 s). A body that took a while to build is remembered in this browser, so the design opens in about a second the next time, and a saved project file carries the built shape of slow bodies (10 s or more), so it opens quickly on any computer. While a slow body builds, the bottom bar shows its name and how long it has taken. Bodies with many offset curved faces get enough time to finish instead of stopping with \"stalled the geometry engine\"."],
+        ["Ribbon:", "Offset face and Clearance are in Advanced Modify (Q still opens Offset face). Chip Carving and the Lathe are in the Workshop menu at the right end of the Design ribbon."],
+      ]),
+      sec("New in version 2.8.1.8", [
+        ["Clearance:", "a quick tool for parts that move (Advanced Modify → Clearance). It finds every pair of bodies that touch or overlap (a wheel on its axle, a pin in a hinge, a ball in its socket, a lid in its box) and cuts a small gap into one of each pair, so they print loose instead of fused. Choose Snug (0.2 mm), Normal (0.3 mm) or Loose (0.5 mm), or type your own; untick pairs that should stay joined, and pick which part gets the gap (the bigger one by default). Each gap is a feature in the timeline that you can edit or delete."],
+        ["Offset face on a whole body:", "drag a box around a body to pick every face at once. The whole body then grows or shrinks by the distance, with rounded outside corners when it grows, and holes shrink or grow to match. Click faces as before to offset only some of them."],
+      ]),
+      sec("New in version 2.8.1.7", [
+        ["Smoother, more accurate STL and 3MF files:", "exports used to reuse the light mesh drawn on screen, so curves came out as visible flat facets in the slicer. Each body is now meshed again from its exact shape just for the file. Choose the quality in Open/Export: Standard (within 0.05 mm, smaller files), Fine (within 0.02 mm, the default) or Extra fine (within 0.008 mm, largest files). Curves follow the true shape about three times more closely, the files stay closed (watertight) for slicers, and textures are still applied. STEP files are exact, as before."],
+      ]),
+      sec("New in version 2.8.1.6", [
+        ["10 bigger tutorials:", "for Advanced mode, each making two or more parts with many tools, about 18-28 minutes. Advanced: Birdhouse with a lift-off roof, Round keepsake box (split into box and lid), Headphone stand with a cable clip, Fidget cone with spinning rings, Robot with plug-in arms. Expert: Link bracelet that prints already linked, Toy car with spinning wheels, Electronics case with a screw-on lid, Chess king and queen, Spiral fidget cone that spins on a base."],
+        ["Pattern → Features:", "any face made by a revolve or a sweep (twisted ones too) can now be clicked to pick that feature, like in Fusion 360, and the feature's real outline is highlighted. Twisted sweeps along a straight line are built as exact helical sweeps: much faster, so a circular pattern of spiral cuts (a spiral cone) builds in seconds instead of minutes, and bodies with several curved cuts get more time before the engine gives up."],
+        ["Revolve:", "points typed a hair off the axis (from rounded lengths and angles) are put onto the axis, so the outline revolves instead of failing."],
+      ]),
+      sec("New in version 2.8.1.5", [
+        ["3D Sketch lines:", "a long hand-drawn line now always becomes a round tube that follows what you drew. Before, the geometry engine could turn some lines into a flat, twisting band with fins or lumps; each tube is now checked against the line, tight hooks are smoothed only where they are, and a tube built straight from the line is used if the engine's is off."],
+        ["Pattern on a path:", "Put the object on the path (on when the object is away from the path) moves it to the nearer end of the path, and the copies run along the whole line, like beads on a string. Go the other way starts from the far end. Turn it off to keep the object where it is, with every copy the same distance from the path."],
+      ]),
+      sec("New in version 2.8.1.4", [
+        ["Layouts:", "five ways to arrange the tools, in the theme menu (◐) under Layout: Default (tools across the top), Simplified (bigger buttons with names), Clean (a slim column of icons on the left; hover for names), Classic CAD (a labelled tool palette down the right side) and Tablet (big tools along the bottom, near your thumbs). Every tool is in every layout, and the choice is remembered on this computer."],
+        ["Save downloads a file:", "Save (or Ctrl+S) now also downloads the project file (.json) to your Downloads, so work isn't lost when a Chromebook clears the browser at sign-out. Open it again with Open/Export → Open a project file. Turn it off in Open/Export → Download a file on every Save. The Floor Planner's 💾 Save also downloads its plan file (turn it off in 📂 My plans)."],
+        ["Pinned Constraints:", "while sketching in Advanced, Pin (next to Constraints on the toolbar) puts every constraint button on the workspace as a small palette. Drag it by its title bar to wherever you like, switch between names and icons only (⤡), and ✕ to put it away. It stays pinned, where you left it, for your next sketches."],
+      ]),
       sec("New in version 2.8.1.3", [
         ["Floor Planner tutorials:", "ten step-by-step projects built into the Floor Planner itself (🎓 Tutorials in its top bar, so they also work when it's opened in its own tab), in the same style as the JumpStart 3D tutorials: your first room, a small apartment, L-shapes and curved walls, a furnished bedroom, kitchen and dining, outside the house, a 3D walk-through, a two-story house, a small shop and the classroom Be an Architect job. Show me points at the button to use, steps tick themselves off, and the checklist shows your progress. Its animated tour is still there as Quick tour."],
         ["Saving in the Floor Planner:", "💾 Save (or Ctrl+S) saves the whole plan (every floor, room, item, finish and the roof) in one click: the first time you name it Last name, First name, Plan name. 📂 My plans opens, copies and deletes saved plans, saves a plan to a file to take to another computer, and opens one again. The planner also keeps your last plan by itself and offers to continue it next time."],
@@ -900,7 +1352,7 @@ app.showShortcuts = function () {
     el("header", {}, el("h2", {}, "Keyboard shortcuts"), el("button", { class: "xbtn", "aria-label": "Close", html: ICON.close, onclick: () => back.remove() })),
     el("div", { class: "mbody keys-grid" },
       rows("Sketching (both modes)", [["L", "Line"], ["R", "Rectangle (last type used; ▾ for 2-point, 3-point, center)"], ["C", "Circle"], ["A", "Arc"], ["P", "Polygon"], ["Shift T", "Text"], ["Enter / dbl-click", "Finish a spline"], ["T", "Trim"], ["D", "Dimension"], ["X", "Construction line"], ["S", "Select"], ["E", "Finish and extrude"], ["Tab", "Next typed value"], ["Esc", "Stop / finish sketch"]]),
-      rows("Advanced", [["L R C", "Start a sketch with that tool"], ["Arrows", "Nudge the selection, the way it looks on screen (Ctrl ↑↓: up / down)"], ["S", "Create sketch"], ["E", "Extrude"], ["Shift R", "Revolve"], ["Q", "Offset face (press pull)"], ["H", "Hole"], ["F", "Fillet"], ["Shift C", "Chamfer"], ["M", "Move / copy"], ["A", "Align"], ["P", "Pattern"], ["B", "Combine"], ["T", "Texture"], ["I", "Measure"], ["Shift F", "Fit all"], ["Drag right / left", "Window / crossing select"]]),
+      rows("Advanced", [["L R C", "Start a sketch with that tool"], ["Arrows", "Nudge the selection, the way it looks on screen (Ctrl ↑↓: up / down)"], ["S", "Create sketch (on the face you clicked, if any)"], ["E", "Extrude (pushes or pulls the face you clicked, if any)"], ["Press + drag a face", "In Extrude: pull it out or push it in"], ["Shift R", "Revolve"], ["Q", "Offset face (press pull)"], ["H", "Hole"], ["F", "Fillet"], ["Shift C", "Chamfer"], ["M", "Move / copy"], ["A", "Align"], ["P", "Pattern"], ["B", "Combine"], ["T", "Texture"], ["I", "Measure"], ["Shift F", "Fit all"], ["Drag right / left", "Window / crossing select"]]),
       rows("Beginner", [["L R C", "Sketch a line, rectangle or circle"], ["E", "Extrude"], ["A", "Align"], ["P", "Pattern"], ["M", "Mirror"], ["H", "Make hole"], ["S", "Make solid"], ["D", "Drop to workplane"], ["T", "Texture"], ["F", "Fit all"], ["Arrows", "Nudge, the way it looks on screen (Shift ×10)"], ["Ctrl ↑↓", "Lift / lower"], [", .", "Turn 1° after a rotation arc (Shift 15°)"], ["Ctrl G", "Group (Shift: ungroup)"], ["Ctrl D", "Duplicate"], ["Tab", "Type sizes on the selected shape (Shift Tab: back)"], ["I", "Measure"]]),
       rows("Architect", [["W", "Wall (click each corner)"], ["R", "Room (drag corner to corner)"], ["E", "Raise walls"], ["D", "Door"], ["N", "Window"], ["O", "Roof"], ["G", "Floor"], ["T", "Finishes (textures, colours, patterns)"], ["L", "Landscape (ground, water, plants)"], ["S", "Simulate (weather, flood test)"], ["Arrows", "Nudge the selected roof, door or window"], ["V", "Select"], ["0-9 Enter", "While drawing a wall: type its exact length (12' 6\" or 3600)"], ["Enter", "Finish the walls you are drawing"], ["Shift", "Draw at any angle"], ["Alt", "Turn snapping off for a moment"], ["P", "Plan view / 3D"], ["X", "See-through on or off"], ["Delete", "Delete the selection"], ["Esc", "Stop drawing, back to Select"]]),
       rows("Chisel (Pro)", [["D", "Standard brush"], ["C", "Clay"], ["S", "Smooth"], ["T", "Flatten"], ["G", "Move brush"], ["N", "Snakehook"], ["Q", "Mask"], ["J", "Paint"], ["M", "Select & move"], ["[ ]", "Brush size"], ["Shift drag", "Smooth"], ["Alt drag", "Invert brush"], ["Ctrl drag", "Mask"], ["X", "Mirror X"], ["F", "Frame"], ["Drag right / left", "Window / crossing select (Select & move)"], ["Tab", "Type sizes (Select & move)"], ["R C P", "Rectangle, circle, polygon (Sketch)"], ["E", "Extrude the sketch"], ["Esc", "Cancel the shape / sketch"]]),
@@ -934,6 +1386,8 @@ app.onShapeClosed = function (skId, regionKeys) {
 
 app.select = function (ids) {
   app.sel = [...new Set(ids)];
+  // (a face picked with the last click: forgotten when the selection changes)
+  if (app.selFace) { app.selFace = null; app.scene.state.faces = new Map(); }
   app.scene.setSelected(app.sel);
   app.refreshUI("select");
 };
@@ -978,9 +1432,60 @@ app.refreshUI = function (kind) {
   app.status();
 };
 
+// "Rebuilding": after a few seconds it names the body being built and how long it has taken,
+// so a slow body (spiral cuts, many offset faces) shows it is still working
+function busyText() {
+  const k = app.kernel, b = $("busy");
+  if (!b) return;
+  const nameOf = (list) => list.map((it) => (store.doc.bodies.find((x) => x.id === it.id) || {}).name).filter(Boolean);
+  const tm = (at) => { const s = Math.round((Date.now() - at) / 1000); return s >= 60 ? Math.floor(s / 60) + " min " + String(s % 60).padStart(2, "0") + " s" : s + " s"; };
+  const parts = [];
+  if (k && k.inflight && k.inflightAt && Date.now() - k.inflightAt > 4000) {
+    const names = nameOf(k.inflight);
+    parts.push("Building " + (names.length ? names.slice(0, 2).join(", ") + (names.length > 2 ? "…" : "") + " · " : "") + tm(k.inflightAt) + (k.queue.size ? ` · ${k.queue.size} more` : ""));
+  }
+  // a very slow body building in the background engine (the rest of the design is usable)
+  if (k && k.slow && k.slow.inflight) {
+    const names = nameOf(k.slow.inflight);
+    parts.push((names.length ? names[0] : "A slow body") + " is building in the background · " + tm(k.slow.at) + (k.slow.queue.size ? ` · ${k.slow.queue.size} more` : ""));
+  }
+  b.textContent = parts.length ? parts.join(" | ") : "Rebuilding";
+  const slowNow = !!(k && k.slowNow && k.slowNow()) && !b.hidden;
+  const st = $("busy-stop"), hp = $("busy-help");
+  if (st) st.hidden = !slowNow;
+  if (hp) hp.hidden = !slowNow;
+  b.title = k && k.slow && k.slow.inflight ? "This body has many curved cuts or offset curved faces, so it takes several minutes the first time. It is remembered afterwards, and saved project files carry it, so it opens quickly next time." : "";
+}
+setInterval(() => { if (app.kernel && (app.kernel.inflight || (app.kernel.slow && app.kernel.slow.inflight))) busyText(); }, 1000);
+// a very slow body: Stop, and tips for making it quicker
+setTimeout(() => {
+  const st = $("busy-stop"), hp = $("busy-help");
+  if (st) st.onclick = () => { app.kernel.stopSlow(); app.toast("Stopped. That body isn't shown until it is built: open the design again (or change the body) to build it."); };
+  if (hp) hp.onclick = () => app.showSlowHelp();
+}, 0);
+app.showSlowHelp = () => {
+  const tips = [
+    ["Why it's slow:", "every curved cut (sweep, twisted sweep, loft, revolve) and every curved face you Offset is one heavy calculation for the geometry engine, and they are done one after another. A body with 5 spiral cuts plus 24 offset spiral faces is about 30 of them."],
+    ["It only happens once:", "the built body is remembered in this browser, and a project file saved after it has built carries it, so the design then opens in a few seconds, on any computer. Let it finish once, then Save."],
+    ["Making clearance between moving parts:", "try Advanced Modify → Clearance before offsetting many curved faces: it cuts the other part, grown by the gap, out in one step. On very complex free-form parts (like spiral cuts) the engine may not be able to grow the part; Clearance then says so, and offsetting the faces is the way."],
+    ["Fewer, simpler features:", "offset a few big faces rather than many small ones; pattern a cut rather than making each copy by hand; fillet or shell before adding spiral cuts, not after; and keep twisted sweeps to the turns you need."],
+    ["Keep working meanwhile:", "a very slow body builds in a second engine, so the rest of the design can be changed while it builds. Stop ends it; opening the design again starts it again."],
+  ];
+  const box = document.createElement("div");
+  box.className = "modal-back"; box.id = "slow-help";
+  box.innerHTML = '<div class="modal" role="dialog" aria-label="Slow bodies" style="max-width:560px"><header style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--line-2)"><h3 style="margin:0;flex:1;font:600 16px/1 var(--f-label);letter-spacing:.08em;text-transform:uppercase">Slow bodies</h3><button class="xbtn" aria-label="Close">✕</button></header><div style="padding:12px 16px 16px;display:flex;flex-direction:column;gap:9px;font-size:13px;line-height:1.45"></div></div>';
+  const body = box.querySelector(".modal > div");
+  for (const [h, t] of tips) { const p = document.createElement("p"); p.style.margin = "0"; const bb = document.createElement("b"); bb.textContent = h + " "; p.append(bb, t); body.append(p); }
+  const close = () => box.remove();
+  box.querySelector(".xbtn").onclick = close;
+  box.addEventListener("click", (e) => { if (e.target === box) close(); });
+  document.body.append(box);
+};
+
 app.status = function () {
-  const busy = app.scene && (app.scene.busy() || app.kernel.inflight || app.kernel.queue.size);
+  const busy = app.scene && (app.scene.busy() || app.kernel.inflight || app.kernel.queue.size || (app.kernel.slowBusy && app.kernel.slowBusy()));
   $("busy").hidden = !busy || !app.kernel.ready;
+  busyText();
   let hint = "";
   if (app.mode === "arch") hint = app.arch.hint();
   else if (app.sketcher.active) hint = app.sketchHint();
@@ -1006,9 +1511,10 @@ app.sketchHint = function () {
   const t = app.sketcher.tool, st = app.sketcher.state;
   const typing = " Type a number to set it exactly, Tab for the next value.";
   return {
-    line: st ? "Click the next point. Click the start point to close, Esc to stop." + typing : "Click to start a line.",
+    line: st ? "Click where the line ends (or type its length and angle)." + typing + " Then press L for the next line." : "Click to start a line.",
     rect: st ? "Click the opposite corner." + typing : "Click the first corner.",
     rectc: st ? "Click a corner." + typing : "Click the center.",
+    freehand: app.vp.touchMode ? "Draw with your finger or pen. Smart shapes turns a straight stroke into a line, a round one into a circle, a rough box into a rectangle; other strokes become smooth curves you can reshape by their points. Start or stop on a point to join it." : "Drag to draw. Smart shapes turns a straight stroke into a line, a round one into a circle, a rough box into a rectangle; other strokes become smooth curves you can reshape by their points. Start or stop on a point to join it.",
     spline: st ? `Click more points (${st.fit ? st.fit.length : 1} so far). Click the first point to close it; double-click, Enter or Esc to finish.` : "Click the first point of the spline.",
     rect3: st ? (st.step === 1 ? "Click the end of the first side." + typing : "Click to set the width." + typing) : "Click the first corner.",
     circle: st ? "Click to set the size." + typing : "Click the center.",
@@ -1145,7 +1651,7 @@ function onKey(e) {
     if (e.key === "Enter") { if (app.sketcher.state) app.sketcher.commitTyped(); else app.exitSketch(); return; }
     if (e.key === "Delete" || e.key === "Backspace") { app.sketcher.deleteSelection(); e.preventDefault(); return; }
     if (/^Arrow/.test(e.key) && !mod && app.sketcher.nudge(e)) { e.preventDefault(); return; }
-    const map = { l: "line", r: "rect*", c: "circle", a: "arc3", p: "polygon", t: "trim", d: "dim", s: "select" };
+    const map = { l: "line", r: "rect*", c: "circle", a: "arc3", p: "polygon", h: "freehand", t: "trim", d: "dim", s: "select" };
     if (!mod && (k === "e" || k === "q")) { e.preventDefault(); app.quickExtrude(); return; }
     if (!mod && e.shiftKey && k === "t") { app.sketcher.setTool("text"); return; }
     if (!mod && map[k]) { app.sketcher.setTool(map[k]); return; }

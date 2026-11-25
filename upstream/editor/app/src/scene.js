@@ -7,7 +7,7 @@ import { resolveNode, bodyKey, regionsFor, sketchTexts } from "./store.js";
 import { textContours } from "./textgeo.js";
 import { resolveSketch, sampleCurve } from "./regions.js";
 import { applyTextures, matchTextureFaces } from "./texture.js";
-import { lookOf } from "./appearance.js";
+import { lookOf, heightColors } from "./appearance.js";
 
 // textured meshes are expensive to make: keep the last few
 const texCache = new Map();
@@ -119,7 +119,7 @@ class BodyView {
   makeMats(body, style) {
     const base = new THREE.MeshStandardMaterial({ color: body.color || "#a7b0ba", roughness: 0.62, metalness: 0.04, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1, side: THREE.DoubleSide });
     const hover = base.clone(); hover.color = HOVER.clone(); hover.emissive = new THREE.Color("#5a3a00"); hover.emissiveIntensity = 0.25;
-    const sel = base.clone(); sel.color = new THREE.Color("#5b8be0"); sel.emissive = new THREE.Color("#0c2a66"); sel.emissiveIntensity = 0.35;
+    const sel = base.clone(); sel.color = new THREE.Color("#4a86f0"); sel.emissive = new THREE.Color("#0c3a99"); sel.emissiveIntensity = 0.45;
     return [base, hover, sel];
   }
   applyStyle(body, style) {
@@ -129,12 +129,13 @@ class BodyView {
     const color = style.mono ? "#b4bcc5" : body.color || "#a7b0ba";
     const cut = !!body.cutPreview; // the volume an extrude is about to cut away
     base.color.set(cut ? "#e5484d" : hole ? "#8f99a3" : style.collide ? "#e5484d" : color);
-    const ghost = hole || style.ghost || cut;
+    // style.standIn: an earlier step of a slow body, shown while it builds
+    const ghost = hole || style.ghost || cut || !!style.standIn;
     // (for the Projector: the color without any highlight, and whether this is a see-through preview)
     this.plainColor = base.color.clone(); this.ghost = ghost || !!style.collide;
     for (const m of [base, hover, sel]) {
       m.transparent = ghost;
-      m.opacity = cut ? 0.5 : hole ? 0.32 : style.ghost ? 0.25 : 1;
+      m.opacity = cut ? 0.5 : hole ? 0.32 : style.ghost ? 0.25 : style.standIn ? 0.45 : 1;
       m.depthWrite = !ghost;
       m.needsUpdate = true;
     }
@@ -158,16 +159,22 @@ class BodyView {
   // colors and simulated materials (Advanced mode): the whole body and/or single faces
   applyAppearance(ap, base) {
     const env = ap && this.scene.vp.studioEnv ? this.scene.vp.studioEnv() : null;
+    let zr = null; // the body's bottom and top, for rainbow / gradient silk
+    const zRange = () => { if (!zr) { const g = this.mesh.geometry; if (!g.boundingBox) g.computeBoundingBox(); this.mesh.updateMatrixWorld(); const b = g.boundingBox.clone().applyMatrix4(this.mesh.matrixWorld); zr = [b.min.z, b.max.z]; } return zr; };
     const setLook = (m, a) => {
       const L = lookOf(a);
       m.color.set(L.color);
       m.metalness = L.metal; m.roughness = L.rough;
-      m.envMap = env; m.envMapIntensity = L.metal > 0.5 ? 1.9 : 0.6;
+      m.envMap = env; m.envMapIntensity = L.env ?? (L.metal > 0.5 ? 1.9 : 0.6);
       if (L.opacity < 1) { m.transparent = true; m.opacity = L.opacity; m.depthWrite = false; }
+      if (L.fx) heightColors(m, L, ...zRange()); else heightColors(m, L, 0, 0);
       m.needsUpdate = true;
     };
     if (ap && ap.body) { setLook(base, ap.body); this.tinted = false; }
-    else if (base.metalness !== 0.04 || base.envMap) { base.metalness = 0.04; base.roughness = 0.62; base.envMap = null; base.needsUpdate = true; }
+    else {
+      if (base.userData.fxKey) heightColors(base, { fx: null }, 0, 0);
+      if (base.metalness !== 0.04 || base.envMap) { base.metalness = 0.04; base.roughness = 0.62; base.envMap = null; base.needsUpdate = true; }
+    }
     const faces = ap && ap.faces && ap.faces.length ? ap.faces : null;
     const sig = faces ? JSON.stringify(faces) + "|" + this.dataVer : "";
     if (sig !== this.apSig) {
@@ -180,6 +187,7 @@ class BodyView {
           const idx = matchTextureFaces(this.data, [f]);
           if (!idx.length) continue;
           const m = this.mats[0].clone();
+          m.userData.fxKey = null; m.onBeforeCompile = () => {}; m.customProgramCacheKey = () => "";
           setLook(m, f);
           m.userData.look = f;
           this.mats.push(m);
@@ -263,12 +271,26 @@ export class SceneSync {
       if (res) {
         if (res.ok) {
           this.errors.delete(b.id);
+          // something the engine wants said once (a fillet that only partly fit, say)
+          if (res.notes && res.notes.length) {
+            this.noted = this.noted || new Set();
+            if (!this.noted.has(b._key)) { this.noted.add(b._key); this.onNotes && this.onNotes(b, res.notes); }
+          }
           const tsig = textureSig(b);
           if (v.key !== b._key || v.tsig !== tsig) {
             v.setData(tsig ? texturedMesh(b._key, res.mesh, b.textures) : res.mesh, b, this.styleFor(b));
             v.key = b._key; v.tsig = tsig; v.shownNode = JSON.parse(JSON.stringify(b.node));
           }
         } else this.errors.set(b.id, res.error);
+        v.standIn = false;
+      } else {
+        // a very slow body still building: show it as it was a step or two earlier (see-through)
+        const pre = this.kernel.standIn && this.kernel.standIn(b._key);
+        if (pre && v.key !== "pre:" + b._key) {
+          v.setData(pre.mesh, b, this.styleFor(b));
+          v.key = "pre:" + b._key; v.tsig = null; v.shownNode = null;
+        }
+        v.standIn = !!pre;
       }
       v.body = b;
       v.pending = !res;
@@ -295,7 +317,7 @@ export class SceneSync {
         v.mesh.position.set(...off);
         v.edges.position.set(...off);
       }
-      v.applyStyle(b, this.styleFor(b));
+      v.applyStyle(b, v.standIn ? { ...this.styleFor(b), standIn: true } : this.styleFor(b));
       v.setFaceStates(this.state.faces.get(b.id) || new Map());
       // projection media (pictures / videos on the object)
       if (this.onView) this.onView(v, b, doc);
@@ -310,7 +332,8 @@ export class SceneSync {
     const s = this.state;
     return {
       // bodies a window is about to catch, and an extrude's new body while it's previewed
-      selected: s.selected.has(b.id) || s.pre.has(b.id) || !!b.cmdPreview,
+      // (a body whose face was clicked shows just that face picked, like Fusion 360)
+      selected: (s.selected.has(b.id) && !(s.faces.get(b.id) && [...s.faces.get(b.id).values()].includes(2))) || s.pre.has(b.id) || !!b.cmdPreview,
       tool: s.tools.has(b.id),
       hovered: s.hovered === b.id,
       ghost: s.ghost.has(b.id),

@@ -5,9 +5,13 @@
 import * as THREE from "three";
 import { TUTORIALS as BASE_TUTORIALS } from "./tutorial_data.js";
 import { MORE } from "./tutorial_data_more.js";
+import { PRO_TUTORIALS } from "./tutorial_pro.js";
 import { ARCH_TUTORIALS } from "./tutorial_arch.js";
+import { LAMP_TUTORIALS } from "./tutorial_lamps.js";
+import { PROJECT_TUTORIALS } from "./tutorial_projects.js";
+import { TOOL_TUTORIALS } from "./tutorial_tools.js";
 import { landArrays, GROUND, PLANTS } from "./archland.js";
-const TUTORIALS = [...BASE_TUTORIALS, ...MORE, ...ARCH_TUTORIALS];
+const TUTORIALS = [...BASE_TUTORIALS, ...MORE, ...PRO_TUTORIALS, ...LAMP_TUTORIALS, ...PROJECT_TUTORIALS, ...ARCH_TUTORIALS, ...TOOL_TUTORIALS.filter((t) => t.mode !== "chisel")];
 import { store } from "./store.js";
 import { el } from "./util.js";
 import { ICON } from "./icons.js";
@@ -121,8 +125,27 @@ export function initTutorials(app) {
     archFloorRaised: () => T.arch().levels.some((l) => l.elev > 100),
     archFinished: (k) => (k === "wall" ? T.archWalls() : k === "roof" ? T.arch().roofs : T.arch().slabs).filter((q) => q.fin && q.fin.tex).length,
     archUnitsPicked: () => !!(app.arch && app.arch.state.unitsPicked),
+    // Chisel (see chisel.js tut()): strokes per tool, objects, saving and exporting
+    ch: () => (app.chisel && app.chisel.tut ? app.chisel.tut() : null),
+    chCount: (re, n = 1) => { const c = T.ch(); return !!c && c.objs.filter((o) => o.visible && re.test(o.name)).length >= n; },
+    chUsed: (key, n = 1) => { const c = T.ch(); return !!c && (c.by[key] || 0) >= n; },
+    chTool: (tool) => { const c = T.ch(); return !!c && c.tool === tool; },
+    chHist: (n) => { const c = T.ch(); return !!c && c.hist >= n; },
+    chSym: () => { const c = T.ch(); return !!c && c.symX; },
+    chPup: () => { const c = T.ch(); return !!c && c.pup; },
+    chKeys: (n) => { const c = T.ch(); return !!c && c.objs.some((o) => o.keys >= n); },
+    chFig: (re) => { const c = T.ch(); return !!c && c.figSets.some((s) => re.test(s)); },
+    chLaid: () => { const c = T.ch(); return !!c && c.figLaid; },
+    chSaved: () => { const c = T.ch(); return !!c && c.objs.length > 0 && c.objs.every((o) => o.jsId) && (store.doc.bodies || []).some((b) => b.sculpt); },
+    chExported: () => { const c = T.ch(); return !!c && c.exported > 0; },
+    chEl: (s) => !!(app.chisel && app.chisel.el && app.chisel.el(s)),
     archPlanSeen: () => !!(app.arch && app.arch.state.planSeen),
     archSelWall: () => !!(app.arch && app.arch.state.sel && app.arch.state.sel.k === "wall"),
+    // the 3D Print Sim: its state (open or not), and whether an object was turned or copied there
+    psim: () => (app.advanced && app.advanced.printSim ? app.advanced.printSim.st : null),
+    psimArranged: () => { const s = T.psim(); return !!s && (s.inst || []).some((q) => q.key !== q.id || !q.X.elements.every((v, i) => Math.abs(v - (i % 5 === 0 ? 1 : 0)) < 1e-9)); },
+    planes: () => store.doc.planes || [],
+    sectionOn: () => !!(app.section && app.section.info),
     exported: (ext) => !!cur && cur.exported.has(ext),
     // the Floor Planner (Architect → Floor Planner): its rooms, items, mode… (sizes in feet)
     fpOpen: () => !!(app.floorplan && app.floorplan.isOpen),
@@ -139,7 +162,7 @@ export function initTutorials(app) {
 
   // ---------------------------------------------------------------- the chooser
   function openChooser(mode) {
-    const want = mode || (app.mode === "advanced" ? "advanced" : app.mode === "arch" ? "arch" : "beginner");
+    const want = mode || (app.mode === "advanced" ? "advanced" : app.mode === "arch" ? "arch" : app.mode === "chisel" ? "chisel" : "beginner");
     const back = el("div", { class: "modal-back", onclick: (e) => { if (e.target === back) back.remove(); } });
     const list = el("div", { class: "tut-cards", id: "tut-cards" });
     const tabs = el("div", { class: "seg tut-tabs", role: "tablist" });
@@ -155,6 +178,7 @@ export function initTutorials(app) {
         const doneN = prog && prog.done ? prog.done.length : 0;
         list.append(el("button", { class: "tut-card", id: "tut-" + t.id, onclick: () => { back.remove(); start(t.id); } },
           el("div", { class: "tut-card-top" }, el("span", { class: "tut-level " + t.level.toLowerCase() }, t.level), el("span", { class: "tut-time" }, `${t.minutes} min · ${t.steps.length} steps`)),
+          t.ages || t.topic ? el("div", { class: "tut-tags" }, t.ages ? el("span", { class: "tut-tag" }, "Ages " + t.ages) : null, t.topic ? el("span", { class: "tut-tag" }, t.topic) : null, /^2[5-9]|^3/.test(t.minutes) ? el("span", { class: "tut-tag proj" }, "Project") : null) : null,
           el("b", {}, t.title),
           el("p", {}, t.blurb),
           el("div", { class: "tut-learn" }, "You'll use: " + t.learn.join(", ")),
@@ -165,7 +189,7 @@ export function initTutorials(app) {
     const modal = el("div", { class: "modal tut-modal", role: "dialog", "aria-label": "Tutorials" },
       el("header", {}, el("h2", {}, "Tutorials"), el("button", { class: "xbtn", "aria-label": "Close", html: ICON.close, onclick: () => back.remove() })),
       el("div", { class: "mbody" },
-        el("p", { class: "tut-intro" }, "Pick a project. Each one walks you through real tools to make a real, printable item. The short ones take 5-10 minutes; the bigger projects take 10-15, and Expert projects about 20."),
+        el("p", { class: "tut-intro" }, "Pick a project. Each one walks you through real tools to make a real, printable item. The short ones take 5-10 minutes and the bigger projects 10-15. The largest Advanced and Expert projects make several parts with many tools and take 18-28 minutes."),
         el("div", { class: "tut-remind" }, el("b", {}, "Always start by naming your design: "), "Last name, First name, Item name ", el("span", { class: "tut-eg" }, "(Lopez, Maria, Keychain)"),
           el("br"), el("b", {}, "Always finish by saving "), "(Save or Ctrl+S: v1, v2…) ", el("b", {}, "and exporting an STL "), "(Export → STL)."),
         el("div", { class: "tut-remind tut-remind-fp", hidden: true }, el("b", {}, "Floor Planner projects "), "happen in Architect → Floor Planner, on graph paper where 1 block = 1 foot. ",
@@ -194,6 +218,8 @@ export function initTutorials(app) {
       app.projects.newDesign(tut.mode);
       lsSet("p." + id, null);
     }
+    // Chisel tutorials use the Easy tools
+    if (tut.mode === "chisel" && app.chisel && app.chisel.setLevel) setTimeout(() => { try { app.chisel.setLevel("easy"); } catch (e) {} }, 600);
     cur = { tut, i: prog ? Math.min(prog.i || 0, tut.steps.length - 1) : 0, done: new Set(prog ? prog.done || [] : []), startVer: app.projects.version(), exported: new Set() };
     lsSet("active", { id, doc: store.doc.id });
     buildPanel();
@@ -241,6 +267,8 @@ export function initTutorials(app) {
     // Floor Planner projects: over the right side of its drawing area, clear of its toolbar,
     // its left menus and its Blueprint List
     if (cur && cur.tut.mode === "plan" && !small) { panel.style.left = Math.max(8, innerWidth - 430 - Math.min(340, innerWidth - 16)) + "px"; panel.style.top = "170px"; }
+    // Chisel: over the left of the view, clear of its tools rail and its panel on the right
+    if (cur && cur.tut.mode === "chisel" && !small) { panel.style.left = "104px"; panel.style.right = "auto"; panel.style.top = "205px"; }
     // drag by the header
     panel.addEventListener("pointerdown", (e) => {
       const h = e.target.closest(".tut-head");
@@ -265,9 +293,28 @@ export function initTutorials(app) {
     if (dock && !dock.hidden && dock.getClientRects().length) { const r = dock.getBoundingClientRect(); if (r.height > 20 && r.top > top + 160) bottom = Math.min(bottom, r.top - 6); }
     panel.style.maxHeight = Math.max(140, bottom - top) + "px";
   }
+  // v2.9.9.9.11: if the control a step points to is under the tutorial card (for example the
+  // 3D Print Sim's panel, which opens where the card starts), move the card beside it
+  function dodge(t) {
+    if (!panel || !t || t.ownerDocument !== document) return;
+    const r = t.getBoundingClientRect(); if (!r.width || !r.height) return;
+    const p = panel.getBoundingClientRect();
+    if (p.right < r.left - 4 || p.left > r.right + 4 || p.bottom < r.top - 4 || p.top > r.bottom + 4) return;
+    let left = r.right + 16;
+    if (left + p.width > innerWidth - 8) left = r.left - 16 - p.width;
+    if (left >= 8) panel.style.left = left + "px";
+    else panel.style.top = Math.max(0, Math.min(innerHeight - 140, r.bottom + 16)) + "px";
+    fit();
+  }
+  function dodgeStep() {
+    if (!panel || !cur) return;
+    const step = cur.tut.steps[cur.i];
+    if (step && step.show) { const t = target(step.show); if (t) dodge(t); }
+  }
   function render() {
     if (!panel || !cur) return;
     requestAnimationFrame(fit);
+    requestAnimationFrame(() => requestAnimationFrame(dodgeStep));
     const { tut, i } = cur, step = tut.steps[i], n = tut.steps.length;
     const doneN = cur.done.size, isDone = cur.done.has(i);
     panel.classList.toggle("mini", !!cur.mini);
@@ -367,6 +414,9 @@ export function initTutorials(app) {
     for (const s of sels) {
       const e = document.querySelector(s);
       if (e && e.getClientRects().length) return e;
+      // in a closed Beginner toolbar menu: point at the menu's button
+      const m = e && e.closest(".bb-menu"), t = m && document.getElementById(m.id.replace(/-menu$/, ""));
+      if (t && t.getClientRects().length) return t;
     }
     // a beginner tool inside a folded ribbon section: point at the section's menu button
     for (const s of sels) {
@@ -390,6 +440,7 @@ export function initTutorials(app) {
     if (!step.show) return;
     const t = target(step.show);
     if (!t) { if (loud) app.toast(step.show.via ? "Find it in the toolbar menus." : cur.tut.mode === "beginner" && app.mode !== "beginner" ? "Switch to Beginner mode to see this." : "It appears when the step before is done."); return; }
+    dodge(t);
     spot = t;
     t.classList.add("tut-spot");
     const r = t.getBoundingClientRect();

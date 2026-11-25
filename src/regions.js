@@ -258,18 +258,48 @@ export function intersect(A, B, tol = 1e-6) {
   return rawIntersect(A, B).filter((p) => onCurve(A, p, tol) && onCurve(B, p, tol));
 }
 
+// ------------------------------------------------------------ pairs that can meet
+// The pairs of curves whose bounding boxes overlap (sorted by left edge and swept), so big
+// sketches don't test every curve against every other one (that took most of a second for a
+// few thousand lines, on every pointer move while snapping).
+function curveBox(c) {
+  const pad = 1e-5;
+  if (c.t === "line") return [Math.min(c.a[0], c.b[0]) - pad, Math.min(c.a[1], c.b[1]) - pad, Math.max(c.a[0], c.b[0]) + pad, Math.max(c.a[1], c.b[1]) + pad];
+  if (c.t === "circle" || c.t === "arc") return [c.c[0] - c.r - pad, c.c[1] - c.r - pad, c.c[0] + c.r + pad, c.c[1] + c.r + pad];
+  const pts = c.poly || c.polyS || [];
+  if (c.t === "spline" && pts.length) {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const q of pts) { if (q[0] < x0) x0 = q[0]; if (q[0] > x1) x1 = q[0]; if (q[1] < y0) y0 = q[1]; if (q[1] > y1) y1 = q[1]; }
+    // (the curve can bulge a little past its samples)
+    const m = Math.max(x1 - x0, y1 - y0) * 0.05 + pad;
+    return [x0 - m, y0 - m, x1 + m, y1 + m];
+  }
+  return [-Infinity, -Infinity, Infinity, Infinity];
+}
+export function curvePairs(geo, fn) {
+  const box = geo.map(curveBox), order = geo.map((_, i) => i).sort((a, b) => box[a][0] - box[b][0]);
+  for (let k = 0; k < order.length; k++) {
+    const i = order[k], bi = box[i];
+    for (let m = k + 1; m < order.length; m++) {
+      const j = order[m], bj = box[j];
+      if (bj[0] > bi[2]) break;
+      if (bj[1] > bi[3] || bj[3] < bi[1]) continue;
+      if (i < j) fn(i, j); else fn(j, i);
+    }
+  }
+}
+
 // ------------------------------------------------------------ split into pieces
 // A piece: {ent, t:'line'|'arc'|'circle', a, b, (c, r, s0, s1 for arcs)}
 export function splitCurves(curves) {
   const geo = curves.filter((c) => c.t !== "point" && !c.cons);
   const cuts = geo.map(() => []);
-  for (let i = 0; i < geo.length; i++)
-    for (let j = i + 1; j < geo.length; j++) {
-      for (const p of intersect(geo[i], geo[j])) {
-        cuts[i].push(p);
-        cuts[j].push(p);
-      }
+  curvePairs(geo, (i, j) => {
+    for (const p of intersect(geo[i], geo[j])) {
+      cuts[i].push(p);
+      cuts[j].push(p);
     }
+  });
   const pieces = [];
   geo.forEach((c, i) => {
     if (c.t === "spline") {
@@ -611,7 +641,6 @@ export function sampleCurve(c, seg = 96) {
 export function allIntersections(curves) {
   const geo = curves.filter((c) => c.t !== "point");
   const out = [];
-  for (let i = 0; i < geo.length; i++)
-    for (let j = i + 1; j < geo.length; j++) out.push(...intersect(geo[i], geo[j]));
+  curvePairs(geo, (i, j) => { for (const p of intersect(geo[i], geo[j])) out.push(p); });
   return out;
 }

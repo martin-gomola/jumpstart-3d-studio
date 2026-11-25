@@ -19,6 +19,7 @@ export async function initKernel(opencascade, wasmBinary) {
 
 // ---------------------------------------------------------------- cache
 const cache = new Map(); // key -> Shape (owned by cache)
+const cacheNotes = new Map(); // key -> notes raised while that shape was built
 const CACHE_MAX = 80;
 function cacheGet(key) {
   const s = cache.get(key);
@@ -33,12 +34,14 @@ function cachePut(key, shape) {
   while (cache.size > CACHE_MAX) {
     const [k, s] = cache.entries().next().value;
     cache.delete(k);
+    cacheNotes.delete(k);
     try { s.delete(); } catch (e) {}
   }
 }
 export function clearCache() {
   for (const s of cache.values()) try { s.delete(); } catch (e) {}
   cache.clear();
+  cacheNotes.clear();
 }
 
 // ---------------------------------------------------------------- helpers
@@ -505,12 +508,31 @@ function buildRevolve(node) {
       const w = pl.toWorldCoords([q0[0] * st[0], q0[1] * st[1]]).toTuple();
       const v = [w[0] - a[0], w[1] - a[1], w[2] - a[2]];
       const side = (v[1] * dn[2] - v[2] * dn[1]) * n[0] + (v[2] * dn[0] - v[0] * dn[2]) * n[1] + (v[0] * dn[1] - v[1] * dn[0]) * n[2];
-      if (side > 1e-6) pos = true;
-      if (side < -1e-6) neg = true;
+      if (side > 1e-2) pos = true;
+      if (side < -1e-2) neg = true;
     }
     if (pos && neg) throw new Error("The profile crosses the axis. Move it to one side of the axis.");
   }
-  const dr = regionsDrawing(node.regions, node.stretch);
+  // points a hair off the axis (typed lengths and angles round a little) go right onto it, so the
+  // solid closes cleanly instead of turning inside out by a few thousandths of a millimeter
+  let regions = node.regions;
+  {
+    const dn = dir.map((v) => v / dl), st = node.stretch || [1, 1];
+    const snap = (q0) => {
+      if (!q0) return q0;
+      const w = pl.toWorldCoords([q0[0] * st[0], q0[1] * st[1]]).toTuple();
+      const v = [w[0] - a[0], w[1] - a[1], w[2] - a[2]], t = v[0] * dn[0] + v[1] * dn[1] + v[2] * dn[2];
+      const off = Math.hypot(v[0] - t * dn[0], v[1] - t * dn[1], v[2] - t * dn[2]);
+      if (off < 1e-9 || off > 1e-2) return q0;
+      const lp = pl.toLocalCoords(new R.Vector([a[0] + t * dn[0], a[1] + t * dn[1], a[2] + t * dn[2]]));
+      const out = [lp.x / st[0], lp.y / st[1]];
+      lp.delete && lp.delete();
+      return out;
+    };
+    const fix = (s0) => ({ ...s0, a: snap(s0.a), b: snap(s0.b) });
+    regions = node.regions.map((r) => ({ ...r, outer: (r.outer || []).map(fix), holes: (r.holes || []).map((h) => h.map(fix)) }));
+  }
+  const dr = regionsDrawing(regions, node.stretch);
   return dr.sketchOnPlane(pl).revolve(dir, { origin: a, angle: node.angle ?? 360 });
 }
 
@@ -761,7 +783,34 @@ function swPipe(spine, wires) {
     ps2.delete();
   }
 }
+// A twist along one straight line (no taper): an exact helical sweep, the profile guided by a
+// helix around the line. Far lighter than lofting through many turned copies of the profile,
+// so patterns of these cuts (spiral fidget cones, twisted vases) build quickly.
+function swHelical(wire, seg, twist) {
+  const a = seg.a, b = seg.b, L = dist(a, b), tw = (twist * Math.PI) / 180;
+  if (L < 1e-6 || Math.abs(tw) < 1e-9) return null;
+  const dir = Vec.norm(Vec.sub(b, a));
+  const pitch = (L * 2 * Math.PI) / Math.abs(tw);
+  const helix = helixWire(pitch, L, 10, a, dir, tw < 0);
+  const spine = sweepPath([seg]);
+  const ps = new OC.BRepOffsetAPI_MakePipeShell(spine.wrapped);
+  try {
+    ps.SetMode(helix.wrapped, false, OC.BRepFill_TypeOfContact.BRepFill_NoContact);
+    ps.Add(wire.wrapped, false, false);
+    ps.Build();
+    if (!ps.IsDone()) return null;
+    ps.MakeSolid();
+    const out = R.cast(ps.Shape());
+    if (!(Math.abs(safeVolume(out)) > 1e-9)) { out.delete(); return null; }
+    return out;
+  } catch (e) { return null; }
+  finally { ps.delete(); spine.delete(); helix.delete(); }
+}
 function swTwistTaper(wire, segs, taper, twist, isHole) {
+  if (Math.abs(taper) < 1e-9 && segs.length === 1 && segs[0].t === "line" && !swTwistTaper.noHelix) {
+    const h = swHelical(wire, segs[0], twist);
+    if (h) return h;
+  }
   let V = swV, tan = Math.tan(taper * Math.PI / 180), tw = twist * Math.PI / 180, ps2 = segs.map(swSeg), total = ps2.reduce((a, q2) => a + q2.len, 0);
   let nTw = Math.ceil(Math.abs(twist) / 12), n = Math.max(2, nTw, Math.min(segs.length + 1, 12)), probe = swStations(segs, n);
   n = Math.max(n, Math.ceil(probe.turn * 180 / Math.PI / 20) + 1);
@@ -851,6 +900,92 @@ function swGuide(wire, segs, railSegs, scale) {
   } finally { wires.forEach((w) => w.delete && w.delete()); }
 }
 
+// ---------------------------------------------------------------- sweep: any path
+// a path run the other way
+function swReverse(segs) {
+  return segs.slice().reverse().map((x) => x.t === "bsp" ? { ...x, a: x.b, b: x.a, pts: x.pts.slice().reverse() } : x.t === "circle" ? x : { ...x, a: x.b, b: x.a, spans: x.spans && x.spans.slice().reverse().map((b) => [b[3], b[2], b[1], b[0]]) });
+}
+// a closed profile loop (sketch coordinates) as points
+function swLoopPts(loop) {
+  const out = [];
+  for (const s of loop) {
+    if (s.t === "circle") { for (let i = 0; i < 48; i++) { const a = (i / 48) * 2 * Math.PI; out.push([s.c[0] + s.r * Math.cos(a), s.c[1] + s.r * Math.sin(a)]); } continue; }
+    if (s.spans) { for (const b of s.spans) for (let k = 0; k < 8; k++) { const t = k / 8, u = 1 - t; out.push([0, 1].map((i) => u * u * u * b[0][i] + 3 * u * u * t * b[1][i] + 3 * u * t * t * b[2][i] + t * t * t * b[3][i])); } continue; }
+    if (s.t === "arc" && s.m) {
+      const [ax, ay] = s.a, [mx, my] = s.m, [bx, by] = s.b, d = 2 * (ax * (my - by) + mx * (by - ay) + bx * (ay - my));
+      if (Math.abs(d) > 1e-12) {
+        const ux = ((ax * ax + ay * ay) * (my - by) + (mx * mx + my * my) * (by - ay) + (bx * bx + by * by) * (ay - my)) / d, uy = ((ax * ax + ay * ay) * (bx - mx) + (mx * mx + my * my) * (ax - bx) + (bx * bx + by * by) * (mx - ax)) / d;
+        const r = Math.hypot(ax - ux, ay - uy), a0 = Math.atan2(ay - uy, ax - ux), am = Math.atan2(my - uy, mx - ux), a1 = Math.atan2(by - uy, bx - ux);
+        const norm = (x) => ((x % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+        let sweep = norm(a1 - a0);
+        if (norm(am - a0) > sweep) sweep -= 2 * Math.PI;
+        for (let k = 0; k < 12; k++) { const a = a0 + (sweep * k) / 12; out.push([ux + r * Math.cos(a), uy + r * Math.sin(a)]); }
+        continue;
+      }
+    }
+    out.push(s.a);
+  }
+  return out;
+}
+// ear clipping for a cap (simple polygon, counter-clockwise)
+function swEars(P) {
+  const n = P.length, idx = [...Array(n).keys()], tris = [];
+  const cross = (a, b, c) => (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+  const inTri = (p, a, b, c) => cross(a, b, p) >= 0 && cross(b, c, p) >= 0 && cross(c, a, p) >= 0;
+  let guard = 0;
+  while (idx.length > 3 && guard++ < n * n) {
+    let cut = false;
+    for (let i = 0; i < idx.length; i++) {
+      const i0 = idx[(i - 1 + idx.length) % idx.length], i1 = idx[i], i2 = idx[(i + 1) % idx.length];
+      if (cross(P[i0], P[i1], P[i2]) <= 1e-12) continue;
+      if (idx.some((k) => k !== i0 && k !== i1 && k !== i2 && inTri(P[k], P[i0], P[i1], P[i2]))) continue;
+      tris.push([i0, i1, i2]); idx.splice(i, 1); cut = true; break;
+    }
+    if (!cut) break;
+  }
+  if (idx.length === 3) tris.push(idx.slice());
+  return tris;
+}
+// when the engine can't sweep a path (tight or wobbly bends, odd corners), build the sweep from
+// copies of the profile carried along the path (no twisting), joined by triangles
+function swMeshSolid(loop, toWorld, segs) {
+  let P2 = swLoopPts(loop);
+  let A2 = 0; for (let i = 0; i < P2.length; i++) { const a = P2[i], b = P2[(i + 1) % P2.length]; A2 += a[0] * b[1] - b[0] * a[1]; }
+  if (A2 < 0) P2 = P2.reverse();
+  const prof = P2.map(toWorld), m = prof.length;
+  const S0 = swStations(segs, 8), total = S0.total;
+  const n = Math.max(16, Math.min(600, Math.ceil(total / Math.max(0.3, Math.sqrt(Math.abs(A2)) / 4))));
+  const S = swStations(segs, n), st0 = S.st[0].p;
+  const first = S.st[0].p, last = S.st[S.st.length - 1].p;
+  const closed = Math.hypot(first[0] - last[0], first[1] - last[1], first[2] - last[2]) < 1e-3;
+  const rings = closed ? S.st.slice(0, -1) : S.st;
+  const V = [], I = [];
+  for (const s of rings) for (const q of prof) { const r = swApply(s.A, swV.sub(q, st0)); V.push(s.p[0] + r[0], s.p[1] + r[1], s.p[2] + r[2]); }
+  const R = rings.length, segN = closed ? R : R - 1;
+  for (let i = 0; i < segN; i++) {
+    const a = i * m, b = ((i + 1) % R) * m;
+    for (let j = 0; j < m; j++) { const j1 = (j + 1) % m; I.push(a + j, a + j1, b + j, a + j1, b + j1, b + j); }
+  }
+  if (!closed) {
+    const tris = swEars(P2), L = (R - 1) * m;
+    for (const [x, y, z] of tris) { I.push(x, z, y); I.push(L + x, L + y, L + z); }
+  }
+  // outward facing: flip if the volume comes out negative
+  let vol = 0;
+  for (let t = 0; t < I.length; t += 3) { const a = I[t] * 3, b = I[t + 1] * 3, c = I[t + 2] * 3; vol += V[a] * (V[b + 1] * V[c + 2] - V[b + 2] * V[c + 1]) - V[a + 1] * (V[b] * V[c + 2] - V[b + 2] * V[c]) + V[a + 2] * (V[b] * V[c + 1] - V[b + 1] * V[c]); }
+  if (vol < 0) for (let t = 0; t < I.length; t += 3) { const x = I[t + 1]; I[t + 1] = I[t + 2]; I[t + 2] = x; }
+  return solidFromMesh(new Float32Array(V), new Uint32Array(I));
+}
+// "Snap the profile to the path": the profile moved so its middle sits on the path's start, square
+// to the path there (column-major matrix for transformShape)
+function swSnapMatrix(pl, plane, loop, segs) {
+  const c2 = loopCenter(loop), pc = pl.toWorldCoords(c2).toTuple();
+  const S = swStations(segs, 8), p0 = S.st[0].p, t0 = S.st[0].t, n = Vec.norm(plane.n);
+  const ax = Vec.cross(n, t0), s = Math.hypot(...ax), c = Vec.dot(n, t0);
+  const Rm = s < 1e-9 ? (c > 0 ? [[1, 0, 0], [0, 1, 0], [0, 0, 1]] : swRot(perpTo(n), Math.PI)) : swRot(ax.map((v) => v / s), Math.atan2(s, c));
+  const RP = swApply(Rm, pc), tr = [p0[0] - RP[0], p0[1] - RP[1], p0[2] - RP[2]];
+  return { m: [Rm[0][0], Rm[1][0], Rm[2][0], 0, Rm[0][1], Rm[1][1], Rm[2][1], 0, Rm[0][2], Rm[1][2], Rm[2][2], 0, tr[0], tr[1], tr[2], 1], R: Rm, tr };
+}
 function buildSweep(node) {
   if (!node.regions || !node.regions.length) throw new Error("Select a closed profile to sweep");
   const pl = planeOf(node.plane);
@@ -871,7 +1006,8 @@ function buildSweep(node) {
   const rail = node.railSegs && node.railSegs.length ? node.railSegs : null;
   const special = !!rail || Math.abs(taper) > 1e-9 || Math.abs(twist) > 1e-9;
   if (frac < 1 - 1e-9 && segs.length) segs = swTrim(segs, frac);
-  if (special) {
+  const snap = node.snap && segs.length ? swSnapMatrix(pl, node.plane, r0.outer, segs) : null;
+  if (special && !snap) {
     const what = rail ? "A guide rail needs" : "Twist and taper need";
     if (segs.length === 1 && segs[0].t === "circle") throw new Error(what + " an open path. Set Distance below 1, or use a path that is not a closed loop.");
     const start = segs[0].a;
@@ -884,7 +1020,15 @@ function buildSweep(node) {
       if (r.text) throw new Error("Text profiles can't be swept yet");
       const solidOf = (loop, hole) => {
         const sk = loopDrawing(loop).sketchOnPlane(pl);
-        try { return rail ? swGuide(sk.wire, segs, rail, node.railScale !== false) : special ? swTwistTaper(sk.wire, segs, taper, twist, hole) : pipe(sk.wire, spine, node.orient); } finally { sk.delete(); }
+        const wire = snap ? transformShape(sk.wire.clone(), snap.m) : sk.wire;
+        try { return rail ? swGuide(wire, segs, rail, node.railScale !== false) : special ? swTwistTaper(wire, segs, taper, twist, hole) : pipe(wire, spine, node.orient); }
+        catch (err) {
+          // the engine couldn't: carry the profile along the path ourselves (plain sweeps only)
+          if (rail || special || node.orient === "parallel") throw err;
+          const toW = (q) => { const w = pl.toWorldCoords(q).toTuple(); return snap ? swV.add(swApply(snap.R, w), snap.tr) : w; };
+          try { return swMeshSolid(loop, toW, segs); } catch (e2) { throw err; }
+        }
+        finally { if (snap && wire.delete) wire.delete(); sk.delete(); }
       };
       let s1 = solidOf(r.outer, false);
       if (Math.abs(R.measureVolume(s1)) < 1e-9) throw new Error("Couldn't sweep");
@@ -1066,6 +1210,29 @@ function chordRadii(shape, radius) {
   faces.forEach((f) => f.delete());
   return out;
 }
+// a chamfer by distance and angle (or two distances) is measured from one of the two faces at the
+// edge: the upper one (the one facing up most), or the other one when flipped
+function chamferFaces(shape, radius) {
+  const out = new Map(), owners = new Map(), faces = shape.faces;
+  for (const f of faces) for (const e of f.edges) { const h = e.hashCode; if (radius.has(h)) { if (!owners.has(h)) owners.set(h, { e, fs: [] }); else e.delete(); owners.get(h).fs.push(f); } else e.delete(); }
+  for (const [h, { e, fs }] of owners) {
+    const set = radius.get(h);
+    if (!set.ct || set.ct === "equal" || !fs.length) continue;
+    let pick = fs[0];
+    if (fs.length > 1) {
+      try {
+        const p = e.pointAt(0.5), z = fs.map((f) => unitT(f.normalAt(p).toTuple())[2]);
+        let i = Math.abs(z[0] - z[1]) > 1e-6 ? (z[0] >= z[1] ? 0 : 1) : 0;
+        if (set.flip) i = 1 - i;
+        pick = fs[i];
+      } catch (err) {}
+    }
+    out.set(h, pick.hashCode);
+  }
+  for (const { e } of owners.values()) e.delete();
+  faces.forEach((f) => f.delete());
+  return out;
+}
 function matchEdges(shape, sigs) {
   // Returns a Set of edge hashCodes matching the stored signatures. Exact
   // positional match first; otherwise the closest edge in the shape's
@@ -1094,9 +1261,410 @@ function matchEdges(shape, sigs) {
   return out;
 }
 
+// ---------------------------------------------------------------- fillet builder
+// Notes the engine wants shown to the person (a fillet that only partly fit, and so on). They are
+// collected while one body is built and returned with its mesh.
+let NOTES = null;
+const note = (msg) => { if (NOTES && !NOTES.includes(msg)) NOTES.push(msg); };
+
+// Polyline of one tangent contour of a fillet, in order along the spine, so a point anywhere on
+// it can be turned into the spine's relative position 0..1 that OpenCascade's radius law uses.
+function contourPolyline(mf, ic) {
+  const n = mf.NbEdges(ic);
+  const runs = [];
+  for (let j = 1; j <= n; j++) {
+    const e = R.cast(mf.Edge(ic, j));
+    const run = [];
+    for (let i = 0; i <= 48; i++) run.push(e.pointAt(i / 48).toTuple());
+    runs.push(run);
+  }
+  const d2 = (a, b) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
+  const v = mf.FirstVertex(ic);
+  const fp = OC.BRep_Tool.Pnt(v);
+  const first = [fp.X(), fp.Y(), fp.Z()];
+  fp.delete();
+  // chain the runs end to end, starting at the spine's first vertex
+  const line = [];
+  let cur = first;
+  for (let j = 0; j < runs.length; j++) {
+    let run = runs[j];
+    if (d2(run[run.length - 1], cur) < d2(run[0], cur)) run = run.slice().reverse();
+    if (j === 0 && runs.length > 1) {
+      // a closed or awkward start: orient the first run toward the second
+      const nx = runs[1];
+      const end = run[run.length - 1], st = run[0];
+      const near = (p) => Math.min(d2(p, nx[0]), d2(p, nx[nx.length - 1]));
+      if (near(st) < near(end) && d2(st, first) > 1e-6) run = run.slice().reverse();
+    }
+    for (const p of line.length ? run.slice(1) : run) line.push(p);
+    cur = run[run.length - 1];
+  }
+  const acc = [0];
+  for (let i = 1; i < line.length; i++) acc.push(acc[i - 1] + Math.sqrt(d2(line[i], line[i - 1])));
+  return { line, acc, len: acc[acc.length - 1] || 1, closed: mf.Closed(ic) };
+}
+function relAlong(poly, p, withDist) {
+  const { line, acc, len } = poly;
+  let best = Infinity, at = 0;
+  for (let i = 1; i < line.length; i++) {
+    const a = line[i - 1], b = line[i];
+    const ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+    const l2 = ab[0] ** 2 + ab[1] ** 2 + ab[2] ** 2 || 1e-12;
+    let t = ((p[0] - a[0]) * ab[0] + (p[1] - a[1]) * ab[1] + (p[2] - a[2]) * ab[2]) / l2;
+    t = Math.max(0, Math.min(1, t));
+    const q = [a[0] + ab[0] * t, a[1] + ab[1] * t, a[2] + ab[2] * t];
+    const d = (q[0] - p[0]) ** 2 + (q[1] - p[1]) ** 2 + (q[2] - p[2]) ** 2;
+    if (d < best) { best = d; at = (acc[i - 1] + (acc[i] - acc[i - 1]) * t) / len; }
+  }
+  return withDist ? [at, Math.sqrt(best)] : at;
+}
+// The (u, r) pairs of a freeform radius: the person's points, sorted along the contour, with the
+// ends filled in (an open contour keeps the nearest radius to its end, a closed one wraps round
+// so its start and end agree).
+function radiusLaw(poly, pts, k) {
+  // only the points that sit on this contour (a set can hold several separate edges)
+  const tol = Math.max(0.5, poly.len * 0.02);
+  let uv = pts.map((q) => { const [u, d] = relAlong(poly, q.p, true); return d <= tol ? [u, Math.max(0.05, q.r * k)] : null; }).filter(Boolean).sort((a, b) => a[0] - b[0]);
+  const clean = [];
+  for (const q of uv) {
+    if (clean.length && q[0] - clean[clean.length - 1][0] < 1e-3) clean[clean.length - 1][1] = q[1];
+    else clean.push(q);
+  }
+  uv = clean;
+  if (!uv.length) return null;
+  if (poly.closed) {
+    const a = uv[0], b = uv[uv.length - 1];
+    const gap = 1 - b[0] + a[0];
+    const r0 = gap > 1e-6 ? b[1] + (a[1] - b[1]) * ((1 - b[0]) / gap) : a[1];
+    if (a[0] > 1e-3) uv.unshift([0, r0]); else uv[0] = [0, r0];
+    if (b[0] < 1 - 1e-3) uv.push([1, r0]); else uv[uv.length - 1] = [1, r0];
+  } else {
+    if (uv[0][0] > 1e-3) uv.unshift([0, uv[0][1]]); else uv[0][0] = 0;
+    if (uv[uv.length - 1][0] < 1 - 1e-3) uv.push([1, uv[uv.length - 1][1]]); else uv[uv.length - 1][0] = 1;
+  }
+  return uv;
+}
+// Fillet with OpenCascade directly: a number is a constant radius, [r1, r2] runs from one end to
+// the other, and {pts} is a freeform radius set at points along the edge's tangent contour.
+function filletWith(shape, fn) {
+  const mf = new OC.BRepFilletAPI_MakeFillet(shape.wrapped, OC.ChFi3d_FilletShape.ChFi3d_Rational);
+  const edges = shape.edges;
+  let count = 0;
+  try {
+    const free = [];
+    for (const e of edges) {
+      const v = fn(e);
+      if (v == null) continue;
+      if (typeof v === "number") mf.Add(v, e.wrapped);
+      else if (Array.isArray(v)) mf.Add(v[0], v[1], e.wrapped);
+      else {
+        if (mf.Contour(e.wrapped) > 0) continue; // already part of a contour added before
+        mf.Add(v.r, e.wrapped);
+        free.push([e, v]);
+      }
+      count++;
+    }
+    if (!count) throw new Error("no edge was selected");
+    for (const [e, v] of free) {
+      const ic = mf.Contour(e.wrapped);
+      if (ic < 1) continue;
+      const uv = radiusLaw(contourPolyline(mf, ic), v.pts, v.k);
+      if (!uv || uv.length < 2) continue;
+      const arr = new OC.NCollection_Array1_gp_Pnt2d(1, uv.length);
+      uv.forEach(([u, r], i) => { const p = new OC.gp_Pnt2d(u, r); arr.SetValue(i + 1, p); p.delete(); });
+      for (let j = 1; j <= mf.NbEdges(ic); j++) mf.SetRadius(arr, ic, j);
+      arr.delete();
+    }
+    const pr = new OC.Message_ProgressRange();
+    mf.Build(pr);
+    pr.delete();
+    if (!mf.IsDone()) throw new Error("fillet failed");
+    const out = R.cast(mf.Shape());
+    if (!out || !out.wrapped || out.wrapped.IsNull()) throw new Error("fillet failed");
+    return out;
+  } finally {
+    edges.forEach((e) => e.delete());
+    mf.delete();
+  }
+}
+// An edge of a partly filleted shape that is what is left of the original edge `sig`: the same
+// kind of curve, lying along the original (fillets at its ends only shorten it).
+function edgeAlong(shape, sig) {
+  const edges = shape.edges;
+  const path = [sig.a, sig.m, sig.b];
+  const segD = (p, a, b) => {
+    const ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+    const l2 = ab[0] ** 2 + ab[1] ** 2 + ab[2] ** 2 || 1e-12;
+    const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * ab[0] + (p[1] - a[1]) * ab[1] + (p[2] - a[2]) * ab[2]) / l2));
+    return Math.hypot(a[0] + ab[0] * t - p[0], a[1] + ab[1] * t - p[1], a[2] + ab[2] * t - p[2]);
+  };
+  const off = (p) => Math.min(segD(p, path[0], path[1]), segD(p, path[1], path[2]));
+  const len = Math.hypot(sig.a[0] - sig.m[0], sig.a[1] - sig.m[1], sig.a[2] - sig.m[2]) + Math.hypot(sig.b[0] - sig.m[0], sig.b[1] - sig.m[1], sig.b[2] - sig.m[2]);
+  // a curved edge's chords sit inside the curve, so allow for the sag
+  const tol = sig.t === "LINE" ? 1e-3 : Math.max(1e-3, len * 0.15);
+  let best = null, bd = Infinity;
+  for (const e of edges) {
+    if (sig.t && e.geomType !== sig.t) continue;
+    const pts = [e.startPoint.toTuple(), e.pointAt(0.5).toTuple(), e.endPoint.toTuple()];
+    if (sig.t !== "LINE" && Math.hypot(pts[1][0] - sig.m[0], pts[1][1] - sig.m[1], pts[1][2] - sig.m[2]) > tol) continue;
+    const d = Math.max(...pts.map(off));
+    if (d < bd) { bd = d; best = e.hashCode; }
+  }
+  edges.forEach((e) => e.delete());
+  return best != null && bd < tol ? best : null;
+}
+// A fillet or chamfer result worth keeping: a valid solid, as many solids as before, and a volume
+// close to the original (rounding only shaves or fills along the edges).
+function roundingSane(out, before) {
+  try {
+    if (!out || !out.wrapped || out.wrapped.IsNull()) return false;
+    const n = (sh) => { let k = 0; const ex = new OC.TopExp_Explorer(sh.wrapped, OC.TopAbs_ShapeEnum.TopAbs_SOLID, OC.TopAbs_ShapeEnum.TopAbs_SHAPE); for (; ex.More(); ex.Next()) k++; ex.delete(); return k; };
+    if (n(out) !== n(before)) return false;
+    if (!validSolid(out)) return false;
+    const v0 = R.measureVolume(before), v1 = R.measureVolume(out);
+    return v1 > 0 && Math.abs(v1 - v0) <= Math.abs(v0) * 0.6;
+  } catch (e) { return true; }
+}
+// Fallback when a whole fillet fails: each edge on its own, in turn, on the result so far. Edges
+// are found again after every step, since earlier fillets renumber and shorten them.
+function filletOneByOne(shape, sets, valueOf) {
+  const jobs = [];
+  for (const set of sets) {
+    for (const sig of set.edges || []) {
+      const h = [...matchEdges(shape, [sig])];
+      if (!h.length) continue;
+      jobs.push({ sig, v: (k) => valueOf(h[0], k) });
+    }
+  }
+  // bigger radii first: they are the ones most likely to clash, and small ones blend into them
+  const size = (j) => { const v = j.v(1); return typeof v === "number" ? v : Array.isArray(v) ? Math.max(...v) : v ? v.r : 0; };
+  jobs.sort((a, b) => size(b) - size(a));
+  let cur = shape.clone();
+  let done = 0;
+  const failed = [];
+  const t0 = Date.now();
+  for (const j of jobs) {
+    if (Date.now() - t0 > 12000) { failed.push(j); continue; }
+    const h = edgeAlong(cur, j.sig);
+    if (h == null) { done++; continue; } // taken in by a tangent neighbour's fillet
+    const v = j.v(1);
+    try {
+      const out = typeof v === "object" && v && !Array.isArray(v) ? filletWith(cur, (e) => (e.hashCode === h ? v : null)) : cur.fillet((e) => (e.hashCode === h ? v : null));
+      if (!roundingSane(out, cur)) { out.delete(); throw new Error("broken"); }
+      cur.delete(); cur = out; done++;
+    } catch (err) {
+      failed.push(j);
+    }
+  }
+  if (!done || done === failed.length) { cur.delete(); return null; }
+  if (failed.length) {
+    const sizes = [...new Set(failed.map((j) => +size(j).toFixed(2)))].join(", ");
+    note(`Fillet: ${done} edge${done === 1 ? "" : "s"} rounded; ${failed.length} left sharp because ${sizes} mm is too large there. Lower that size or leave those edges out.`);
+  }
+  return cur;
+}
+
+// ---------------------------------------------------------------- freehand router
+// A groove cut along strokes drawn on the body. Each stroke stores, per point, where it lies on
+// the surface (p), the surface's outward normal there (n) and how deep to cut (d), all in the
+// body's own coordinates. Bits: "ball" (round bottom, sweeps a circle: works on any surface and
+// any change of depth), "flat" (square bottom and straight walls) and "v" (a V-groove, like a
+// scalpel or a V-bit; ang is the half angle). Strokes are split where they turn sharply, each
+// piece is swept, and the ends and corners get the bit's own shape (a ball, a round end mill
+// plunge or a cone), so the groove is clean wherever the bit stopped or turned.
+const rV = {
+  sub: (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]],
+  add: (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]],
+  mul: (a, k) => [a[0] * k, a[1] * k, a[2] * k],
+  dot: (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2],
+  cross: (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]],
+  len: (a) => Math.hypot(a[0], a[1], a[2]),
+  norm: (a) => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; },
+};
+function routeSpine(pts) {
+  if (pts.length === 2) return R.assembleWire([R.makeLine(pts[0], pts[1])]);
+  try { return R.assembleWire([R.makeBSplineApproximation(pts, { tolerance: 0.005, degMin: 3, degMax: 3 })]); }
+  catch (e) { return R.assembleWire([R.makeBSplineApproximation(pts, { tolerance: 0.05, degMin: 2, degMax: 3 })]); }
+}
+// thin out points closer than `gap` (a sweep's spline wiggles through bunched points)
+function routeThin(st, gap) {
+  const out = [st[0]];
+  for (let i = 1; i < st.length - 1; i++) if (rV.len(rV.sub(st[i].p, out[out.length - 1].p)) >= gap) out.push(st[i]);
+  const last = st[st.length - 1];
+  if (rV.len(rV.sub(last.p, out[out.length - 1].p)) < gap * 0.5 && out.length > 1) out[out.length - 1] = last; else out.push(last);
+  return out;
+}
+function routeSweep(bit, piece, r, ang, H) {
+  const tan0 = rV.norm(rV.sub(piece[1].c, piece[0].c));
+  const spine = routeSpine(piece.map((q) => q.c));
+  let prof = null, aux = null;
+  const ps = new OC.BRepOffsetAPI_MakePipeShell(spine.wrapped);
+  try {
+    if (bit === "ball") {
+      prof = R.assembleWire([R.makeCircle(r, piece[0].c, tan0)]);
+      // guided like the other bits: the plain (corrected Frenet) sweep of a circle along a
+      // curve in space makes a tube the booleans misread on curved bodies
+      aux = routeSpine(piece.map((q) => rV.add(q.c, rV.mul(q.n, H))));
+      ps.SetMode(aux.wrapped, false, OC.BRepFill_TypeOfContact.BRepFill_NoContact);
+    } else {
+      const n0 = piece[0].n;
+      const u = rV.norm(rV.cross(tan0, n0));
+      const up = rV.norm(rV.cross(u, tan0)); // n0 made square to the path
+      const b = piece[0].c;
+      const top = rV.add(b, rV.mul(up, H));
+      const half = bit === "v" ? Math.max(r, H * Math.tan(ang)) : r;
+      const corners = bit === "v" ? [b, rV.add(top, rV.mul(u, half)), rV.add(top, rV.mul(u, -half))] : [rV.add(b, rV.mul(u, -r)), rV.add(b, rV.mul(u, r)), rV.add(top, rV.mul(u, r)), rV.add(top, rV.mul(u, -r))];
+      const edges = corners.map((c, i) => R.makeLine(c, corners[(i + 1) % corners.length]));
+      prof = R.assembleWire(edges);
+      // the profile stays upright to the surface: guided by a copy of the path lifted along the normals
+      aux = routeSpine(piece.map((q) => rV.add(q.c, rV.mul(q.n, H))));
+      ps.SetMode(aux.wrapped, false, OC.BRepFill_TypeOfContact.BRepFill_NoContact);
+    }
+    ps.Add(prof.wrapped, false, false);
+    const pr = new OC.Message_ProgressRange();
+    ps.Build(pr); pr.delete();
+    if (!ps.IsDone()) throw new Error("sweep failed");
+    ps.MakeSolid();
+    let o = R.cast(ps.Shape());
+    let v = safeVolume(o);
+    if (v < 0) { const rr = R.cast(o.wrapped.Reversed()); o.delete(); o = rr; v = safeVolume(o); }
+    if (!(v > 1e-9)) { o.delete(); throw new Error("sweep failed"); }
+    return o;
+  } finally {
+    ps.delete(); spine.delete();
+    if (prof) prof.delete();
+    if (aux) aux.delete();
+  }
+}
+// the bit standing at one spot: what it cuts if it plunges there
+// (a hair smaller than the sweep, so its surface never lies exactly on the sweep's: booleans
+// misread surfaces that coincide, and 0.3% is far below what a printer can show)
+function routeCap(bit, q, r0, ang, H) {
+  const r = r0 * 0.997;
+  if (bit === "ball") return R.makeSphere(r).translate(q.c);
+  if (bit === "flat") return R.makeCylinder(r, H * 0.999, q.c, q.n);
+  // a cone, apex down: a triangle turned about the normal
+  const n = q.n, side = rV.norm(Math.abs(n[0]) < 0.9 ? rV.cross(n, [1, 0, 0]) : rV.cross(n, [0, 1, 0]));
+  const top = rV.add(q.c, rV.mul(n, H));
+  const half = Math.max(r, H * Math.tan(ang)) * 0.997;
+  const w = R.assembleWire([R.makeLine(q.c, top), R.makeLine(top, rV.add(top, rV.mul(side, half))), R.makeLine(rV.add(top, rV.mul(side, half)), q.c)]);
+  const f = R.makeFace(w);
+  w.delete();
+  const out = R.revolution(f, q.c, n, 360);
+  f.delete();
+  return out;
+}
+function routeTools(mod) {
+  const bit = mod.bit === "flat" || mod.bit === "v" ? mod.bit : "ball";
+  const r = Math.max(0.1, (mod.w || 3) / 2);
+  const ang = (Math.max(5, Math.min(75, mod.ang ?? 30)) * Math.PI) / 180;
+  const groups = []; // one list of tools per stroke
+  for (const s of mod.strokes || []) {
+    const P = s.p || [];
+    if (!P.length) continue;
+    const tools = [];
+    groups.push(tools);
+    const dMax = Math.max(...P.map((_, i) => (s.d && s.d[i] != null ? s.d[i] : mod.depth || 1)));
+    // the bit reaches this far above the surface, so the groove opens cleanly at the top
+    const H = dMax + Math.max(1, r * 2);
+    let st = P.map((p, i) => {
+      const n = rV.norm(s.n && s.n[i] ? s.n[i] : [0, 0, 1]);
+      const d = Math.max(0.02, s.d && s.d[i] != null ? s.d[i] : mod.depth || 1);
+      // ball: the centre of the ball; flat and V: the bottom of the cut
+      const c = bit === "ball" ? rV.sub(p, rV.mul(n, d - r)) : rV.sub(p, rV.mul(n, d));
+      return { p, n, d, c };
+    });
+    st = routeThin(st, Math.max(0.05, r * 0.35));
+    // a loop that nearly meets itself is closed exactly (two caps almost on top of each other
+    // trip up the booleans)
+    if (st.length > 3 && rV.len(rV.sub(st[0].c, st[st.length - 1].c)) < Math.max(r, 0.2)) st[st.length - 1] = { ...st[0] };
+    // split where the path turns sharply: one smooth sweep per piece, the bit's shape at the joins
+    const pieces = [];
+    let cur = [st[0]];
+    for (let i = 1; i < st.length; i++) {
+      cur.push(st[i]);
+      if (i < st.length - 1) {
+        const a = rV.norm(rV.sub(st[i].c, st[i - 1].c)), b = rV.norm(rV.sub(st[i + 1].c, st[i].c));
+        if (rV.dot(a, b) < Math.cos((40 * Math.PI) / 180)) { pieces.push(cur); cur = [st[i]]; }
+      }
+    }
+    pieces.push(cur);
+    const caps = [];
+    // a sweep that comes out broken (a closed loop, a twist) is tried again in two halves, and
+    // if a short piece still won't sweep, the bit is stood at each of its points
+    const sweepPiece = (pc, depth) => {
+      const len = pc.reduce((L, q, i) => (i ? L + rV.len(rV.sub(q.c, pc[i - 1].c)) : 0), 0);
+      caps.push(pc[0], pc[pc.length - 1]);
+      if (pc.length < 2 || len <= 1e-3) return;
+      const closed = pc.length > 3 && rV.len(rV.sub(pc[0].c, pc[pc.length - 1].c)) < 1e-6;
+      if (!closed) {
+        try {
+          const o = routeSweep(bit, pc, r, ang, H);
+          if (validSolid(o)) { tools.push(o); return; }
+          o.delete();
+        } catch (e) {}
+      }
+      if (depth < 3 && pc.length >= 4) {
+        const mid = Math.floor(pc.length / 2);
+        sweepPiece(pc.slice(0, mid + 1), depth + 1);
+        sweepPiece(pc.slice(mid), depth + 1);
+        return;
+      }
+      for (const q of routeThin(pc, r * 0.5)) caps.push(q);
+    };
+    for (const pc of pieces) sweepPiece(pc, 0);
+    const seen = [];
+    for (const q of caps) {
+      if (seen.some((o) => rV.len(rV.sub(o.c, q.c)) < 1e-4)) continue;
+      seen.push(q);
+      tools.push(routeCap(bit, q, r, ang, H));
+    }
+  }
+  return groups.filter((g) => g.length);
+}
+// One cut with all of a stroke's pieces as tools (the caps are a hair smaller than the sweeps, so
+// no two tool surfaces coincide). If that quietly takes nothing away, the pieces go one by one.
+function cutWithTools(shape, tools) {
+  if (!tools.length) return shape;
+  const v0 = safeVolume(shape);
+  const args = new OC.NCollection_List_TopoDS_Shape(), tl = new OC.NCollection_List_TopoDS_Shape();
+  args.Append(shape.wrapped);
+  for (const t of tools) tl.Append(t.wrapped);
+  const op = new OC.BRepAlgoAPI_Cut();
+  try {
+    op.SetArguments(args); op.SetTools(tl); op.SetRunParallel(false);
+    const pr = new OC.Message_ProgressRange();
+    op.Build(pr); pr.delete();
+    if (op.IsDone() && !op.HasErrors()) {
+      const out = solidsOnly(R.cast(op.Shape()));
+      const v = safeVolume(out);
+      if (v > 1e-9 && v < v0 - 1e-7) return out;
+      out.delete();
+    }
+  } catch (e) {
+  } finally { op.delete(); args.delete(); tl.delete(); }
+  let cur = shape.clone();
+  for (const t of tools) {
+    try { const o = cur.clone().cut(t.clone()); const v = safeVolume(o); if (v > 1e-9 && v <= safeVolume(cur) + 1e-6) { cur.delete(); cur = o; } else o.delete(); } catch (e) {}
+  }
+  return cur;
+}
+
 // ---------------------------------------------------------------- modifiers
 function applyMod(shape, mod) {
   switch (mod.t) {
+    case "route": {
+      // stroke by stroke: each stroke's pieces fused into one tool, then cut
+      const groups = routeTools(mod);
+      let cur = shape;
+      for (const tools of groups) {
+        try {
+          const out = cutWithTools(cur, tools);
+          if (out !== cur) { cur.delete(); cur = out; }
+        } finally { tools.forEach((t) => { try { t.delete(); } catch (e) {} }); }
+      }
+      return cur;
+    }
     case "fillet":
     case "chamfer": {
       // one or more selection sets, each with its own size; a fillet's radius can be
@@ -1110,22 +1678,40 @@ function applyMod(shape, mod) {
       }
       if (!radius.size) throw new Error(`${isF ? "Fillet" : "Chamfer"}: its edges no longer exist`);
       const chordOf = isF && sets.some((x) => x.rt === "chord") ? chordRadii(shape, radius) : null;
+      const refFace = !isF && sets.some((x) => x.ct && x.ct !== "equal") ? chamferFaces(shape, radius) : null;
       const valueOf = (h, k) => {
         const set = radius.get(h);
         if (!set) return null;
-        if (!isF) return set.r * k;
+        if (!isF) {
+          const fh = refFace && refFace.get(h);
+          if (fh != null && set.ct === "angle") return { distance: set.r * k, angle: Math.max(1, Math.min(89, set.ang ?? 45)), selectedFace: (f) => f.when(({ element }) => element.hashCode === fh) };
+          if (fh != null && set.ct === "two") return { distances: [set.r * k, (set.r2 ?? set.r) * k], selectedFace: (f) => f.when(({ element }) => element.hashCode === fh) };
+          return set.r * k;
+        }
         if (set.rt === "variable") return [set.r * k, (set.r2 ?? set.r) * k];
         if (set.rt === "chord") return (chordOf.get(h) || set.r) * k;
+        if (set.rt === "points" && set.pts && set.pts.length) return { pts: set.pts, k, r: set.r * k };
         return set.r * k;
       };
+      const free = isF && sets.some((x) => x.rt === "points" && x.pts && x.pts.length);
       const attempt = (k) => {
         const fn = (e) => valueOf(e.hashCode, k);
-        return isF ? shape.fillet(fn) : shape.chamfer(fn);
+        const out = free ? filletWith(shape, fn) : isF ? shape.fillet(fn) : shape.chamfer(fn);
+        // OpenCascade sometimes "succeeds" with a broken solid (loose faces, gaps) when the size
+        // is too big: count that as a failure, so the fallback and the size hint take over
+        if (!roundingSane(out, shape)) { out.delete(); throw new Error("fillet made a broken solid"); }
+        return out;
       };
       let out;
       try {
         out = attempt(1);
       } catch (e) {
+        // the whole set failed together: round the edges one at a time instead, keep every edge
+        // that works, and say which ones stayed sharp (a fillet that only partly fits is far more
+        // useful than none). Only when not one edge works does the size message below appear.
+        let part = null;
+        try { part = isF && radius.size > 1 ? filletOneByOne(shape, sets, valueOf) : null; } catch (err) { part = null; }
+        if (part) { shape.delete(); return part; }
         // find roughly the largest size that does fit, so the message can say what to use
         let lo = 0, hi = 1;
         const t0 = Date.now();
@@ -1163,7 +1749,18 @@ function applyMod(shape, mod) {
     case "bool": {
       const tool = transformShape(evalNode(mod.tool), mod.m);
       let out;
-      if (mod.op === "cut") out = shape.cut(tool);
+      // Clearance: the gap must take away at least what the part itself takes away; on very
+      // complex free-form parts the grown part can come out wrong and remove far too little
+      if (mod.op === "cut" && mod.src === "clearance") {
+        out = shape.cut(tool);
+        const plainTool = { ...mod.tool, children: (mod.tool.children || []).map((c) => ({ ...c, node: { ...c.node, mods: (c.node.mods || []).filter((q) => !(q.t === "offset" && q.all)) } })) };
+        let vPlain = NaN;
+        try { const pt = transformShape(evalNode(plainTool), mod.m); const pc = shape.cut(pt); vPlain = safeVolume(pc); pc.delete(); pt.delete(); } catch (e) {}
+        if (isFinite(vPlain) && safeVolume(out) > vPlain + Math.max(1e-3, vPlain * 1e-4)) {
+          out.delete(); tool.delete();
+          throw new Error(`Clearance: the geometry engine couldn't make the ${mod.gap || ""} mm gap around ${mod.other || "the other part"} (that part is too complex to grow). Delete this Clearance and offset the touching faces with Offset face instead.`);
+        }
+      } else if (mod.op === "cut") out = shape.cut(tool);
       else if (mod.op === "intersect") out = shape.intersect(tool);
       else {
         // join: a tool made of many solids (a pattern of ribs, say) is fused in one go, and the
@@ -1306,6 +1903,25 @@ function applyMod(shape, mod) {
       // and curved faces: the face is thickened into a slab that is added or removed.
       const dist0 = mod.d || 0;
       if (Math.abs(dist0) < 1e-6) return shape;
+      // every face (picked with a selection window): the whole body grows or shrinks, with
+      // round outside corners when it grows, like a solid offset in other CAD apps. Slabs face by
+      // face would leave notches at every edge and corner.
+      if (mod.all) {
+        const vIn = safeVolume(shape);
+        const out = offsetSolid(shape, dist0, vIn, dist0 > 0);
+        if (!out) throw new Error(dist0 > 0 ? "Offset face couldn't grow the whole body by this distance. Try a smaller distance." : "Offset face couldn't shrink the whole body by this distance: it may be thinner than twice the distance somewhere.");
+        // the engine can return a wrong shape for very complex free-form bodies: the volume must
+        // change by about the surface area × the distance (corners and narrow parts change it
+        // somewhat, so a wide margin)
+        let area = NaN;
+        try { area = R.measureArea(shape); } catch (e) {}
+        const change = safeVolume(out) - vIn, expect = area * dist0;
+        if (isFinite(expect) && Math.abs(expect) > 1e-6 && !(change / expect > 0.5 && change / expect < 1.6)) {
+          out.delete();
+          throw new Error("The geometry engine couldn't offset this whole body correctly (it is too complex). Offset some of its faces instead, or use a smaller distance.");
+        }
+        return out;
+      }
       let cur = shape;
       for (const q of mod.faces || []) {
         const faces = cur.faces;
@@ -1396,6 +2012,22 @@ function applyMod(shape, mod) {
       return out;
     }
     case "facepat": {
+      // a lattice on a solid body can be a lattice shell: the body is hollowed to a skin first
+      // (unless it is already thin there, like a tube or a shelled part), so the cells go
+      // through the skin only and the lattice follows the curved surface
+      if (mod.lattice && mod.skin > 0) {
+        const hollow = latticeSkin(shape, mod);
+        if (hollow) { shape.delete(); shape = hollow; }
+      }
+      // a sphere (a ball, a dome, a hollow sphere): a geodesic lattice
+      const sph = mod.lattice ? sphereLattice(shape, mod) : null;
+      if (sph) {
+        const out = cutAll(shape, [sph]);
+        sph.delete();
+        if (!out || !(safeVolume(out) > 1e-9) || safeVolume(out) > safeVolume(shape) - 1e-6) { if (out) out.delete(); throw new Error("Lattice: couldn't cut the cells into this sphere. Try a bigger cell size or a thicker skin."); }
+        shape.delete();
+        return out;
+      }
       const tool = facePatTool(shape, mod);
       const v0 = safeVolume(shape);
       let out;
@@ -2430,7 +3062,398 @@ function inPoly(x, y, P) {
   }
   return c;
 }
+// ---- lattice shells and sphere lattices (v2.9.9.9.14)
+// How thick the body is straight in from a point on its surface (to the next surface inside).
+function wallAt(shape, p, n) {
+  let mesh = null;
+  try { mesh = shape.mesh({ tolerance: 0.05, angularTolerance: 0.2 }); } catch (e) { return Infinity; }
+  const N = Vec.norm(n);
+  return rayMeshDepth(mesh, p.map((x, i) => x - N[i] * 0.02), N.map((x) => -x)) + 0.02;
+}
+// The body hollowed to a closed skin of the chosen thickness, so a lattice on a curved face goes
+// through the skin, not right through the solid. Not done where the body is already that thin.
+function latticeSkin(shape, m) {
+  const t = Math.max(0.4, +m.skin || 2);
+  const w = wallAt(shape, m.p, m.n);
+  if (isFinite(w) && w <= t * 2.2) return null;
+  const v0 = safeVolume(shape);
+  const out = shellSolid(shape.clone(), t, new Set(), "in", v0);
+  if (!out) throw new Error("Lattice: couldn't hollow this body to a " + t + " mm skin. Try a thinner skin, or Cut right through.");
+  return out;
+}
+// The spherical face clicked (by the stored point), with its centre and radius.
+function sphereOf(shape, m) {
+  const face = curvedPatFace(shape, m);
+  if (!face) return null;
+  try {
+    const ad = new OC.BRepAdaptor_Surface(face.wrapped, true);
+    try {
+      if (ad.GetType() !== OC.GeomAbs_SurfaceType.GeomAbs_Sphere) return null;
+      const sp = ad.Sphere(), loc = sp.Location();
+      const out = { c: [loc.X(), loc.Y(), loc.Z()], r: sp.Radius() };
+      sp.delete(); loc.delete();
+      return { ...out, face: face.clone() };
+    } finally { ad.delete(); }
+  } finally { face.delete(); }
+}
+// Geodesic cells on a unit sphere: an icosahedron split n times along each edge. Returns the
+// vertices and triangles. Cells: "hex" (the hexagons and twelve pentagons around each vertex,
+// like a football), "triangles", "circles" and "mesh" (round and square holes at each vertex).
+function geodesic(n) {
+  const t = (1 + Math.sqrt(5)) / 2;
+  const V0 = [[-1, t, 0], [1, t, 0], [-1, -t, 0], [1, -t, 0], [0, -1, t], [0, 1, t], [0, -1, -t], [0, 1, -t], [t, 0, -1], [t, 0, 1], [-t, 0, -1], [-t, 0, 1]].map(Vec.norm);
+  const F0 = [[0, 11, 5], [0, 5, 1], [0, 1, 7], [0, 7, 10], [0, 10, 11], [1, 5, 9], [5, 11, 4], [11, 10, 2], [10, 7, 6], [7, 1, 8], [3, 9, 4], [3, 4, 2], [3, 2, 6], [3, 6, 8], [3, 8, 9], [4, 9, 5], [2, 4, 11], [6, 2, 10], [8, 6, 7], [9, 8, 1]];
+  const verts = [], key = new Map(), tris = [];
+  const add = (p) => { const q = Vec.norm(p); const k = q.map((x) => Math.round(x * 1e6)).join(","); let i = key.get(k); if (i == null) { i = verts.length; verts.push(q); key.set(k, i); } return i; };
+  for (const [a, b, c] of F0) {
+    const A = V0[a], B = V0[b], C = V0[c], id = [];
+    for (let i = 0; i <= n; i++) { id.push([]); for (let j = 0; j <= n - i; j++) { const k = n - i - j; id[i].push(add([0, 1, 2].map((d) => (A[d] * k + B[d] * i + C[d] * j) / n))); } }
+    for (let i = 0; i < n; i++) for (let j = 0; j < n - i; j++) {
+      tris.push([id[i][j], id[i + 1][j], id[i][j + 1]]);
+      if (j < n - i - 1) tris.push([id[i + 1][j], id[i + 1][j + 1], id[i][j + 1]]);
+    }
+  }
+  return { verts, tris };
+}
+// Shrink a convex polygon (in a tangent plane, 2D) inward by d.
+function insetPoly(P, d) {
+  const n = P.length;
+  let area = 0; for (let i = 0; i < n; i++) { const a = P[i], b = P[(i + 1) % n]; area += a[0] * b[1] - b[0] * a[1]; }
+  const sgn = area > 0 ? 1 : -1;
+  const lines = [];
+  for (let i = 0; i < n; i++) {
+    const a = P[i], b = P[(i + 1) % n], dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy) || 1;
+    const nx = (-dy / L) * sgn, ny = (dx / L) * sgn; // inward
+    lines.push({ p: [a[0] + nx * d, a[1] + ny * d], d: [dx / L, dy / L] });
+  }
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const A = lines[(i - 1 + n) % n], B = lines[i];
+    const den = A.d[0] * B.d[1] - A.d[1] * B.d[0];
+    if (Math.abs(den) < 1e-9) return null;
+    const tt = ((B.p[0] - A.p[0]) * B.d[1] - (B.p[1] - A.p[1]) * B.d[0]) / den;
+    out.push([A.p[0] + A.d[0] * tt, A.p[1] + A.d[1] * tt]);
+  }
+  // still the same way round and not turned inside out
+  let a2 = 0; for (let i = 0; i < n; i++) { const a = out[i], b = out[(i + 1) % n]; a2 += a[0] * b[1] - b[0] * a[1]; }
+  return a2 * sgn > 1e-6 && Math.abs(a2) < Math.abs(area) ? out : null;
+}
+// The lattice cells for a sphere: each cell a solid wedge reaching from inside the skin (rIn) to
+// past the surface (rOut), its sides running toward the centre, so the ribs between cells stay
+// the same width all the way through.
+function sphereLattice(shape, m) {
+  const S = sphereOf(shape, m);
+  if (!S) return null;
+  const { c: C, r: Rs, face } = S;
+  try {
+    const size = Math.max(1, +m.size || 10), gap = Math.max(0.3, +m.gap || 2);
+    const wall = wallAt(shape, m.p, m.n);
+    if (!isFinite(wall) || wall > Rs * 0.85) throw new Error("Lattice: this sphere is solid. Choose Lattice shell (a hollow ball with a lattice skin), or shell it first.");
+    const rIn = Math.max(Rs * 0.05, Rs - wall - 0.6), rOut = Rs + 0.6;
+    // how finely to split: neighbouring vertices about one cell size apart
+    const n = Math.max(1, Math.min(40, Math.round((1.1071 * Rs) / size)));
+    const g = geodesic(n);
+    // turn the layout so a cell sits right where the face was clicked (then by the angle)
+    const up = Vec.norm(Vec.sub(m.p, C));
+    const rot = rotBetween([0, 1, 0].map((x, i) => g.verts[0][i]), up);
+    const ang = ((+m.angle || 0) * Math.PI) / 180;
+    const spin = (v) => { if (!ang) return v; const k = up, ca = Math.cos(ang), sa = Math.sin(ang), d = Vec.dot(k, v), x = Vec.cross(k, v); return [0, 1, 2].map((i) => v[i] * ca + x[i] * sa + k[i] * d * (1 - ca)); };
+    const V = g.verts.map((v) => spin(rot(v)));
+    // the cells, each as directions (unit vectors) round its outline
+    const cells = [];
+    const tangentFrame = (u) => { const a = Math.abs(u[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0]; const e1 = Vec.norm(Vec.cross(u, a)), e2 = Vec.cross(u, e1); return [e1, e2]; };
+    // a polygon of directions around centre direction u: into the tangent plane at radius Rs
+    // (gnomonic), inset by half a rib, back out to directions
+    const cellFrom = (u, dirs) => {
+      const [e1, e2] = tangentFrame(u);
+      const flat = dirs.map((d) => { const k = Rs / Vec.dot(d, u); return [Vec.dot(d, e1) * k, Vec.dot(d, e2) * k]; });
+      const ins = insetPoly(flat, gap / 2);
+      if (!ins) return null;
+      return ins.map(([x, y]) => Vec.norm([0, 1, 2].map((i) => u[i] * Rs + e1[i] * x + e2[i] * y)));
+    };
+    const kind = m.kind || "hex";
+    if (kind === "triangles") {
+      for (const [a, b, c2] of g.tris) { const u = Vec.norm([0, 1, 2].map((i) => V[a][i] + V[b][i] + V[c2][i])); const q = cellFrom(u, [V[a], V[b], V[c2]]); if (q) cells.push({ u, q }); }
+    } else if (kind === "hex") {
+      // around each vertex: the middles of the triangles that meet there, in order
+      const around = V.map(() => []);
+      g.tris.forEach((t, ti) => t.forEach((vi) => around[vi].push(ti)));
+      const mid = g.tris.map(([a, b, c2]) => Vec.norm([0, 1, 2].map((i) => V[a][i] + V[b][i] + V[c2][i])));
+      V.forEach((u, vi) => {
+        const [e1, e2] = tangentFrame(u);
+        const ring = around[vi].map((ti) => mid[ti]).sort((p, q) => Math.atan2(Vec.dot(p, e2), Vec.dot(p, e1)) - Math.atan2(Vec.dot(q, e2), Vec.dot(q, e1)));
+        const q = cellFrom(u, ring);
+        if (q) cells.push({ u, q });
+      });
+    } else {
+      // round holes (or square ones for the screen mesh) at each vertex
+      const sides = kind === "mesh" ? 4 : 20;
+      const rr = Math.max(0.3, (((1.1071 * Rs) / n) - gap) / (kind === "mesh" ? Math.SQRT2 : 2));
+      for (const u of V) {
+        const [e1, e2] = tangentFrame(u);
+        const q = [];
+        for (let i = 0; i < sides; i++) { const a = (i / sides) * 2 * Math.PI + (kind === "mesh" ? Math.PI / 4 : 0); q.push(Vec.norm([0, 1, 2].map((d) => u[d] * Rs + (e1[d] * Math.cos(a) + e2[d] * Math.sin(a)) * rr))); }
+        cells.push({ u, q });
+      }
+    }
+    // a sphere with edges (a dome, a ball cut flat): keep cells that lie on the face, a frame's
+    // width in from its edges
+    let edges = [];
+    for (const e of face.edges) { let deg = false; try { deg = e.length < 1e-6; } catch (er) {} if (!deg) edges.push(e); else e.delete(); }
+    const frame = Math.max(0, +m.border || 0);
+    // how far inside the frame a direction lands: + inside, - in the frame or off the face
+    const gAt = (d) => {
+      const P = [0, 1, 2].map((i) => C[i] + d[i] * Rs);
+      const vx = R.makeVertex(P);
+      try {
+        const off = R.measureDistanceBetween(vx, face);
+        if (off > 0.02) return -off - frame;
+        let near = Infinity;
+        for (const e of edges) near = Math.min(near, R.measureDistanceBetween(vx, e));
+        return near - frame;
+      } finally { vx.delete(); }
+    };
+    const lerpDir = (a, b, t) => Vec.norm([0, 1, 2].map((i) => a[i] + (b[i] - a[i]) * t));
+    const kept = [];
+    const whole = m.edge === "whole";
+    for (const cl of cells) {
+      if (!edges.length) { kept.push(cl); continue; }
+      const g0 = cl.q.map(gAt);
+      if (g0.every((x) => x >= 0)) { kept.push(cl); continue; }
+      if (whole || g0.every((x) => x < 0)) continue;
+      // trimmed at the frame: the outline clipped where it crosses the frame's edge
+      const out = [];
+      for (let i = 0; i < cl.q.length; i++) {
+        const j = (i + 1) % cl.q.length, A = cl.q[i], B = cl.q[j], ga = g0[i], gb = g0[j];
+        if (ga >= 0) out.push(A);
+        if ((ga >= 0) !== (gb >= 0)) {
+          let lo = 0, hi = 1, glo = ga;
+          for (let k = 0; k < 9; k++) { const mid = (lo + hi) / 2, gm = gAt(lerpDir(A, B, mid)); if ((gm >= 0) === (glo >= 0)) { lo = mid; glo = gm; } else hi = mid; }
+          out.push(lerpDir(A, B, (lo + hi) / 2));
+        }
+      }
+      if (out.length < 3) continue;
+      // too thin a sliver to print: left solid
+      const u = Vec.norm(out.reduce((acc, d) => [acc[0] + d[0], acc[1] + d[1], acc[2] + d[2]], [0, 0, 0]));
+      const [e1, e2] = tangentFrame(u);
+      const fl = out.map((d) => { const k = Rs / Vec.dot(d, u); return [Vec.dot(d, e1) * k, Vec.dot(d, e2) * k]; });
+      let ar = 0; for (let i = 0; i < fl.length; i++) { const p0 = fl[i], p1 = fl[(i + 1) % fl.length]; ar += p0[0] * p1[1] - p1[0] * p0[1]; }
+      if (Math.abs(ar) / 2 < Math.max(0.6, gap * gap)) continue;
+      kept.push({ u, q: out });
+    }
+    edges.forEach((e) => e.delete());
+    if (!kept.length) throw new Error("Lattice: no cells fit on this sphere. Make the cells smaller or the frame thinner.");
+    if (kept.length > 3000) throw new Error(`Lattice: that would be ${kept.length} cells. Make the cell size bigger.`);
+    // trimmed cells at a dome's edge: the frame itself trims them (the frame stays solid)
+    const solids = [];
+    for (const cl of kept) {
+      const k = cl.q.length;
+      const O = cl.q.map((d) => [0, 1, 2].map((i) => C[i] + d[i] * rOut)), I = cl.q.map((d) => [0, 1, 2].map((i) => C[i] + d[i] * rIn));
+      const mo = [0, 1, 2].map((i) => C[i] + cl.u[i] * rOut / Math.max(0.5, Math.min(...cl.q.map((d) => Vec.dot(d, cl.u))))), mi = [0, 1, 2].map((i) => C[i] + cl.u[i] * rIn);
+      const faces = [];
+      try {
+        for (let i = 0; i < k; i++) {
+          const j = (i + 1) % k;
+          faces.push(R.makePolygon([O[i], O[j], I[j], I[i]]));
+          faces.push(R.makePolygon([mo, O[j], O[i]]));
+          faces.push(R.makePolygon([mi, I[i], I[j]]));
+        }
+        const sol = R.makeSolid(faces);
+        if (safeVolume(sol) < 0) { const r2 = R.cast(sol.wrapped.Reversed()); sol.delete(); solids.push(r2); } else solids.push(sol);
+      } catch (e) {
+      } finally { faces.forEach((f) => { try { f.delete(); } catch (er) {} }); }
+    }
+    if (!solids.length) throw new Error("Lattice: couldn't make the cells");
+    // the frame round a dome's edge: cells reaching into it are trimmed by a shell kept solid there
+    return R.makeCompound(solids);
+  } finally { face.delete(); }
+}
+// a rotation taking unit vector a to unit vector b
+function rotBetween(a, b) {
+  const v = Vec.cross(a, b), c = Vec.dot(a, b), s = Math.hypot(...v);
+  if (s < 1e-9) return c > 0 ? (x) => x : (x) => { const p = Math.abs(a[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0]; const k = Vec.norm(Vec.cross(a, p)); const d = Vec.dot(k, x); return [0, 1, 2].map((i) => -x[i] + 2 * k[i] * d); };
+  const k = v.map((x) => x / s);
+  return (x) => { const d = Vec.dot(k, x), cr = Vec.cross(k, x); return [0, 1, 2].map((i) => x[i] * c + cr[i] * s + k[i] * d * (1 - c)); };
+}
+
+// ---- patterns and lattices on curved faces (cylinders, cones, spheres, fillets, freeform)
+// The pattern is laid out flat in the face's own surface coordinates, measured in mm along the
+// surface (s round, t along), then each shape is stood on the surface where its middle lands:
+// a prism square to the surface there, reaching far enough past it to allow for the curve.
+// Faces that wrap all the way round get a whole number of shapes round, so there is no seam.
+function curvedPatFace(shape, m) {
+  const p = m.p, n = Vec.norm(m.n);
+  let best = null, bd = Infinity;
+  for (const f of shape.faces) {
+    let d;
+    try { const v = R.makeVertex(p); d = R.measureDistanceBetween(v, f); v.delete(); } catch (e) { d = Infinity; }
+    if (d < 1e-3) { try { const nn = unitT(f.normalAt(p).toTuple()); if (Vec.dot(nn, n) < 0.5) d += 1; } catch (e) {} }
+    if (d < bd) { if (best) best.delete(); bd = d; best = f; } else f.delete();
+  }
+  return bd < 2 ? best : (best && best.delete(), null);
+}
+function rayMeshDepth(mesh, o, dir) {
+  // the first surface along the ray (further than a hair): Möller–Trumbore over every triangle
+  const V = mesh.vertices, T = mesh.triangles;
+  let best = Infinity;
+  for (let k = 0; k < T.length; k += 3) {
+    const a = T[k] * 3, b = T[k + 1] * 3, c = T[k + 2] * 3;
+    const e1x = V[b] - V[a], e1y = V[b + 1] - V[a + 1], e1z = V[b + 2] - V[a + 2];
+    const e2x = V[c] - V[a], e2y = V[c + 1] - V[a + 1], e2z = V[c + 2] - V[a + 2];
+    const px = dir[1] * e2z - dir[2] * e2y, py = dir[2] * e2x - dir[0] * e2z, pz = dir[0] * e2y - dir[1] * e2x;
+    const det = e1x * px + e1y * py + e1z * pz;
+    if (Math.abs(det) < 1e-12) continue;
+    const inv = 1 / det, tx = o[0] - V[a], ty = o[1] - V[a + 1], tz = o[2] - V[a + 2];
+    const u = (tx * px + ty * py + tz * pz) * inv; if (u < 0 || u > 1) continue;
+    const qx = ty * e1z - tz * e1y, qy = tz * e1x - tx * e1z, qz = tx * e1y - ty * e1x;
+    const v = (dir[0] * qx + dir[1] * qy + dir[2] * qz) * inv; if (v < 0 || u + v > 1) continue;
+    const t = (e2x * qx + e2y * qy + e2z * qz) * inv;
+    if (t > 0.08 && t < best) best = t;
+  }
+  return best;
+}
+function clipPolyRect(P, x0, x1, y0, y1) {
+  const clipE = (pts, inside, cross) => { const out = []; for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length], ia = inside(a), ib = inside(b); if (ia) out.push(a); if (ia !== ib) out.push(cross(a, b)); } return out; };
+  const lerp = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+  let q = P;
+  if (x0 > -Infinity) q = clipE(q, (a) => a[0] >= x0, (a, b) => lerp(a, b, (x0 - a[0]) / (b[0] - a[0])));
+  if (q.length && x1 < Infinity) q = clipE(q, (a) => a[0] <= x1, (a, b) => lerp(a, b, (x1 - a[0]) / (b[0] - a[0])));
+  if (q.length && y0 > -Infinity) q = clipE(q, (a) => a[1] >= y0, (a, b) => lerp(a, b, (y0 - a[1]) / (b[1] - a[1])));
+  if (q.length && y1 < Infinity) q = clipE(q, (a) => a[1] <= y1, (a, b) => lerp(a, b, (y1 - a[1]) / (b[1] - a[1])));
+  return q;
+}
+function facePatCurved(shape, m) {
+  if (m.kind === "slots") throw new Error("Pattern: ribs only go on flat faces. Pick another pattern for a curved face.");
+  if (m.lines) throw new Error("Pattern: “lines between” only works on flat faces. Choose “the shapes” for a curved face.");
+  const face = curvedPatFace(shape, m);
+  if (!face) throw new Error("Pattern: the curved face it was on is gone. Edit it and click a face again.");
+  const bp = new OC.BRepGProp_Face(face.wrapped, false), gpt = new OC.gp_Pnt(), gvec = new OC.gp_Vec();
+  try {
+    let { uMin, uMax, vMin, vMax } = face.UVBounds;
+    // a round surface split into pieces (a cone or sphere is often two half faces): the pattern
+    // goes all the way round the surface, on whichever piece each shape lands
+    let extended = false;
+    try {
+      const ad = new OC.BRepAdaptor_Surface(face.wrapped, true);
+      if (ad.IsUPeriodic()) { const per = ad.UPeriod(); if (uMax - uMin < per - 1e-6) { uMax = uMin + per; extended = true; } }
+      if (ad.IsVPeriodic()) { const per = ad.VPeriod(); if (vMax - vMin < per - 1e-6) { vMax = vMin + per; extended = true; } }
+      ad.delete();
+    } catch (e) {}
+    const ev = (u, v) => { bp.Normal(u, v, gpt, gvec); const N = [gvec.X(), gvec.Y(), gvec.Z()], L = Math.hypot(...N) || 1; return { P: [gpt.X(), gpt.Y(), gpt.Z()], N: N.map((x) => x / L) }; };
+    const NS = 96, um = (uMin + uMax) / 2, vm = (vMin + vMax) / 2;
+    // arc length tables: along v at the middle u, and along u at any v (cached)
+    const table = (f) => { const L = [0]; let prev = f(0); for (let i = 1; i <= NS; i++) { const q = f(i / NS); L.push(L[i - 1] + Math.hypot(q[0] - prev[0], q[1] - prev[1], q[2] - prev[2])); prev = q; } return L; };
+    const inv = (L, x) => { if (x <= 0) return 0; const tot = L[NS]; if (x >= tot) return 1; let lo = 0, hi = NS; while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (L[mid] <= x) lo = mid; else hi = mid; } return (lo + (x - L[lo]) / Math.max(1e-12, L[hi] - L[lo])) / NS; };
+    const Lv = table((a) => ev(um, vMin + a * (vMax - vMin)).P), H = Lv[NS];
+    const rows = new Map();
+    const rowAt = (v) => { const key = Math.round(v * 1e6); let r = rows.get(key); if (!r) { r = table((a) => ev(uMin + a * (uMax - uMin), v).P); rows.set(key, r); } return r; };
+    const W = rowAt(vm)[NS];
+    if (!(W > 0.5 && H > 0.5)) throw new Error("Pattern: this face is too small for a pattern");
+    const dist3 = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+    let isCyl = false; try { isCyl = face.geomType === "CYLINDRE"; } catch (e) {}
+    const uClosed = dist3(ev(uMin, vm).P, ev(uMax, vm).P) < 1e-3 * Math.max(1, W);
+    const vClosed = dist3(ev(um, vMin).P, ev(um, vMax).P) < 1e-3 * Math.max(1, H);
+    // where a point of the flat layout lands: t along, s round (squeezed in proportion on rows
+    // that are shorter or longer than the middle one, e.g. toward the top of a sphere or a cone)
+    const vOf = (t) => vMin + inv(Lv, t) * (vMax - vMin);
+    const land = (sx, t) => {
+      const v = vOf(t), L = rowAt(v), k = L[NS] / W;
+      let sl = sx * k;
+      if (uClosed) { sl = ((sl % L[NS]) + L[NS]) % L[NS]; }
+      return { u: uMin + inv(L, sl) * (uMax - uMin), v, k };
+    };
+    // pattern size: on a face that wraps round, a whole number of shapes round
+    let size = Math.max(0.5, +m.size || 6);
+    if (uClosed && !(+m.angle)) { const nr = Math.max(3, Math.round(W / size)); size = W / nr; }
+    const mm = { ...m, size };
+    const ang = ((+m.angle || 0) * Math.PI) / 180, ca = Math.cos(ang), sa = Math.sin(ang);
+    const ox = +m.ox || 0, oy = +m.oy || 0;
+    // lay out over the whole face (and a bit), centered on it (from the seam on a wrapped face)
+    const cxD = uClosed ? 0 : W / 2, cyD = H / 2;
+    const R2 = Math.hypot(W, H) / 2 + size * 2;
+    let cells = facePatCells(mm, uClosed && !ang ? [0, -cyD - size, W - 1e-6, cyD + size] : [-R2, -R2, R2, R2]);
+    const toDom = ([x, y]) => [cxD + ox + x * ca - y * sa, cyD + oy + x * sa + y * ca];
+    cells = cells.map((c) => ({ ...c, c: toDom(c.c), pts: c.r ? null : c.pts.map(toDom) }));
+    if (uClosed && !ang) cells = cells.filter((c) => c.c[0] - ox >= -1e-6 && c.c[0] - ox < W - 1e-6);
+    // edges: whole shapes inside the border, or shapes trimmed at the edge / the lattice frame
+    const clip = m.edge === "clip";
+    const fr = clip ? (m.through ? Math.max(0, +m.border || 0) : 0) : Math.max(0, +m.border || 0);
+    const sx0 = uClosed ? -Infinity : fr, sx1 = uClosed ? Infinity : W - fr, ty0 = vClosed ? -Infinity : fr, ty1 = vClosed ? Infinity : H - fr;
+    const circ = (c, k = 24) => { const o = []; for (let i = 0; i < k; i++) { const a = (i / k) * 2 * Math.PI; o.push([c.c[0] + c.r * Math.cos(a), c.c[1] + c.r * Math.sin(a)]); } return o; };
+    const kept = [];
+    for (const c of cells) {
+      let pts = c.r ? circ(c) : c.pts;
+      const inR = (q) => q[0] >= sx0 - 1e-9 && q[0] <= sx1 + 1e-9 && q[1] >= ty0 - 1e-9 && q[1] <= ty1 + 1e-9;
+      if (clip) {
+        if (pts.every(inR)) { kept.push(c); continue; }
+        const q = clipPolyRect(pts, sx0, sx1, ty0, ty1);
+        if (q.length >= 3) { let a2 = 0; for (let i = 0; i < q.length; i++) { const a = q[i], b = q[(i + 1) % q.length]; a2 += a[0] * b[1] - b[0] * a[1]; } if (Math.abs(a2) / 2 > 0.04 * size * size) kept.push({ c: c.c, pts: q }); }
+      } else if (pts.every(inR)) kept.push(c);
+    }
+    cells = kept;
+    // shapes squeezed to nothing (near the pole of a sphere) are left off
+    cells = cells.filter((c) => land(c.c[0], Math.max(0, Math.min(H, c.c[1]))).k > 0.3);
+    // a face with holes or trimmed edges: only shapes whose middle is on the face
+    let a0 = 0; try { a0 = R.measureArea(face); } catch (e) {}
+    let est = 0; for (let i = 0; i < 24; i++) { const t0 = (i / 24) * H, t1 = ((i + 1) / 24) * H; est += rowAt(vOf((t0 + t1) / 2))[NS] * (t1 - t0); }
+    const trimmed = extended || (a0 > 0 && Math.abs(a0 - est) / est > 0.03);
+    // the faces of the body on this surface: a shape is kept when its middle lands on one of them
+    const onFaces = [];
+    if (trimmed) {
+      let gt = null; try { gt = face.geomType; } catch (e) {}
+      for (const f of shape.faces) { let g = null; try { g = f.geomType; } catch (e) {} if (g === gt) onFaces.push(f); else f.delete(); }
+    }
+    if (!cells.length) throw new Error("Pattern: no shapes fit on this face. Make the pattern smaller or the border thinner.");
+    if (cells.length > 2500) throw new Error(`Pattern: that would be ${cells.length} shapes. Make the pattern size bigger (or pick a smaller face).`);
+    const cut = m.mode === "cut" || !!m.through;
+    const depth = clampPos(+m.depth || 1, 0.05), e = 0.05;
+    let mesh = null;
+    if (m.through) { try { mesh = shape.mesh({ tolerance: 0.05, angularTolerance: 0.2 }); } catch (err) { mesh = null; } }
+    const [blo, bhi] = shape.boundingBox.bounds, diag = Math.hypot(bhi[0] - blo[0], bhi[1] - blo[1], bhi[2] - blo[2]);
+    const prisms = [];
+    try {
+      for (const c of cells) {
+        const ct = Math.max(0, Math.min(H, c.c[1]));
+        const L0 = land(c.c[0], ct), A = ev(L0.u, L0.v), P = A.P, N = A.N;
+        if (trimmed) {
+          let d = 1; const vx = R.makeVertex(P);
+          for (const f of onFaces) { try { d = Math.min(d, R.measureDistanceBetween(vx, f)); } catch (err) {} if (d <= 0.05) break; }
+          vx.delete();
+          if (d > 0.05) continue;
+        }
+        // the surface's directions here: round (Tu) and along (Tv)
+        const du = (uMax - uMin) * 1e-4, dv = (vMax - vMin) * 1e-4;
+        const Pu = ev(Math.min(uMax, L0.u + du), L0.v).P, Pu0 = ev(Math.max(uMin, L0.u - du), L0.v).P;
+        const Pv = ev(L0.u, Math.min(vMax, L0.v + dv)).P, Pv0 = ev(L0.u, Math.max(vMin, L0.v - dv)).P;
+        let Tu = Vec.norm(Vec.sub(Pu, Pu0)); Tu = Vec.norm(Vec.sub(Tu, N.map((x) => x * Vec.dot(Tu, N))));
+        let Tv = Vec.cross(N, Tu); if (Vec.dot(Tv, Vec.sub(Pv, Pv0)) < 0) Tv = Tv.map((x) => -x);
+        const k = L0.k;
+        // true circles (squeezed ones toward a sphere's poles become 16-sided ovals)
+        const pts = c.r && (isCyl || k > 0.85) ? null : (c.r ? circ(c, 16) : c.pts);
+        // how far the surface curves away from this flat shape: the shape reaches past it
+        let dmin = 0, dmax = 0;
+        for (const q of pts || circ(c, 8)) { const Lq = land(q[0], Math.max(0, Math.min(H, q[1]))), S = ev(Lq.u, Lq.v).P, d = Vec.dot(Vec.sub(S, P), N); dmin = Math.min(dmin, d); dmax = Math.max(dmax, d); }
+        let z0, len;
+        if (cut) {
+          let dd = depth;
+          if (m.through) { const t = mesh ? rayMeshDepth(mesh, P.map((x, i) => x - N[i] * 0.02), N.map((x) => -x)) : Infinity; dd = (isFinite(t) ? t : diag) + 0.5 - dmin; }
+          z0 = -dd; len = dd + dmax + e + 0.3;
+        } else { z0 = dmin - e; len = depth - z0; }
+        const P3 = ([x, y]) => { const dx = (x - c.c[0]) * k, dy = y - c.c[1]; return [0, 1, 2].map((i) => P[i] + Tu[i] * dx + Tv[i] * dy + N[i] * z0); };
+        let f;
+        if (!pts) { const w = R.assembleWire([R.makeCircle(c.r, P.map((x, i) => x + N[i] * z0), N)]); f = R.makeFace(w); w.delete(); }
+        else f = R.makePolygon(pts.map(P3));
+        prisms.push(R.basicFaceExtrusion(f, new R.Vector(N.map((x) => x * len))));
+        f.delete();
+      }
+    } catch (err) { prisms.forEach((q) => q.delete()); throw new Error("Pattern: couldn't make the shapes (" + (err.message || err) + ")"); }
+    onFaces.forEach((f) => f.delete());
+    if (!prisms.length) throw new Error("Pattern: no shapes fit on this face. Make the pattern smaller or the border thinner.");
+    return R.makeCompound(prisms);
+  } finally { bp.delete(); gpt.delete(); gvec.delete(); face.delete(); }
+}
 function facePatTool(shape, m) {
+  if (m.curved) return facePatCurved(shape, m);
   const face = facePatFace(shape, m);
   if (!face) throw new Error("Pattern: the flat face it was on is gone. Edit the pattern and click a face again.");
   try {
@@ -2453,6 +3476,8 @@ function facePatTool(shape, m) {
     const box = [bx0 - cx, by0 - cy, bx1 - cx, by1 - cy];
     let cells = facePatCells(m, box);
     const clip = m.edge === "clip" || m.kind === "slots";
+    // a lattice trims its cells at a frame: the face's outline moved in by the border
+    const frame = clip && m.through ? Math.max(0, +m.border || 0) : 0;
     const border = clip ? 0 : Math.max(0, +m.border || 0);
     const bpts = []; for (const s of segs) bpts.push([s[0], s[1]]);
     cells = cells.filter((c) => {
@@ -2461,9 +3486,18 @@ function facePatTool(shape, m) {
       for (const [x, y] of bpts) if (inPoly(x, y, c.pts)) return false; // a hole or corner inside the shape
       return true;
     });
+    if (frame > 0) cells = cells.filter((c) => c.strip || c.pts.some(([x, y]) => insideSegs(x, y, segs) && !segs.some((s) => segDist(x, y, s) < frame)) || (insideSegs(c.c[0], c.c[1], segs) && !segs.some((s) => segDist(c.c[0], c.c[1], s) < frame)));
     if (!cells.length) throw new Error("Pattern: no shapes fit on this face. Make the pattern smaller or the border thinner.");
     if (cells.length > 2500) throw new Error(`Pattern: that would be ${cells.length} shapes. Make the pattern size bigger (or pick a smaller face).`);
-    const depth = clampPos(+m.depth || 1, 0.05), cut = m.mode === "cut";
+    let depth = clampPos(+m.depth || 1, 0.05);
+    const cut = m.mode === "cut" || !!m.through;
+    if (m.through) {
+      // right through the body: as deep as the body is along the face's normal
+      const [lo, hi] = shape.boundingBox.bounds;
+      let ext = 0;
+      for (const x of [lo[0], hi[0]]) for (const y of [lo[1], hi[1]]) for (const z of [lo[2], hi[2]]) ext = Math.max(ext, Vec.dot(Vec.sub([x, y, z], O0), n.map((v) => -v)));
+      depth = ext + 1;
+    }
     const e = 0.02;
     // raised: from just under the face up by the depth; cut: from the depth below up past the face
     const z0 = cut ? -depth : -e, len = cut ? depth + 0.4 : depth + e;
@@ -2490,12 +3524,41 @@ function facePatTool(shape, m) {
       return t;
     }
     if (!clip) return comp;
-    const sl = slab();
+    let sl = null;
+    if (frame > 0) {
+      const inner = insetFace(face, frame);
+      if (!inner) { comp.delete(); throw new Error("Lattice: the frame is too wide for this face. Make the frame thinner."); }
+      const base = inner.translate(n.map((v) => v * z0));
+      sl = R.basicFaceExtrusion(base, vec); base.delete();
+    } else sl = slab();
     const t = commonAll(comp, sl);
     sl.delete(); comp.delete();
     if (!t) throw new Error("Pattern: couldn't trim the shapes at the face's edge");
     return t;
   } finally { face.delete(); }
+}
+// a flat face with its outline (and holes) moved in by d: the inside of a lattice's frame
+function insetFace(face, d) {
+  let a0 = 0;
+  try { a0 = R.measureArea(face); } catch (e) { return null; }
+  for (const sgn of [-1, 1]) {
+    let mk = null;
+    const made = [];
+    try {
+      mk = new OC.BRepOffsetAPI_MakeOffset(face.wrapped, OC.GeomAbs_JoinType.GeomAbs_Arc, false);
+      mk.Perform(sgn * d, 0);
+      if (!mk.IsDone()) continue;
+      const sh = R.cast(mk.Shape());
+      const wires = sh instanceof R.Wire ? [sh] : [...(sh.wires || [])];
+      // the outer wire is the one whose face is biggest; the others are the holes
+      for (const w of wires) { try { const f = R.makeFace(w); made.push({ w, a: R.measureArea(f) }); f.delete(); } catch (e) {} }
+      if (!made.length) continue;
+      made.sort((p, q) => q.a - p.a);
+      if (!(made[0].a < a0 - 1e-6)) continue;
+      return R.makeFace(made[0].w, made.slice(1).map((x) => x.w));
+    } catch (e) { continue; } finally { if (mk) mk.delete(); }
+  }
+  return null;
 }
 function commonAll(a, b) {
   const op = new OC.BRepAlgoAPI_Common();
@@ -2579,16 +3642,58 @@ let node_tol_hint = 0.05;
 // is (a bend tighter than the tube, a wobble), try again on a smoothed copy, and if that fails
 // too, build the tube from triangles, which always works
 function buildPipe(node) {
+  // Distance (a fraction of the path) and which end it starts from, like Fusion 360's pipe
+  if (node.flip || (node.dist != null && node.dist < 1)) {
+    let sg = node.pathSegs || [];
+    if (node.flip) sg = swReverse(sg);
+    if (node.dist != null && node.dist < 1 && sg.length) sg = swTrim(sg, Math.max(1e-3, node.dist));
+    node = { ...node, pathSegs: sg, flip: false, dist: 1 };
+  }
   const segs = node.pathSegs || [];
   if (segs.length === 1 && segs[0].t === "bsp" && !node.hollow && !node._try) {
     const size = clampPos(node.size ?? 5), P0 = segs[0].pts;
     // a bend much tighter than the tube can't sweep (and finding that out is slow): smooth first
-    if (minBend(P0) > size * 0.55) { try { return buildPipeShell(node); } catch (e1) {} }
+    // the engine's sweep can come out wrong without failing on a long hand-drawn line (flattened
+    // into a twisting band, or with fins and lumps where the line wiggles), so each try is checked
+    // against the line itself, and a tube built straight from the line is used when it's off
+    const good = (shape, P) => { if (tubeFits(shape, P, size / 2)) return shape; shape.delete(); return null; };
+    if (minBend(P0) > size * 0.55) { try { const s1 = good(buildPipeShell(node), P0); if (s1) return s1; } catch (e1) {} }
     const P = relaxPath(P0, size);
-    try { return buildPipeShell({ ...node, _tol: Math.max(0.05, size * 0.1), pathSegs: [{ t: "bsp", a: P[0], b: P[P.length - 1], pts: P }] }); } catch (e2) {}
+    try { const s2 = good(buildPipeShell({ ...node, _tol: Math.max(0.05, size * 0.1), pathSegs: [{ t: "bsp", a: P[0], b: P[P.length - 1], pts: P }] }), P); if (s2) return s2; } catch (e2) {}
     return solidFromMesh(...tubeMesh(P, size / 2));
   }
   return buildPipeShell(node);
+}
+// is this solid really a round tube of radius r along the points P? Every point of its surface
+// must lie about r from the line, and its volume must be about that of the tube.
+function tubeFits(shape, P, r) {
+  let L = 0;
+  for (let i = 1; i < P.length; i++) L += Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1], P[i][2] - P[i - 1][2]);
+  const vol = safeVolume(shape), want = Math.PI * r * r * L;
+  if (!(vol > want * 0.85 && vol < want * 1.15)) return false;
+  let V;
+  try { V = shape.mesh({ tolerance: Math.max(0.02, r * 0.08), angularTolerance: 0.35 }).vertices; } catch (e) { return false; }
+  // the line's segments in a grid of cells, so each surface point checks only the nearby ones
+  const cell = Math.max(r * 4, L / 60), key = (x, y, z) => `${Math.floor(x / cell)},${Math.floor(y / cell)},${Math.floor(z / cell)}`;
+  const grid = new Map();
+  for (let i = 1; i < P.length; i++) {
+    const a = P[i - 1], b = P[i], lo = [0, 1, 2].map((k) => Math.floor((Math.min(a[k], b[k]) - 2 * r) / cell)), hi = [0, 1, 2].map((k) => Math.floor((Math.max(a[k], b[k]) + 2 * r) / cell));
+    for (let x = lo[0]; x <= hi[0]; x++) for (let y = lo[1]; y <= hi[1]; y++) for (let z = lo[2]; z <= hi[2]; z++) { const kk = `${x},${y},${z}`; if (!grid.has(kk)) grid.set(kk, []); grid.get(kk).push(i); }
+  }
+  const lim = r * 1.2 + 0.05;
+  for (let v = 0; v < V.length; v += 3) {
+    const x = V[v], y = V[v + 1], z = V[v + 2], segs = grid.get(key(x, y, z));
+    if (!segs) return false;
+    let best = Infinity;
+    for (const i of segs) {
+      const a = P[i - 1], b = P[i], ab0 = b[0] - a[0], ab1 = b[1] - a[1], ab2 = b[2] - a[2], L2 = ab0 * ab0 + ab1 * ab1 + ab2 * ab2 || 1;
+      let t = ((x - a[0]) * ab0 + (y - a[1]) * ab1 + (z - a[2]) * ab2) / L2; t = t < 0 ? 0 : t > 1 ? 1 : t;
+      const d = Math.hypot(a[0] + ab0 * t - x, a[1] + ab1 * t - y, a[2] + ab2 * t - z);
+      if (d < best) { best = d; if (best <= lim) break; }
+    }
+    if (best > lim) return false;
+  }
+  return true;
 }
 function minBend(pts) {
   const d = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
@@ -2617,17 +3722,26 @@ function relaxPath(pts, size) {
   const rad = (a, b, c) => { const ab = d(a, b), bc = d(b, c), ca = d(c, a); const s2 = (ab + bc + ca) / 2, A = Math.sqrt(Math.max(0, s2 * (s2 - ab) * (s2 - bc) * (s2 - ca))); return A < 1e-12 ? Infinity : (ab * bc * ca) / (4 * A); };
   let p = out;
   const n = p.length, m = closed ? n - 1 : n; // m distinct points (a closed path repeats its first)
-  for (let it = 0; it < 60 && m > 2; it++) {
+  // only around the tight bends, so the rest of the line stays exactly where it was drawn
+  const lo = closed ? 0 : 1, hi = closed ? m : m - 1, reach = 3;
+  for (let it = 0; it < 80 && m > 2; it++) {
+    const near = new Uint8Array(m);
     let tight = false;
+    for (let i = lo; i < hi; i++) {
+      if (rad(p[(i - 1 + m) % m], p[i], p[(i + 1) % m]) < size * 0.75) {
+        tight = true;
+        for (let j = -reach; j <= reach; j++) { const k = closed ? (i + j + m) % m : i + j; if (k >= lo && k < hi) near[k] = 1; }
+      }
+    }
+    if (!tight) break;
     const q = p.map((v) => v.slice());
-    for (let i = closed ? 0 : 1; i < (closed ? m : m - 1); i++) {
+    for (let i = lo; i < hi; i++) {
+      if (!near[i]) continue;
       const ia = p[(i - 1 + m) % m], b = p[i], ic = p[(i + 1) % m];
-      if (rad(ia, b, ic) < size * 0.75) tight = true;
       for (let k = 0; k < 3; k++) q[i][k] = b[k] * 0.5 + (ia[k] + ic[k]) * 0.25;
     }
     if (closed) q[n - 1] = q[0].slice();
     p = q;
-    if (!tight && it > 1) break;
   }
   return p;
 }
@@ -2909,6 +4023,8 @@ function scaleMod(m, k, o) {
       return { ...m, face: { c: P(m.face.c), n: N(m.face.n) }, loops: (m.loops || []).map((l) => ({ ...l, c: P(l.c) })) };
     case "facepat":
       return { ...m, p: P(m.p), n: N(m.n) };
+    case "route":
+      return { ...m, strokes: (m.strokes || []).map((s) => ({ ...s, p: s.p.map(P), n: s.n.map(N) })) };
     case "bool": {
       const g = scaleNode({ t: "group", children: [{ node: m.tool, m: m.m || [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1] }] }, k, o);
       if (!g) return null;
@@ -3225,8 +4341,11 @@ function evalBase(node) {
 export function evalNode(node) {
   const key = stableKey(node);
   const hit = cacheGet(key);
-  if (hit) return hit;
+  if (hit) { const n = cacheNotes.get(key); if (n) n.forEach(note); return hit; }
+  const outer = NOTES;
+  NOTES = [];
   let shape;
+  try {
   const mods = node.mods || [];
   const last = mods[mods.length - 1];
   const exact = last && last.t === "scale" && !isUniform(last.k) ? scaleNode({ ...node, mods: mods.slice(0, -1) }, last.k, last.o) : null;
@@ -3234,15 +4353,68 @@ export function evalNode(node) {
     try { shape = evalNode(exact); }
     catch (e) { shape = scaleShape(evalNode({ ...node, mods: mods.slice(0, -1) }), last.k, last.o); }
   } else if (mods.length) {
-    // evaluate prefix (node without last mod) so editing the last feature is cheap
-    const prefix = { ...node, mods: mods.slice(0, -1) };
-    shape = evalNode(prefix);
-    shape = solidsOnly(applyMod(shape, mods[mods.length - 1]));
+    // a run of plain cuts at the end (a pattern of cuts, say) with nothing of it built yet:
+    // one boolean with every tool (OpenCascade works out the intersections together), much
+    // quicker than one cut after another on a complicated body
+    let k = mods.length;
+    while (k > 0 && mods[k - 1].t === "bool" && mods[k - 1].op === "cut" && mods[k - 1].tool) k--;
+    const run = mods.length - k;
+    if (run >= 2 && !cache.has(stableKey({ ...node, mods: mods.slice(0, -1) }))) {
+      const before = evalNode({ ...node, mods: mods.slice(0, k) });
+      const out = cutMany(before, mods.slice(k));
+      if (out) { before.delete(); shape = solidsOnly(out); }
+      else shape = runMods(before, mods.slice(k));
+    } else {
+      // evaluate prefix (node without last mod) so editing the last feature is cheap
+      const prefix = { ...node, mods: mods.slice(0, -1) };
+      shape = evalNode(prefix);
+      shape = solidsOnly(applyMod(shape, mods[mods.length - 1]));
+    }
   } else {
     shape = solidsOnly(evalBase(node));
   }
+  } finally {
+    const mine = NOTES;
+    NOTES = outer;
+    if (mine.length) { mine.forEach(note); if (shape) cacheNotes.set(key, mine); }
+  }
   cachePut(key, shape);
   return shape;
+}
+
+// the cuts one after another (when they can't all be done in one go)
+function runMods(shape, list) {
+  for (const m of list) shape = solidsOnly(applyMod(shape, m));
+  return shape;
+}
+// cut several tools out of a shape in one boolean; null when that doesn't work
+function cutMany(shape, list) {
+  const tools = [];
+  try {
+    for (const m of list) tools.push(transformShape(evalNode(m.tool), m.m));
+    const v0 = safeVolume(shape);
+    const args = new OC.NCollection_List_TopoDS_Shape(), tl = new OC.NCollection_List_TopoDS_Shape();
+    args.Append(shape.wrapped);
+    for (const t of tools) tl.Append(t.wrapped);
+    const op = new OC.BRepAlgoAPI_Cut();
+    let out = null;
+    try {
+      op.SetArguments(args); op.SetTools(tl); op.SetRunParallel(false);
+      try { op.SetUseOBB(true); } catch (e) {}
+      const pr = new OC.Message_ProgressRange();
+      op.Build(pr); pr.delete();
+      if (op.IsDone() && !op.HasErrors()) {
+        out = R.cast(op.Shape());
+        const v = safeVolume(out);
+        if (!(v > 1e-9) || !(v <= v0 + 1e-6)) { out.delete(); out = null; }
+      }
+    } finally { op.delete(); args.delete(); tl.delete(); }
+    return out;
+  } catch (e) {
+    return null;
+  } finally {
+    for (const t of tools) try { t.delete(); } catch (e) {}
+  }
 }
 
 function buildGroup(node) {
@@ -3560,16 +4732,100 @@ export function meshShape(shape, quality = 1) {
 export function buildBodies(bodies, quality = 1) {
   const out = [];
   for (const b of bodies) {
+    NOTES = [];
     try {
+      const t0 = Date.now();
       const shape = evalNode(b.node);
       const mesh = meshShape(shape, quality);
       shape.delete();
-      out.push({ id: b.id, rev: b.rev, ok: true, mesh });
+      out.push({ id: b.id, rev: b.rev, ok: true, mesh, ms: Date.now() - t0, notes: NOTES.length ? NOTES : undefined });
     } catch (e) {
       out.push({ id: b.id, rev: b.rev, ok: false, error: friendly(e) });
     }
+    NOTES = null;
   }
   return out;
+}
+
+// STL / 3MF export: the display mesh is kept light so the view stays quick (curves in steps of
+// about 11°, chords up to 0.06% of the part's size). Files for printing are meshed again here,
+// much finer, from the exact shape: chord error (how far a flat triangle may sit from the true
+// surface) and the angle between neighbouring triangles on a curve.
+export const EXPORT_LEVELS = {
+  standard: { rel: 2e-4, min: 0.01, max: 0.05, ang: 0.1 },   // ≤ 0.05 mm, ≤ 5.7°
+  fine: { rel: 1e-4, min: 0.005, max: 0.02, ang: 0.06 },     // ≤ 0.02 mm, ≤ 3.4°
+  extra: { rel: 5e-5, min: 0.002, max: 0.008, ang: 0.035 },  // ≤ 0.008 mm, ≤ 2°
+};
+export function exportTolerance(diag, level = "fine") {
+  const L = EXPORT_LEVELS[level] || EXPORT_LEVELS.fine;
+  return { tol: Math.min(L.max, Math.max(L.min, diag * L.rel)), ang: L.ang };
+}
+export function meshForExport(shape, level = "fine") {
+  const bb = bboxOf(shape);
+  const diag = Math.hypot(...bb.size) || 1;
+  const { tol, ang } = exportTolerance(diag, level);
+  const m = shape.mesh({ tolerance: tol, angularTolerance: ang });
+  try { repairFaceMeshes(shape, m, tol, ang); } catch (err) {}
+  return {
+    vertices: new Float32Array(m.vertices),
+    normals: new Float32Array(m.normals),
+    triangles: new Uint32Array(m.triangles),
+    faceGroups: m.faceGroups.map((g) => [g.start, g.count]),
+    tol, ang,
+  };
+}
+export function exportMeshes(bodies, level = "fine") {
+  const out = [];
+  for (const b of bodies) {
+    try {
+      const shape = evalNode(b.node);
+      const mesh = meshForExport(shape, level);
+      shape.delete();
+      out.push({ id: b.id, ok: true, mesh });
+    } catch (e) {
+      out.push({ id: b.id, ok: false, error: friendly(e) });
+    }
+  }
+  return out;
+}
+
+// Clearance: which bodies touch, overlap or sit closer than `gap` (parts that should move
+// against each other). bodies: [{ id, node, m }]. Returns [{ a, b, d }] (d: closest distance,
+// 0 when touching or overlapping) and each body's volume, so the tool can choose which to cut.
+export function contactPairs(bodies, gap = 0.3) {
+  const items = [];
+  for (const b of bodies) {
+    try {
+      const sh = transformShape(evalNode(b.node), b.m);
+      const bb = bboxOf(sh);
+      items.push({ id: b.id, sh, bb, vol: safeVolume(sh) });
+    } catch (e) {}
+  }
+  const near = gap + 0.01;
+  const boxesMeet = (A, B) => [0, 1, 2].every((k) => A.min[k] - near <= B.max[k] && B.min[k] - near <= A.max[k]);
+  // a part buried completely inside another: their surfaces are apart but they share volume
+  const overlap = (A, B) => { try { const c = A.sh.intersect(B.sh); const v = safeVolume(c); c.delete(); return v > 1e-6; } catch (e) { return false; } };
+  const pairs = [];
+  for (let i = 0; i < items.length; i++) for (let j = i + 1; j < items.length; j++) {
+    const A = items[i], B = items[j];
+    if (!boxesMeet(A.bb, B.bb)) continue;
+    let d = Infinity;
+    try {
+      const ds = new OC.BRepExtrema_DistShapeShape();
+      ds.LoadS1(A.sh.wrapped); ds.LoadS2(B.sh.wrapped);
+      const pr = new OC.Message_ProgressRange();
+      if (ds.Perform(pr) && ds.IsDone()) d = ds.Value();
+      pr.delete(); ds.delete();
+    } catch (e) {}
+    if (d > near) {
+      // no surfaces close: one part may still be completely inside the other
+      if (overlap(A, B)) d = 0;
+    }
+    if (d <= near) pairs.push({ a: A.id, b: B.id, d: Math.max(0, d) });
+  }
+  const vols = {};
+  for (const it of items) { vols[it.id] = it.vol; try { it.sh.delete(); } catch (e) {} }
+  return { pairs, vols };
 }
 
 function friendly(e) {

@@ -31,14 +31,28 @@ export const MOTION = {
     acc: { def: 4000, top: 1500, bridge: 1500, first: 800, travel: 4000 }, mach: { acc: 4000, travel: 5000, v: 300, z: 12, e: 100, retract: 1250 }, jerk: { x: 8, y: 8, z: 2, e: 10 } }),
   mini: P({ name: "Prusa MINI 0.20mm", v: { outer: 200, inner: 250, sparse: 250, solid: 250, top: 100, bottom: 250, bridge: 40, support: 110, skirt: 50, brim: 50 }, first: { wall: 40, infill: 100 }, travel: 300,
     acc: { def: 4000, solid: 3000, top: 2000, bridge: 1500, first: 500, travel: 4000 }, mach: { acc: 4000, travel: 4000, v: 300, z: 12, e: 80, retract: 1250 }, jerk: { x: 8, y: 8, z: 2, e: 10 } }),
+  // Prusa MK3 / MK3S / MK3S+: Marlin, 1,250 mm/s² printing, slower "QUALITY" speeds (PrusaSlicer's
+  // and Orca's MK3S 0.20mm QUALITY process)
+  mk3: P({ name: "Prusa MK3S 0.20mm QUALITY", v: { outer: 25, inner: 45, sparse: 80, solid: 80, top: 40, bottom: 80, bridge: 25, support: 50, skirt: 30, brim: 30 }, first: { wall: 20, infill: 20 }, travel: 180,
+    acc: { def: 1000, outer: 800, top: 800, bridge: 1000, first: 800, travel: 1250 }, mach: { acc: 1250, travel: 1250, v: 200, z: 12, e: 120, retract: 1250 }, jerk: { x: 8, y: 8, z: 0.4, e: 4.5 } }),
+  // MK3.5 / MK3.5S: the same frame with input shaping (Prusa's 0.20mm SPEED profile for it)
+  mk35: P({ name: "Prusa MK3.5 0.20mm SPEED", v: { outer: 100, inner: 140, sparse: 200, solid: 200, top: 100, bottom: 200, bridge: 25, support: 120, skirt: 50, brim: 50 }, first: { wall: 30, infill: 60 }, travel: 300,
+    acc: { def: 2500, outer: 2000, top: 1500, bridge: 1000, first: 800, travel: 4000 }, mach: { acc: 4000, travel: 4000, v: 300, z: 12, e: 100, retract: 1250 }, jerk: { x: 8, y: 8, z: 2, e: 10 } }),
+  // FLSUN QQ-S / QQ-S Pro: a Marlin delta (Orca's QQ-S Pro 0.20mm Standard); Z moves as fast as X and Y
+  qqs: P({ name: "FLSUN QQ-S Pro 0.20mm Standard", v: { outer: 40, inner: 60, sparse: 80, solid: 70, top: 40, bottom: 60, bridge: 30, support: 60, skirt: 30, brim: 30 }, first: { wall: 20, infill: 25 }, travel: 200,
+    acc: { def: 1500, outer: 1000, top: 1000, first: 500, travel: 3000 }, mach: { acc: 3000, travel: 3000, v: 300, z: 300, e: 60, retract: 3000 }, jerk: { x: 10, y: 10, z: 10, e: 5 } }),
+  // H3C: Bambu Lab's standard 0.20 mm speeds, with its lighter toolhead's higher limits
+  // (25,000 mm/s² and 1,400 mm/s; the H3C profiles weren't in Orca Slicer 2.5.1 yet)
+  bambuh3c: P({ name: "Bambu Lab H3C 0.20mm Standard", v: { outer: 200, inner: 300, sparse: 270, solid: 250, top: 200, bottom: 250, bridge: 50, support: 150, skirt: 50, brim: 50 }, first: { wall: 50, infill: 105 }, travel: 600,
+    acc: { def: 12000, outer: 5000, top: 2000, first: 500, travel: 12000 }, mach: { acc: 25000, travel: 25000, v: 1400, z: 20, e: 30, retract: 5000 }, jerk: { x: 9, y: 9, z: 3, e: 2.5 } }),
   ender3: P({ name: "Creality Ender-3 0.20mm Standard", v: { outer: 40, inner: 40, sparse: 60, solid: 50, top: 30, bottom: 50, bridge: 25, support: 40, skirt: 40, brim: 30 }, first: { wall: 14, infill: 21 }, travel: 150,
     acc: { def: 500, first: 500, travel: 500 }, mach: { acc: 500, travel: 1500, v: 500, z: 10, e: 60, retract: 1000 }, jerk: { x: 8, y: 8, z: 0.4, e: 5 } }),
 };
 const BY_PRINTER = {
-  a1mini: "bambu", a1: "bambu", a2l: "bambu", p1s: "bambu", p2s: "bambu", x1: "bambu", x2d: "bambu", h2s: "bambu", h2d: "bambu", h2c: "bambu",
+  a1mini: "bambu", a1: "bambu", a2l: "bambu", p1s: "bambu", p2s: "bambu", x1: "bambu", x2d: "bambu", h2s: "bambu", h2d: "bambu", h2c: "bambu", h3c: "bambuh3c",
   ender3: "ender3", k1: "k1", k1max: "k1", k2se: "k2", k2: "k2", k2pro: "k2", k2plus: "k2", cc: "elegoo", cc2: "elegoo",
   ff5m: "flashforge", ffad5x: "flashforge", creator5: "flashforge", creator5pro: "flashforge",
-  mini: "mini", mk4: "mk4", xl1: "mk4", xl2: "mk4", xl5: "mk4", core1: "core", core1l: "core", core1lindx4: "core", core1lindx8: "core", u1: "u1", voron: "voron",
+  mini: "mini", mk4: "mk4", mk3: "mk3", mk3s: "mk3", mk3splus: "mk3", mk35: "mk35", mk35s: "mk35", mk39: "mk4", mk39s: "mk4", qqs: "qqs", xl1: "mk4", xl2: "mk4", xl5: "mk4", core1: "core", core1l: "core", core1lindx4: "core", core1lindx8: "core", u1: "u1", voron: "voron",
 };
 export function motionFor(printerKey, printer) {
   const k = BY_PRINTER[printerKey] || (printer && printer.brand === "Bambu Lab" ? "bambu" : printer && printer.brand === "Prusa" ? "mk4" : "k1");

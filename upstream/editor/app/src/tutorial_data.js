@@ -60,16 +60,16 @@ const TABS = "In the tool's panel, press <b>Tab</b> to go to the next box. (<b>E
 export const TUTORIALS = [
   // ============================================================== BEGINNER
   {
-    id: "b-top", mode: "beginner", level: "Proficient", minutes: "8-10", item: "Spinning Top",
+    id: "b-top", mode: "advanced", level: "Proficient", minutes: "8-10", item: "Spinning Top",
     title: "Spinning top (Lathe)",
     blurb: "Turn a square block of wood into a spinning top on the virtual lathe: round it, shape a point and a handle.",
     learn: ["Lathe", "Foot pedal", "Roughing gouge", "Spindle gouge", "Parting tool"],
     steps: [
       nameStep("Spinning Top", "Lopez, Maria, Spinning Top"),
       {
-        title: "Open the Lathe", tool: "Lathe", icon: "lathe", show: { sel: "#bb-lathe" }, anim: false,
+        title: "Open the Lathe", tool: "Lathe", icon: "lathe", show: { sel: "#ad-lathe", via: "#ad-workshop" }, anim: false,
         how: [
-          "In the toolbar, click <b>Lathe</b> (next to 3D Sketch).",
+          "At the right end of the <b>Design</b> ribbon, click <b>Workshop</b>, then <b>Lathe</b>.",
           "The Lathe opens over the whole screen with a window asking <b>What do you want to turn?</b>",
         ],
         when: "A lathe makes round things: it spins the wood while you hold a chisel against it, so everything you cut comes out perfectly round. Bowls, cups, bats, pens, chess pieces and tops are all turned.",
@@ -242,7 +242,7 @@ export const TUTORIALS = [
         title: "Copy it into a row", tool: "Pattern", icon: "pattern", show: { sel: "#bb-pattern" },
         how: [
           "Click the channel to select only it.",
-          "Click <b>Pattern</b> in the toolbar.",
+          "Click <b>Arrange ▾ → Pattern</b> in the toolbar.",
           TABS,
           "Type <b>Rectangular</b>. Direction 1: <b>Along Y</b>, <b>Count 4</b>, <b>Spacing 14</b>.",
           "Tick <b>Both sides of the original</b>. The panel says 7 instances.",
@@ -322,7 +322,7 @@ export const TUTORIALS = [
       {
         title: "Add a texture", tool: "Texture", icon: "texture", show: { sel: "#bb-texture" },
         how: [
-          "With the holder selected, click <b>Texture</b> in the toolbar.",
+          "With the holder selected, click <b>Shape it ▾ → Texture</b> in the toolbar.",
           "Click two or three of the outside flat sides that face you.",
           "Pick a pattern from the library (try one of the first few), keep <b>Raise</b>, and click <b>OK</b>.",
         ],
@@ -439,7 +439,7 @@ export const TUTORIALS = [
       {
         title: "Make three arms", tool: "Pattern (circular)", icon: "pattern", show: { sel: "#bb-pattern" },
         how: [
-          "With the arm selected, click <b>Pattern</b>.",
+          "With the arm selected, click <b>Arrange ▾ → Pattern</b>.",
           TABS,
           "Type: <b>Circular</b>. Around: <b>Z</b>. Through: <b>Origin</b>.",
           "<b>Count 3</b>, <b>Total angle 360</b>. Click <b>OK</b>.",
@@ -460,7 +460,7 @@ export const TUTORIALS = [
         title: "Weight holes", tool: "Holes + Pattern", icon: "pattern", show: { tile: "cylinder", hole: true },
         how: [
           "Add another <b>Cylinder</b> hole: <b>Width 16</b>, <b>Depth 16</b>, <b>Height 10</b>, Position <b>X 34</b>, <b>Y 0</b>, <b>Z (bottom) -1</b>.",
-          "With it selected, click <b>Pattern</b>: <b>Circular</b>, Around <b>Z</b>, Through <b>Origin</b>, <b>Count 3</b>, <b>360</b>. <b>OK</b>.",
+          "With it selected, click <b>Arrange ▾ → Pattern</b>: <b>Circular</b>, Around <b>Z</b>, Through <b>Origin</b>, <b>Count 3</b>, <b>360</b>. <b>OK</b>.",
         ],
         when: "Holes in the ends make it lighter, or hold coins or nuts for a longer spin.",
         check: (t) => t.prim("cylinder", true).filter((b) => t.near(b.node.p.w, 16, 1)).length >= 3,
@@ -530,7 +530,7 @@ export const TUTORIALS = [
       {
         title: "Four fins with a circular pattern", tool: "Pattern (circular)", icon: "pattern", show: { sel: "#bb-pattern" }, anim: "cpattern",
         how: [
-          "Click the fin so only it is selected, then click <b>Pattern</b>.",
+          "Click the fin so only it is selected, then click <b>Arrange ▾ → Pattern</b>.",
           TABS,
           "Type: <b>Circular</b>. Around: <b>Z</b>. Through: <b>Origin</b>.",
           "<b>Count 4</b>, <b>Total angle 360</b>. Click <b>OK</b>.",
@@ -607,7 +607,7 @@ export const TUTORIALS = [
       {
         title: "A row of three", tool: "Pattern", icon: "pattern", show: { sel: "#bb-pattern" },
         how: [
-          "Keep the pencil hole selected and click <b>Pattern</b>.",
+          "Keep the pencil hole selected and click <b>Arrange ▾ → Pattern</b>.",
           TABS,
           "Type <b>Rectangular</b>. Direction 1: <b>Along X</b>, <b>Count 3</b>, <b>Spacing 16</b>. Leave <b>Both sides</b> off.",
           "Click <b>OK</b>. Three holes in a neat row.",
@@ -699,7 +699,7 @@ export const TUTORIALS = [
       {
         title: "All the way round", tool: "Pattern (circular)", icon: "pattern", show: { sel: "#bb-pattern" }, anim: "cpattern",
         how: [
-          "Keep the notch hole selected and click <b>Pattern</b>.",
+          "Keep the notch hole selected and click <b>Arrange ▾ → Pattern</b>.",
           TABS,
           "Type <b>Circular</b>, Around <b>Z</b>, Through <b>Origin</b>.",
           "<b>Count 4</b>, <b>Total angle 135</b>. Click <b>OK</b>. That's 4 holes 45° apart: 8 notches all round.",
@@ -730,7 +730,7 @@ export const TUTORIALS = [
         title: "Window slits", tool: "Box hole + Pattern", icon: "pattern", show: { tile: "box", hole: true }, anim: "holeBox",
         how: [
           "Add a <b>Box</b> hole: <b>Width 4</b>, <b>Depth 70</b>, <b>Height 14</b>. Position <b>X 0</b>, <b>Y 0</b>, <b>Z (bottom) 45</b>. That cuts a slit in the front and the back.",
-          "With it selected, click <b>Pattern</b>: <b>Circular</b>, Around <b>Z</b>, Through <b>Origin</b>, <b>Count 2</b>, <b>Total angle 90</b>. <b>OK</b>. Now there are slits on all four sides.",
+          "With it selected, click <b>Arrange ▾ → Pattern</b>: <b>Circular</b>, Around <b>Z</b>, Through <b>Origin</b>, <b>Count 2</b>, <b>Total angle 90</b>. <b>OK</b>. Now there are slits on all four sides.",
         ],
         when: "Narrow slits were for archers. On a print they also let you see inside.",
         check: (t) => t.prim("box", true).filter((b) => t.near(b.node.p.w, 4, 1)).length >= 2,
@@ -1399,9 +1399,9 @@ export const TUTORIALS = [
     steps: [
       nameStep("Turned Cup", "Lopez, Maria, Turned Cup"),
       {
-        title: "Open the Lathe", tool: "Lathe", icon: "lathe", show: { sel: "#ad-lathe" }, anim: false,
+        title: "Open the Lathe", tool: "Lathe", icon: "lathe", show: { sel: "#ad-lathe", via: "#ad-workshop" }, anim: false,
         how: [
-          "On the <b>Create</b> tab, click <b>Lathe</b>.",
+          "At the right end of the <b>Design</b> ribbon, click <b>Workshop</b>, then <b>Lathe</b>.",
           "The Lathe opens over the whole screen with a window asking <b>What do you want to turn?</b>",
         ],
         when: "A lathe makes round things: it spins the wood while you hold a chisel against it, so everything you cut comes out perfectly round. Bowls, cups, bats, pens, chess pieces and tops are all turned.",

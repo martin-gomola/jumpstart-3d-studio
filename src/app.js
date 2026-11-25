@@ -35,6 +35,11 @@ import { initProjects } from "./projects.js";
 import { initFlexiGen } from "./flexigen.js";
 import { initFloorPlan } from "./floorplan.js";
 import { initMeshStep } from "./meshstep.js";
+import { initColorLitho } from "./colorlitho.js";
+import { openFlowers } from "./flowerui.js";
+import { initNeon } from "./neon.js";
+import { initLayerscape } from "./layerscape.js";
+import { initToolSearch } from "./toolsearch.js";
 import { initCosForge } from "./cosforge.js";
 import { initMcp } from "../mcp/browser/editor-bridge.js";
 
@@ -136,9 +141,11 @@ function boot() {
     },
   }));
   kernel.onBusy = () => app.status();
+  kernel.onSlowFallback = () => app.toast("This device ran short of memory for a second geometry engine, so slow bodies now build one after another in the main engine. Other changes wait until they finish.");
   for (const [k, b] of extraFonts()) kernel.addAsset("font:" + k, "font", b);
   kernel.start();
   const scene = (app.scene = new SceneSync(vp, kernel));
+  scene.onNotes = (b, notes) => app.toast(`${b.name}: ${notes.join(" ")}`, "err");
   vp.zoomTargets = () => scene.meshes();
   app.sketcher = new Sketcher(app);
   scene.onRefresh = () => app.onSceneRefresh && app.onSceneRefresh();
@@ -178,6 +185,11 @@ app.voxel = initVoxel(app);
   app.flexigen = initFlexiGen(app);
   app.floorplan = initFloorPlan(app);
   app.meshstep = initMeshStep(app);
+  app.colorLitho = initColorLitho(app);
+  app.neon = initNeon(app);
+  app.layerscape = initLayerscape(app);
+  app.flowers = { open: () => openFlowers(app) };
+  app.toolSearch = initToolSearch(app);
   app.cosforge = initCosForge(app);
   app.arch = initArch(app);
   app.cam = initCam(app);
@@ -188,6 +200,8 @@ app.voxel = initVoxel(app);
     app.sel = app.sel.filter((id) => findBody(doc, id));
     if (app.sketcher.active && !doc.sketches.some((s) => s.id === app.sketcher.active)) app.exitSketch();
     scene.state.hideSketch = app.sketcher.active;
+    // a picked face belongs to the design as it was: after a change it's dropped
+    if (app.selFace && app.selFace.doc !== store.doc) { app.selFace = null; scene.state.faces = new Map(); }
     scene.sync(doc);
     // a command can show its own picks as the selection (Combine's target)
     scene.setSelected(app.command && app.command.sceneSel ? app.command.sceneSel() : app.sel);
@@ -257,7 +271,7 @@ app.voxel = initVoxel(app);
   // theme menu
   const tmenu = $("menu-theme");
   $("btn-theme").onclick = () => { tmenu.hidden = !tmenu.hidden; };
-  tmenu.addEventListener("click", (e) => { const b = e.target.closest("button"); const t = b?.dataset.theme, pf = b?.dataset.perf; if (t) { app.setTheme(t); tmenu.hidden = true; } else if (pf) { app.setPerf(pf); tmenu.hidden = true; } });
+  tmenu.addEventListener("click", (e) => { const b = e.target.closest("button"); const t = b?.dataset.theme, pf = b?.dataset.perf, ly = b?.dataset.layout, dv = b?.dataset.device; if (t) { app.setTheme(t); tmenu.hidden = true; } else if (pf) { app.setPerf(pf); tmenu.hidden = true; } else if (ly) { app.setLayout(ly); tmenu.hidden = true; } else if (dv) { app.setTabletMode(!app.tabletOn); tmenu.hidden = true; } });
   window.addEventListener("pointerdown", (e) => { if (!tmenu.hidden && !tmenu.contains(e.target) && !e.target.closest("#btn-theme")) tmenu.hidden = true; });
   // sketch line width and colour (the menu stays open so choices can be compared)
   const hex = (n) => "#" + n.toString(16).padStart(6, "0");
@@ -308,6 +322,8 @@ app.voxel = initVoxel(app);
   $("btn-about").onclick = () => app.showAbout();
   loadPrefs();
   vp.onContext = (e) => app.contextMenu && app.contextMenu(e);
+  // Tablet & Pencil mode: a two-finger tap undoes, a three-finger tap redoes
+  vp.onFingerTap = (n) => { if (n === 2) app.undo(); else if (n >= 3) app.redo(); };
 
   document.addEventListener("keydown", onKey);
   window.addEventListener("pointerdown", (e) => {
@@ -449,7 +465,7 @@ function gridFromSnap() {
 }
 function readPrefs() { try { return JSON.parse(localStorage.getItem("workplane.ui.v1") || "{}"); } catch (e) { return {}; } }
 function savePrefs() {
-  try { localStorage.setItem("workplane.ui.v1", JSON.stringify({ skw: sketchStyle.width, skc: sketchStyle.color, theme: app.themePref, snap: app.snapOn, obj: app.objectSnap, grid: snapPick.mm, gridIn: snapPick.in, lightOn: app.vp.realistic, appear: app.scene.state.appearance !== false })); } catch (e) {}
+  try { localStorage.setItem("workplane.ui.v1", JSON.stringify({ skw: sketchStyle.width, skc: sketchStyle.color, theme: app.themePref, layout: app.layoutPref, tablet: !!app.tabletOn, tabletPrevLayout: app.tabletPrevLayout || null, snap: app.snapOn, obj: app.objectSnap, grid: snapPick.mm, gridIn: snapPick.in, lightOn: app.vp.realistic, appear: app.scene.state.appearance !== false })); } catch (e) {}
 }
 function loadPrefs() {
   const p = readPrefs();
@@ -462,6 +478,11 @@ function loadPrefs() {
   app.setSnap(p.snap !== false, true);
   app.setSketchStyle({ width: p.skw || "thin", color: p.skc || "theme" }, true);
   app.setTheme(p.theme || "system", true);
+  app.setLayout(p.layout || "default", true);
+  app.tabletPrevLayout = p.tabletPrevLayout || null;
+  app.setTabletMode(!!p.tablet, true);
+  // an iPad (or other tablet) that hasn't chosen yet: suggest Tablet & Pencil mode once
+  if (p.tablet === undefined && isTablet()) setTimeout(() => app.toast("On an iPad or tablet? Turn on Tablet & Pencil mode in the theme menu (◐): fingers move the view, the Apple Pencil draws and picks precisely."), 4000);
   // realistic lighting starts off (faster); it stays on only for someone who turned it on themselves
   app.setLighting(p.lightOn === true, true);
   app.setAppearances(p.appear !== false, true);
@@ -549,6 +570,90 @@ app.setSketchStyle = function (patch, quiet) {
   if (app.vp) app.vp.request();
   if (!quiet) savePrefs();
 };
+
+// Layouts: where the tool bars sit. Default (top), Simplified (big labelled buttons on top), Clean
+// (an icon rail on the left), Classic CAD (a labelled palette on the right) and Tablet (big tools at
+// the bottom). Only CSS changes (html[data-layout]); every tool is the same in each.
+const LAYOUTS = { default: "Default", simple: "Simplified", clean: "Clean", classic: "Classic CAD", tablet: "Tablet" };
+app.layoutPref = "default";
+app.setLayout = function (name, quiet) {
+  if (!LAYOUTS[name]) name = "default";
+  app.layoutPref = name;
+  if (name === "default") delete document.documentElement.dataset.layout;
+  else document.documentElement.dataset.layout = name;
+  document.querySelectorAll("#menu-theme button[data-layout]").forEach((b) => b.setAttribute("aria-checked", b.dataset.layout === name));
+  document.getElementById("ribbon-menu")?.remove();
+  // the view and the panels size themselves to the new space
+  requestAnimationFrame(() => { window.dispatchEvent(new Event("resize")); app.vp && app.vp.request(); });
+  if (!quiet) {
+    savePrefs();
+    app.toast(LAYOUTS[name] + " layout: " + ({ default: "tools across the top.", simple: "bigger buttons with names.", clean: "icons down the left side (hover for names).", classic: "a tool palette down the right side.", tablet: "big tools along the bottom." })[name] + " Change it any time in the theme menu (◐).");
+  }
+};
+
+// Tablet & Pencil mode, for iPad and other tablets (html[data-device="tablet"]): the Tablet layout
+// with big touch targets, the pencil as a precise pointer and fingers for the view (viewport.js
+// penMode), keys on screen (Undo, Redo, Shift, Delete, Esc, Enter, Fit), finger taps for undo and
+// redo, a long press for the right-click menu, and no page zoom or text pop-ups when tapping.
+function isTablet() {
+  const ua = navigator.userAgent || "";
+  return /iPad|Android(?!.*Mobile)|Tablet/i.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+}
+app.tabletOn = false;
+app.setTabletMode = function (on, quiet) {
+  on = !!on;
+  const was = app.tabletOn;
+  app.tabletOn = on;
+  if (on) document.documentElement.dataset.device = "tablet";
+  else delete document.documentElement.dataset.device;
+  if (app.vp) { app.vp.penMode = on; if (!on) { app.vp.shiftDown = false; } }
+  // the Tablet layout goes with it; turning the mode off brings back the layout from before
+  if (on && !was && app.layoutPref !== "tablet") { app.tabletPrevLayout = app.layoutPref; app.setLayout("tablet", true); }
+  if (!on && was && app.layoutPref === "tablet" && app.tabletPrevLayout && app.tabletPrevLayout !== "tablet") { app.setLayout(app.tabletPrevLayout, true); app.tabletPrevLayout = null; }
+  const b = document.querySelector('#menu-theme button[data-device="tablet"]');
+  if (b) b.setAttribute("aria-checked", on);
+  tabletKeys(on);
+  requestAnimationFrame(() => { window.dispatchEvent(new Event("resize")); app.vp && app.vp.request(); });
+  if (!quiet) {
+    savePrefs();
+    app.toast(on ? "Tablet & Pencil mode: draw and pick with the Apple Pencil, move the view with your fingers (one to orbit, two to pan and zoom). Two-finger tap: undo, three-finger tap: redo, long press: menu. The keys on the left of the view stand in for a keyboard." : "Tablet & Pencil mode is off.");
+  }
+};
+// the on-screen keys, down the left edge of the view
+function tabletKeys(on) {
+  let bar = document.getElementById("tabkeys");
+  if (!on) { if (bar) bar.remove(); return; }
+  if (bar) return;
+  const vpEl = document.getElementById("viewport");
+  if (!vpEl) return;
+  const key = (k) => document.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true }));
+  const svg = (d) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+  const keys = [
+    ["tk-undo", "Undo", svg('<path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/>'), () => app.undo()],
+    ["tk-redo", "Redo", svg('<path d="m15 14 5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h3"/>'), () => app.redo()],
+    ["tk-shift", "Shift: the next tap adds to the selection (tap twice to keep it on)", svg('<path d="M12 4 4 12h4v7h8v-7h4z"/>'), null],
+    ["tk-del", "Delete the selection", svg('<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>'), () => key("Delete")],
+    ["tk-esc", "Esc: cancel or step out", '<b>Esc</b>', () => key("Escape")],
+    ["tk-ok", "Enter: OK or finish", svg('<path d="M5 12l5 5L20 7"/>'), () => { if (app.command && document.getElementById("cmd-ok")) app.submitCommand ? app.submitCommand() : document.getElementById("cmd-ok").click(); else key("Enter"); }],
+    ["tk-fit", "Fit everything in the view", svg('<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>'), () => app.fit()],
+  ];
+  bar = document.createElement("div");
+  bar.id = "tabkeys"; bar.className = "tabkeys"; bar.setAttribute("role", "toolbar"); bar.setAttribute("aria-label", "Keys for tablets");
+  for (const [id, title, icon, fn] of keys) {
+    const b = document.createElement("button");
+    b.id = id; b.title = title; b.setAttribute("aria-label", title); b.innerHTML = icon;
+    if (fn) b.onclick = (e) => { e.preventDefault(); fn(); };
+    bar.append(b);
+  }
+  // Shift: one tap = for the next pick, a second tap = stays on (locked), a third = off
+  const sh = bar.querySelector("#tk-shift");
+  let state = 0;
+  const show = () => { sh.setAttribute("aria-pressed", state > 0); sh.classList.toggle("locked", state === 2); if (app.vp) app.vp.shiftDown = state > 0; };
+  sh.onclick = (e) => { e.preventDefault(); state = (state + 1) % 3; show(); };
+  if (app.vp) app.vp.endShift = () => { if (state === 1) { state = 0; show(); } };
+  show();
+  vpEl.append(bar);
+}
 
 // Light, dark and high-contrast interface. "system" follows the device setting.
 app.setTheme = function (pref, quiet) {
@@ -642,7 +747,8 @@ app.startSketchTool = function (tool) {
 
 // keyboard shortcuts sheet
 app.showAbout = function () {
-  const sec = (title, items) => el("section", {}, el("h3", {}, title), el("ul", {}, ...items.map(([b, t]) => el("li", {}, el("b", {}, b), " " + t))));
+  // (an item is [bold heading, text], or a plain sentence)
+  const sec = (title, items) => el("section", {}, el("h3", {}, title), el("ul", {}, ...items.map((it) => (typeof it === "string" ? el("li", {}, it) : el("li", {}, el("b", {}, it[0]), " " + it[1])))));
   const back = el("div", { class: "modal-back", onclick: (e) => { if (e.target === back) back.remove(); } });
   const logo = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 16.5 12 21l9-4.5L12 12z" fill="#2d63c8"/><path d="M3 12 12 16.5 21 12 12 7.5z" fill="#6f98d8"/><path d="M3 7.5 12 12l9-4.5L12 3z" fill="#c9d3df"/></svg>';
   const modal = el("div", { class: "modal about", role: "dialog", "aria-label": "About " + PRODUCT_NAME },
@@ -654,6 +760,23 @@ app.showAbout = function () {
         ["AI modeling:", "local MCP clients can preview, inspect and apply editable models."],
         ["Maker workspace:", "drawer layouts, Gridfinity parts, measured pockets and printer-fit settings."],
         ["AR sharing:", "temporary QR links open models at actual size with iPhone AR Quick Look."],
+      ]),
+      sec("Editor interface", [
+        ["Layouts:", "choose Default, Simplified, Clean, Classic CAD or Tablet; ribbon menus reposition for the selected layout."],
+        ["Tablet & Pencil:", "use the stylus for precise picks and drawing, fingers for view controls, and on-screen keys for common commands."],
+        ["Tool search:", "open Search tools from the top bar, with Ctrl+K or with / when you are not typing."],
+        ["Saved copies:", "Save can download a project file as well as keep the browser's version history. A pinned Constraints palette stays available while sketching."],
+      ]),
+      sec("Architect and Floor Planner", [
+        ["Furniture:", "place and edit 229 furniture, fixture and appliance models; the floor plan and Architect exports can include them."],
+        ["Landscape animals:", "browse 94 species in eight regions, place them in the yard and set their scale and movement."],
+        ["Architect panels:", "the active panel keeps its scroll position and focus when it redraws. Tool tutorials now include Architect projects."],
+        ["Floor Planner saves:", "choose in My plans whether Save also downloads a .floorplan.json backup."],
+      ]),
+      sec("Editor core 2.9.9.9.14 changes", [
+        ["Curved-face lattice:", "lattice patterns now follow curved and spherical faces, with optional wall skin and geodesic layouts on spheres."],
+        ["CAD operations:", "more reliable fillets, sweeps and pipes, plus improved solid and imported-mesh handling."],
+        ["Sketch performance:", "large sketches find intersecting curve pairs from their bounds instead of checking every pair."],
       ]),
       sec("Editor core 2.8.1.3 changes", [
         ["3D Print Sim plate layout:", "move, rotate, scale, duplicate and arrange objects on the plate. These placements affect the simulation and G-code, not the design bodies."],
@@ -816,7 +939,7 @@ app.showShortcuts = function () {
     el("header", {}, el("h2", {}, "Keyboard shortcuts"), el("button", { class: "xbtn", "aria-label": "Close", html: ICON.close, onclick: () => back.remove() })),
     el("div", { class: "mbody keys-grid" },
       rows("Sketching (both modes)", [["L", "Line"], ["R", "Rectangle (last type used; ▾ for 2-point, 3-point, center)"], ["C", "Circle"], ["A", "Arc"], ["P", "Polygon"], ["Shift T", "Text"], ["Enter / dbl-click", "Finish a spline"], ["T", "Trim"], ["D", "Dimension"], ["X", "Construction line"], ["S", "Select"], ["E", "Finish and extrude"], ["Tab", "Next typed value"], ["Esc", "Stop / finish sketch"]]),
-      rows("Advanced", [["L R C", "Start a sketch with that tool"], ["Arrows", "Nudge the selection, the way it looks on screen (Ctrl ↑↓: up / down)"], ["S", "Create sketch"], ["E", "Extrude"], ["Shift R", "Revolve"], ["Q", "Offset face (press pull)"], ["H", "Hole"], ["F", "Fillet"], ["Shift C", "Chamfer"], ["M", "Move / copy"], ["A", "Align"], ["P", "Pattern"], ["B", "Combine"], ["T", "Texture"], ["I", "Measure"], ["Shift F", "Fit all"], ["Drag right / left", "Window / crossing select"]]),
+      rows("Advanced", [["L R C", "Start a sketch with that tool"], ["Arrows", "Nudge the selection, the way it looks on screen (Ctrl ↑↓: up / down)"], ["S", "Create sketch (on the face you clicked, if any)"], ["E", "Extrude (pushes or pulls the face you clicked, if any)"], ["Press + drag a face", "In Extrude: pull it out or push it in"], ["Shift R", "Revolve"], ["Q", "Offset face (press pull)"], ["H", "Hole"], ["F", "Fillet"], ["Shift C", "Chamfer"], ["M", "Move / copy"], ["A", "Align"], ["P", "Pattern"], ["B", "Combine"], ["T", "Texture"], ["I", "Measure"], ["Shift F", "Fit all"], ["Drag right / left", "Window / crossing select"]]),
       rows("Beginner", [["L R C", "Sketch a line, rectangle or circle"], ["E", "Extrude"], ["A", "Align"], ["P", "Pattern"], ["M", "Mirror"], ["H", "Make hole"], ["S", "Make solid"], ["D", "Drop to workplane"], ["T", "Texture"], ["F", "Fit all"], ["Arrows", "Nudge, the way it looks on screen (Shift ×10)"], ["Ctrl ↑↓", "Lift / lower"], [", .", "Turn 1° after a rotation arc (Shift 15°)"], ["Ctrl G", "Group (Shift: ungroup)"], ["Ctrl D", "Duplicate"], ["Tab", "Type sizes on the selected shape (Shift Tab: back)"], ["I", "Measure"]]),
       rows("Architect", [["W", "Wall (click each corner)"], ["R", "Room (drag corner to corner)"], ["E", "Raise walls"], ["D", "Door"], ["N", "Window"], ["O", "Roof"], ["G", "Floor"], ["T", "Finishes (textures, colours, patterns)"], ["L", "Landscape (ground, water, plants)"], ["S", "Simulate (weather, flood test)"], ["Arrows", "Nudge the selected roof, door or window"], ["V", "Select"], ["0-9 Enter", "While drawing a wall: type its exact length (12' 6\" or 3600)"], ["Enter", "Finish the walls you are drawing"], ["Shift", "Draw at any angle"], ["Alt", "Turn snapping off for a moment"], ["P", "Plan view / 3D"], ["X", "See-through on or off"], ["Delete", "Delete the selection"], ["Esc", "Stop drawing, back to Select"]]),
       ...(IS_MAC ? [rows("Mac trackpad", [["Option drag", "Orbit"], ["Option Shift drag", "Pan"], ["Pinch", "Zoom"], ["Two-finger scroll", "Zoom"], ["Control click", "Right-click menu (drag to orbit)"]])] : []),
@@ -849,6 +972,8 @@ app.onShapeClosed = function (skId, regionKeys) {
 
 app.select = function (ids) {
   app.sel = [...new Set(ids)];
+  // (a face picked with the last click: forgotten when the selection changes)
+  if (app.selFace) { app.selFace = null; app.scene.state.faces = new Map(); }
   app.scene.setSelected(app.sel);
   app.refreshUI("select");
 };
@@ -892,9 +1017,60 @@ app.refreshUI = function (kind) {
   for (const fn of app.uiListeners) fn(kind);
 };
 
+// "Rebuilding": after a few seconds it names the body being built and how long it has taken,
+// so a slow body (spiral cuts, many offset faces) shows it is still working
+function busyText() {
+  const k = app.kernel, b = $("busy");
+  if (!b) return;
+  const nameOf = (list) => list.map((it) => (store.doc.bodies.find((x) => x.id === it.id) || {}).name).filter(Boolean);
+  const tm = (at) => { const s = Math.round((Date.now() - at) / 1000); return s >= 60 ? Math.floor(s / 60) + " min " + String(s % 60).padStart(2, "0") + " s" : s + " s"; };
+  const parts = [];
+  if (k && k.inflight && k.inflightAt && Date.now() - k.inflightAt > 4000) {
+    const names = nameOf(k.inflight);
+    parts.push("Building " + (names.length ? names.slice(0, 2).join(", ") + (names.length > 2 ? "…" : "") + " · " : "") + tm(k.inflightAt) + (k.queue.size ? ` · ${k.queue.size} more` : ""));
+  }
+  // a very slow body building in the background engine (the rest of the design is usable)
+  if (k && k.slow && k.slow.inflight) {
+    const names = nameOf(k.slow.inflight);
+    parts.push((names.length ? names[0] : "A slow body") + " is building in the background · " + tm(k.slow.at) + (k.slow.queue.size ? ` · ${k.slow.queue.size} more` : ""));
+  }
+  b.textContent = parts.length ? parts.join(" | ") : "Rebuilding";
+  const slowNow = !!(k && k.slowNow && k.slowNow()) && !b.hidden;
+  const st = $("busy-stop"), hp = $("busy-help");
+  if (st) st.hidden = !slowNow;
+  if (hp) hp.hidden = !slowNow;
+  b.title = k && k.slow && k.slow.inflight ? "This body has many curved cuts or offset curved faces, so it takes several minutes the first time. It is remembered afterwards, and saved project files carry it, so it opens quickly next time." : "";
+}
+setInterval(() => { if (app.kernel && (app.kernel.inflight || (app.kernel.slow && app.kernel.slow.inflight))) busyText(); }, 1000);
+// a very slow body: Stop, and tips for making it quicker
+setTimeout(() => {
+  const st = $("busy-stop"), hp = $("busy-help");
+  if (st) st.onclick = () => { app.kernel.stopSlow(); app.toast("Stopped. That body isn't shown until it is built: open the design again (or change the body) to build it."); };
+  if (hp) hp.onclick = () => app.showSlowHelp();
+}, 0);
+app.showSlowHelp = () => {
+  const tips = [
+    ["Why it's slow:", "every curved cut (sweep, twisted sweep, loft, revolve) and every curved face you Offset is one heavy calculation for the geometry engine, and they are done one after another. A body with 5 spiral cuts plus 24 offset spiral faces is about 30 of them."],
+    ["It only happens once:", "the built body is remembered in this browser, and a project file saved after it has built carries it, so the design then opens in a few seconds, on any computer. Let it finish once, then Save."],
+    ["Making clearance between moving parts:", "try Advanced Modify → Clearance before offsetting many curved faces: it cuts the other part, grown by the gap, out in one step. On very complex free-form parts (like spiral cuts) the engine may not be able to grow the part; Clearance then says so, and offsetting the faces is the way."],
+    ["Fewer, simpler features:", "offset a few big faces rather than many small ones; pattern a cut rather than making each copy by hand; fillet or shell before adding spiral cuts, not after; and keep twisted sweeps to the turns you need."],
+    ["Keep working meanwhile:", "a very slow body builds in a second engine, so the rest of the design can be changed while it builds. Stop ends it; opening the design again starts it again."],
+  ];
+  const box = document.createElement("div");
+  box.className = "modal-back"; box.id = "slow-help";
+  box.innerHTML = '<div class="modal" role="dialog" aria-label="Slow bodies" style="max-width:560px"><header style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--line-2)"><h3 style="margin:0;flex:1;font:600 16px/1 var(--f-label);letter-spacing:.08em;text-transform:uppercase">Slow bodies</h3><button class="xbtn" aria-label="Close">✕</button></header><div style="padding:12px 16px 16px;display:flex;flex-direction:column;gap:9px;font-size:13px;line-height:1.45"></div></div>';
+  const body = box.querySelector(".modal > div");
+  for (const [h, t] of tips) { const p = document.createElement("p"); p.style.margin = "0"; const bb = document.createElement("b"); bb.textContent = h + " "; p.append(bb, t); body.append(p); }
+  const close = () => box.remove();
+  box.querySelector(".xbtn").onclick = close;
+  box.addEventListener("click", (e) => { if (e.target === box) close(); });
+  document.body.append(box);
+};
+
 app.status = function () {
-  const busy = app.scene && (app.scene.busy() || app.kernel.inflight || app.kernel.queue.size);
+  const busy = app.scene && (app.scene.busy() || app.kernel.inflight || app.kernel.queue.size || (app.kernel.slowBusy && app.kernel.slowBusy()));
   $("busy").hidden = !busy || !app.kernel.ready;
+  busyText();
   let hint = "";
   if (app.mode === "arch") hint = app.arch.hint();
   else if (app.sketcher.active) hint = app.sketchHint();
@@ -920,9 +1096,10 @@ app.sketchHint = function () {
   const t = app.sketcher.tool, st = app.sketcher.state;
   const typing = " Type a number to set it exactly, Tab for the next value.";
   return {
-    line: st ? "Click the next point. Click the start point to close, Esc to stop." + typing : "Click to start a line.",
+    line: st ? "Click where the line ends (or type its length and angle)." + typing + " Then press L for the next line." : "Click to start a line.",
     rect: st ? "Click the opposite corner." + typing : "Click the first corner.",
     rectc: st ? "Click a corner." + typing : "Click the center.",
+    freehand: app.vp.touchMode ? "Draw with your finger or pen. Smart shapes turns a straight stroke into a line, a round one into a circle, a rough box into a rectangle; other strokes become smooth curves you can reshape by their points. Start or stop on a point to join it." : "Drag to draw. Smart shapes turns a straight stroke into a line, a round one into a circle, a rough box into a rectangle; other strokes become smooth curves you can reshape by their points. Start or stop on a point to join it.",
     spline: st ? `Click more points (${st.fit ? st.fit.length : 1} so far). Click the first point to close it; double-click, Enter or Esc to finish.` : "Click the first point of the spline.",
     rect3: st ? (st.step === 1 ? "Click the end of the first side." + typing : "Click to set the width." + typing) : "Click the first corner.",
     circle: st ? "Click to set the size." + typing : "Click the center.",
@@ -1059,7 +1236,7 @@ function onKey(e) {
     if (e.key === "Enter") { if (app.sketcher.state) app.sketcher.commitTyped(); else app.exitSketch(); return; }
     if (e.key === "Delete" || e.key === "Backspace") { app.sketcher.deleteSelection(); e.preventDefault(); return; }
     if (/^Arrow/.test(e.key) && !mod && app.sketcher.nudge(e)) { e.preventDefault(); return; }
-    const map = { l: "line", r: "rect*", c: "circle", a: "arc3", p: "polygon", t: "trim", d: "dim", s: "select" };
+    const map = { l: "line", r: "rect*", c: "circle", a: "arc3", p: "polygon", h: "freehand", t: "trim", d: "dim", s: "select" };
     if (!mod && (k === "e" || k === "q")) { e.preventDefault(); app.quickExtrude(); return; }
     if (!mod && e.shiftKey && k === "t") { app.sketcher.setTool("text"); return; }
     if (!mod && map[k]) { app.sketcher.setTool(map[k]); return; }

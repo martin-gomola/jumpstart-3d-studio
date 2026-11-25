@@ -2,6 +2,7 @@
 // height maps, and a mesh post-process that subdivides the chosen faces and
 // moves their vertices along the surface normal. Textures change the mesh used
 // for display and STL export; the exact (STEP) solid is not changed.
+import { themeDefs, THEME_CATS } from "./texture_themes.js";
 const TAU = Math.PI * 2;
 function mulberry32(a){ return function(){ a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 const clamp01 = x => x < 0 ? 0 : x > 1 ? 1 : x;
@@ -57,7 +58,7 @@ function normalizeHM(hm){
 const tri = t => 1 - 2 * Math.abs(fract(t) - .5);
 const SQ3 = Math.sqrt(3);
 
-export const TEX_CATS = [['all', 'All'], ['geo', 'Geometric'], ['nature', 'Nature'], ['wood', 'Wood'], ['build', 'Building'], ['fabric', 'Fabric'], ['skin', 'Skin & fur'], ['mat', 'Materials'], ['mine', 'My images']];
+export const TEX_CATS = [['all', 'All'], ['geo', 'Geometric'], ['nature', 'Nature'], ['wood', 'Wood'], ['build', 'Building'], ['fabric', 'Fabric'], ['skin', 'Skin & fur'], ['mat', 'Materials'], ...THEME_CATS, ['mine', 'My images']];
 function buildLibrary(){
   const n4 = periodicNoise(4, 7), n8 = periodicNoise(8, 11), n16 = periodicNoise(16, 3), n32 = periodicNoise(32, 5), n64 = periodicNoise(64, 9);
   const hexPts = [[0, 0], [.5, SQ3 / 2]];
@@ -248,12 +249,22 @@ function buildLibrary(){
     { key: 'pineapple', name: 'Pineapple', cat: 'nature', size: 16, fn: (x, y) => { const d = Math.min(tri(5 * (x + y)), tri(5 * (x - y))); return Math.pow(d, .5) + .25 * Math.exp(-(((tri(5 * (x + y)) - 1) ** 2 + (tri(5 * (x - y)) - 1) ** 2) / .02)); } },
     { key: 'rock', name: 'Rough rock', cat: 'nature', size: 20, fn: (x, y) => .45 * Math.pow(ridged(L6(x, y)), 1.5) + .3 * ridged(L12(x, y)) + .15 * ridged(L24(x, y)) + .1 * n64(x, y) },
     { key: 'dimples', name: 'Golf ball dimples', cat: 'geo', size: 6, h: 443, fn: (x, y) => { const f = voronoi(hexPts, 1, SQ3, x, y * SQ3)[0], r = .44; return f < r ? 1 - Math.sqrt(1 - (f / r) ** 2) : 1; } },
+    // Luxury finishes (Architect): stone, parquet and millwork
+    { key: 'marble', name: 'Marble (veined)', cat: 'build', size: 40, fn: (x, y) => { const v = Math.abs(Math.sin(TAU * (x + y + .9 * n4(x, y) + .25 * n8(x, y)))), w = Math.abs(Math.sin(TAU * (2 * x - y + 1.3 * n8(x, y)))); return .85 + .05 * n16(x, y) - .35 * Math.pow(1 - v, 14) - .18 * Math.pow(1 - w, 22); } },
+    { key: 'herringbone', name: 'Chevron parquet', cat: 'wood', size: 50, fn: (x, y) => { const N = 4, c = Math.floor(N * x), fx = fract(N * x), s = c & 1 ? 1 : -1, t = fract(3 * y + s * (fx - .5) * .75), e = Math.min(fx, 1 - fx); return smooth(.01, .05, Math.min(t, 1 - t)) * smooth(.01, .04, e) * (.9 + .1 * woodFine(x, y)); } },
+    { key: 'travertine', name: 'Travertine', cat: 'build', size: 40, fn: (x, y) => { const u = fract(2 * x), v = fract(3 * y), e = Math.min(u, 1 - u, v, 1 - v), band = .06 * Math.sin(TAU * (9 * y + .4 * n4(x, y))), pit = smooth(.7, .8, n64(x, y)) * .35; return smooth(.01, .03, e) * (.82 + band - pit); } },
+    { key: 'ashlar', name: 'Cut stone blocks', cat: 'build', size: 60, fn: (x, y) => { const r = Math.floor(4 * y), off = r & 1 ? .25 : 0, u = fract(2 * x + off), v = fract(4 * y), e = Math.min(u, 1 - u, (v) * .5, (1 - v) * .5); return smooth(.01, .05, e) * (.88 + .12 * n16(x + r * .37, y)); } },
+    { key: 'mosaic', name: 'Mosaic tiles', cat: 'build', size: 20, fn: (x, y) => { const N = 10, i = Math.floor(N * x), j = Math.floor(N * y), u = fract(N * x), v = fract(N * y), e = Math.min(u, 1 - u, v, 1 - v), h = fract(Math.sin(i * 12.9898 + j * 78.233) * 43758.5453); return smooth(.04, .14, e) * (.8 + .2 * h); } },
+    { key: 'fluted', name: 'Fluted panels', cat: 'build', size: 30, fn: (x) => { const u = 2 * fract(6 * x) - 1; return 1 - .8 * Math.sqrt(Math.max(0, 1 - u * u)) * smooth(.02, .12, 1 - Math.abs(u)); } },
+    { key: 'coffered', name: 'Coffered ceiling', cat: 'build', size: 80, fn: (x, y) => { const u = fract(2 * x), v = fract(2 * y), e = Math.min(u, 1 - u, v, 1 - v); return e < .08 ? 1 : e < .16 ? 1 - (e - .08) / .08 * .5 : e < .2 ? .5 : e < .23 ? .62 : .45; } },
+    { key: 'wainscot', name: 'Raised panels (wainscot)', cat: 'build', size: 80, fn: (x, y) => { const u = fract(2 * x), v = fract(y), e = Math.min(u, 1 - u, v, 1 - v); return e < .07 ? .75 : e < .1 ? .55 : e < .18 ? .55 + (e - .1) / .08 * .45 : 1; } },
     { key: 'stucco', name: 'Stucco', cat: 'mat', fn: (x, y) => .8 * smooth(.42, .72, .6 * n16(x, y) + .4 * n32(x, y)) + .2 * n64(x, y) },
+    ...themeDefs(),
   ];
   // Height maps are generated the first time they are needed.
   return defs.map(d => {
     const w = d.w || 256, h = d.h || 256; let src = null;
-    return { key: d.key, name: d.name, cat: d.cat, size: d.size || 0, get src(){
+    return { key: d.key, name: d.name, cat: d.cat, size: d.size || 0, pic: !!d.pic, get src(){
       if (!src) src = d.gen ? normalizeHM({ w, h, data: d.gen(w, h) }) : makeHM(w, h, d.fn);
       return src; } };
   });
@@ -411,7 +422,8 @@ export function textureThumb(key, size = 64) {
   if (thumbs.has(k)) return thumbs.get(k);
   const cv = document.createElement("canvas");
   cv.width = cv.height = size;
-  drawHM(cv, texByKey(key).src, 2);
+  const t = texByKey(key); // picture textures read better shown once
+  drawHM(cv, t.src, THEME_CATS.some((c) => c[0] === t.cat) ? 1 : 2);
   const url = cv.toDataURL();
   thumbs.set(k, url);
   return url;
@@ -744,7 +756,7 @@ export function applyTextures(data, layers0, budget = 1.2e6) {
   for (let t = 0; t < B.nT; t++) po[t] = patchOfFace[faceOfBase[t]];
   computeFrames(B, po, P, layers);
   let target = Infinity;
-  for (const L of layers) target = Math.min(target, Math.max(0.06, (L.size || 4) / (String(L.tex).startsWith("img:") ? 80 : 9))); // pictures need finer detail
+  for (const L of layers) target = Math.min(target, Math.max(0.06, (L.size || 4) / (String(L.tex).startsWith("img:") || (LIB.find((t) => t.key === L.tex) || {}).pic ? 80 : 9))); // pictures need finer detail
   const res = subdivide(B, po, target, budget);
   target = res.target;
   const { pos, idx, tb, nV, nT } = res;

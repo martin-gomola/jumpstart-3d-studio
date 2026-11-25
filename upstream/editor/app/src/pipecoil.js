@@ -59,6 +59,130 @@ export function initPipeCoil(app, X) {
     return { node: md.tool, m: arr(M4(b.m).multiply(M4(md.m || IDENTITY))), op: md.op };
   }
 
+  // ------------------------------------------------------------ shared: smarter paths
+  // (like Fusion 360's chain selection: one click takes the edges that run on smoothly from it)
+  const edgeHit = (base, ei) => ({ base, edge: ei, info: base.data.edgeInfo[ei], body: base.body.id });
+  function edgeEnds(base, ei) {
+    const P = edgeWorldPts(base, ei), n = P.length;
+    if (n < 2) return null;
+    return { a: P[0], b: P[n - 1], ta: P[1].clone().sub(P[0]).normalize(), tb: P[n - 1].clone().sub(P[n - 2]).normalize(), closed: P[0].distanceTo(P[n - 1]) < 1e-4 };
+  }
+  // the edges of the same body joined end to end with the clicked one where they meet at less
+  // than maxDeg (0..180: 180 takes every connected edge)
+  function tangentChain(base, ei, maxDeg = 25) {
+    const N = base.data.edgeGroups.length, ends = [];
+    for (let i = 0; i < N; i++) ends.push(edgeEnds(base, i));
+    const out = [ei], used = new Set([ei]), tol = 1e-3, cosM = Math.cos((maxDeg * Math.PI) / 180);
+    if (!ends[ei] || ends[ei].closed) return out;
+    // walk from each end of the chain: the next edge sharing that point and running on smoothly
+    const walk = (p, dir) => {
+      for (let guard = 0; guard < N; guard++) {
+        let best = -1, bestDot = -2, nextP = null, nextDir = null;
+        for (let i = 0; i < N; i++) {
+          if (used.has(i) || !ends[i] || ends[i].closed) continue;
+          const E = ends[i];
+          let d = null, np = null, nd = null;
+          if (E.a.distanceTo(p) < tol) { d = dir.dot(E.ta); np = E.b; nd = E.tb; }
+          else if (E.b.distanceTo(p) < tol) { d = dir.dot(E.tb.clone().negate()); np = E.a; nd = E.ta.clone().negate(); }
+          if (d != null && d > bestDot) { bestDot = d; best = i; nextP = np; nextDir = nd; }
+        }
+        if (best < 0 || bestDot < cosM) return;
+        used.add(best); out.push(best); p = nextP; dir = nextDir;
+      }
+    };
+    walk(ends[ei].b, ends[ei].tb);
+    walk(ends[ei].a, ends[ei].ta.clone().negate());
+    return out;
+  }
+  // a face's outer boundary (its longest loop of edges), for a path all the way round it
+  function faceLoopEdges(base, face) {
+    const FE = base.data.faceEdges && base.data.faceEdges[face];
+    if (!FE || !FE.length) return [];
+    const list = [...FE], loops = [];
+    while (list.length) {
+      const loop = [list.shift()];
+      let grew = true;
+      while (grew) {
+        grew = false;
+        for (let j = 0; j < list.length; j++) {
+          const E = edgeEnds(base, list[j]);
+          if (!E) { list.splice(j, 1); j--; continue; }
+          if (loop.some((k) => { const F = edgeEnds(base, k); return F && [F.a, F.b].some((q) => q.distanceTo(E.a) < 1e-3 || q.distanceTo(E.b) < 1e-3); })) { loop.push(list.splice(j, 1)[0]); j--; grew = true; }
+        }
+      }
+      loops.push(loop);
+    }
+    const len = (loop) => loop.reduce((s, k) => { const P = edgeWorldPts(base, k); let L = 0; for (let i = 1; i < P.length; i++) L += P[i].distanceTo(P[i - 1]); return s + L; }, 0);
+    loops.sort((a, b) => len(b) - len(a));
+    return loops[0];
+  }
+  // "Around a body": the body's outline where a level plane through the point cuts it, pushed out
+  // by off (negative goes inside), as one smooth closed path
+  function aroundLoop(base, point, off = 0) {
+    const d = base.data, V = d.vertices, T = d.triangles, m = base.m, z = point.z;
+    const W = [];
+    const v = new THREE.Vector3();
+    for (let i = 0; i < V.length; i += 3) { v.set(V[i], V[i + 1], V[i + 2]).applyMatrix4(m); W.push(v.x, v.y, v.z); }
+    const segs = [];
+    for (let t = 0; t < T.length; t += 3) {
+      const p = [T[t], T[t + 1], T[t + 2]].map((k) => [W[k * 3], W[k * 3 + 1], W[k * 3 + 2]]), cut = [];
+      for (let e = 0; e < 3; e++) {
+        const a = p[e], b = p[(e + 1) % 3], da = a[2] - z, db = b[2] - z;
+        if ((da < 0) !== (db < 0)) { const s = da / (da - db); cut.push([a[0] + (b[0] - a[0]) * s, a[1] + (b[1] - a[1]) * s]); }
+      }
+      if (cut.length === 2) segs.push(cut);
+    }
+    if (!segs.length) return null;
+    // join the pieces into loops
+    const key = (q) => Math.round(q[0] * 1e4) + "," + Math.round(q[1] * 1e4);
+    const at = new Map();
+    segs.forEach((s, i) => { for (const q of s) { const k = key(q); if (!at.has(k)) at.set(k, []); at.get(k).push(i); } });
+    const used = new Uint8Array(segs.length), loops = [];
+    for (let i = 0; i < segs.length; i++) {
+      if (used[i]) continue;
+      used[i] = 1;
+      const L = [segs[i][0], segs[i][1]];
+      for (;;) {
+        const nx = (at.get(key(L[L.length - 1])) || []).find((j) => !used[j]);
+        if (nx == null) break;
+        used[nx] = 1;
+        const s = segs[nx];
+        L.push(key(s[0]) === key(L[L.length - 1]) ? s[1] : s[0]);
+      }
+      if (L.length > 3) loops.push(L);
+    }
+    const area = (P) => { let A = 0; for (let i = 0; i < P.length; i++) { const a = P[i], b = P[(i + 1) % P.length]; A += a[0] * b[1] - b[0] * a[1]; } return A / 2; };
+    // the loop round the clicked point's side of the body: the biggest one that isn't a hole
+    const near = (P) => Math.min(...P.map((q) => Math.hypot(q[0] - point.x, q[1] - point.y)));
+    loops.sort((a, b) => near(a) - near(b) || Math.abs(area(b)) - Math.abs(area(a)));
+    let P = loops[0];
+    if (key(P[0]) === key(P[P.length - 1])) P = P.slice(0, -1);
+    if (area(P) < 0) P = P.reverse();
+    // even spacing, then push out along the outline's normal
+    let per = 0; for (let i = 0; i < P.length; i++) per += Math.hypot(P[(i + 1) % P.length][0] - P[i][0], P[(i + 1) % P.length][1] - P[i][1]);
+    const step = Math.max(0.4, per / 160), R = [];
+    let acc = 0;
+    R.push(P[0]);
+    for (let i = 0; i < P.length; i++) {
+      let a = P[i]; const b = P[(i + 1) % P.length];
+      let L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      while (acc + L >= step) { const s = (step - acc) / L; a = [a[0] + (b[0] - a[0]) * s, a[1] + (b[1] - a[1]) * s]; R.push(a); L = Math.hypot(b[0] - a[0], b[1] - a[1]); acc = 0; }
+      acc += L;
+    }
+    if (R.length > 2 && Math.hypot(R[R.length - 1][0] - R[0][0], R[R.length - 1][1] - R[0][1]) < step * 0.5) R.pop();
+    const n = R.length;
+    const Q = R.map((q, i) => {
+      const a = R[(i - 1 + n) % n], b = R[(i + 1) % n], tx = b[0] - a[0], ty = b[1] - a[1], l = Math.hypot(tx, ty) || 1;
+      return [q[0] + (ty / l) * off, q[1] - (tx / l) * off, z];
+    });
+    // a few smoothing passes so the offset corners stay round
+    for (let it = 0; it < 2; it++) for (let i = 0; i < n; i++) { const a = Q[(i - 1 + n) % n], b = Q[(i + 1) % n]; Q[i] = [Q[i][0] * 0.5 + (a[0] + b[0]) * 0.25, Q[i][1] * 0.5 + (a[1] + b[1]) * 0.25, z]; }
+    const pts = Q.map((q) => q.map((x) => +x.toFixed(4)));
+    pts.push(pts[0].slice());
+    return { t: "bsp", a: pts[0], b: pts[pts.length - 1], pts };
+  }
+  const segsPts = (segs) => segs.map((s) => s.t === "bsp" ? s.pts.map((q) => V3(q)) : s.t === "line" ? [V3(s.a), V3(s.b)] : s.t === "arc" ? [V3(s.a), V3(s.m), V3(s.b)] : []);
+
   // ------------------------------------------------------------ Pipe
   // a body edge as a fixed world-space path segment
   function edgeSeg(h) {
@@ -112,72 +236,113 @@ export function initPipeCoil(app, X) {
   }
   function pipeCmd(editing = null) {
     const ex = existing(editing);
-    const st = { path: null, edges: [], section: "circle", size: 5, hollow: false, wall: 1, op: "new", editing, hover: null };
+    const st = { path: null, edges: [], section: "circle", size: 5, hollow: false, wall: 1, op: "new", editing, hover: null, chain: true, dist: 1, flip: false, around: null, aroundPick: false, aroundOff: 0 };
     if (ex) {
       const n = ex.node;
-      Object.assign(st, { path: n.path || null, section: n.section || "circle", size: n.size ?? 5, hollow: !!n.hollow, wall: n.wall ?? 1, op: ex.op, fixedSegs: n.edgeSegs || null });
+      Object.assign(st, { path: n.path || null, section: n.section || "circle", size: n.size ?? 5, hollow: !!n.hollow, wall: n.wall ?? 1, op: ex.op, fixedSegs: n.edgeSegs || null, dist: n.dist ?? 1, flip: !!n.flip, aroundOff: n.aroundOff ?? 0 });
     }
     const pathSegsNow = () => (st.edges.length ? chainSegs(st.edges.map((e) => e.segs)) : st.fixedSegs || null);
+    const addEdges = (base, list) => {
+      for (const ei of list) if (!st.edges.some((x) => x.body === base.body.id && x.edge === ei)) { const h = edgeHit(base, ei); st.edges.push({ body: h.body, edge: ei, segs: edgeSeg(h), pts: edgeWorldPts(base, ei) }); }
+    };
+    const checkPath = () => { try { pathSegsNow(); def.error = null; } catch (err) { def.error = err.message; } };
     const def = {
       title: (editing ? "Edit " : "") + "Pipe",
       valid: () => !!((st.path && st.path.ents.length) || st.edges.length || st.fixedSegs),
       canOk: () => def.valid(),
       apply(doc) {
         const node = { t: "pipe", section: st.section, size: st.size, hollow: st.hollow, wall: st.wall };
+        if (st.dist < 1) node.dist = st.dist;
+        if (st.flip) node.flip = true;
+        if (st.around) node.aroundOff = st.aroundOff;
         if (st.path) node.path = st.path; else node.edgeSegs = pathSegsNow();
         place(doc, st, node, IDENTITY.slice(), toolBox());
         if (st.path && !editing) { const ps = findSketch(doc, st.path.sketch); if (ps) ps.hidden = true; }
       },
       ok() { commit(def, editing ? "Edit pipe" : "Pipe"); },
       onDelete: editing ? () => deleteFeature(editing) : null,
-      hint: () => def.valid() ? "Set the section and size, then OK." : "Click a sketch line, arc or spline, or body edges, for the path.",
+      hint: () => st.aroundPick ? "Click a body where the pipe should go round it (at that height)." : def.valid() ? "Set the section and size, then OK. Drag the Distance to run the pipe part of the way." : "Click a sketch curve or a body edge for the path (Chain takes the curves or edges that run on from it), or click a face to go round its edge.",
       build(body) {
         const n = st.path ? st.path.ents.length : st.edges.length;
-        const label = st.path ? `${n} sketch curve${n > 1 ? "s" : ""}` : st.edges.length ? `${n} edge${n > 1 ? "s" : ""}` : st.fixedSegs ? "body edges" : null;
-        body.append(row("Path", pickbox(!label, label ? el("b", {}, label) : "Click curves or edges", label ? () => { st.path = null; st.edges = []; st.fixedSegs = null; refresh(); } : null)));
+        const label = st.around ? "round a body" : st.path ? `${n} sketch curve${n > 1 ? "s" : ""}` : st.edges.length ? `${n} edge${n > 1 ? "s" : ""}` : st.fixedSegs ? "body edges" : null;
+        body.append(row("Path", pickbox(!label && !st.aroundPick, label ? el("b", {}, label) : "Click curves, edges or a face", label ? () => { st.path = null; st.edges = []; st.fixedSegs = null; st.around = null; refresh(); } : null)));
+        body.append(el("label", { class: "check", title: "On: one click takes every connected sketch curve, or the body edges that run on smoothly from the one clicked. Off: one at a time." }, el("input", { type: "checkbox", id: "pp-chain", checked: st.chain, onchange: (e) => { st.chain = e.target.checked; refresh(); } }), "Chain selection"));
+        body.append(el("div", { class: "psbtns" }, el("button", { class: "btn" + (st.aroundPick ? " primary" : ""), id: "pp-around", title: "Go all the way round a body at the height you click, like a rim or a band", onclick: () => { st.aroundPick = !st.aroundPick; refresh(); } }, "Around a body…")));
+        if (st.around) body.append(row("Offset", app.numField({ value: st.aroundOff, id: "pp-aoff", step: 0.5, live: true, onCommit: (v) => { st.aroundOff = v; makeAround(); refresh(false); } }), "pp-aoff"));
         body.append(row("Section", seg(SECTIONS, st.section, (v) => { st.section = v; refresh(); }, "pp-sec")));
         body.append(row(st.section === "circle" ? "Diameter" : "Size", app.numField({ value: st.size, id: "pp-size", min: 0.05, step: 0.5, live: true, onCommit: (v) => { st.size = v; refresh(false); } }), "pp-size"));
         body.append(el("label", { class: "check" }, el("input", { type: "checkbox", id: "pp-hollow", checked: st.hollow, onchange: (e) => { st.hollow = e.target.checked; refresh(); } }), "Hollow"));
-        if (st.hollow) body.append(row("Wall", app.numField({ value: st.wall, id: "pp-wall", min: 0.05, step: 0.1, live: true, onCommit: (v) => { st.wall = v; refresh(false); } }), "pp-wall"));
+        if (st.hollow) body.append(row("Section thickness", app.numField({ value: st.wall, id: "pp-wall", min: 0.05, step: 0.1, live: true, onCommit: (v) => { st.wall = v; refresh(false); } }), "pp-wall"));
+        body.append(row("Distance", app.numField({ value: st.dist, id: "pp-dist", min: 0.01, max: 1, step: 0.05, live: true, onCommit: (v) => { const was = st.dist < 1; st.dist = Math.min(1, Math.max(0.01, v)); refresh(was !== st.dist < 1); } }), "pp-dist"));
+        if (st.dist < 1) body.append(el("label", { class: "check" }, el("input", { type: "checkbox", id: "pp-flip", checked: st.flip, onchange: (e) => { st.flip = e.target.checked; refresh(); } }), "Start from the other end"));
         opRow(body, st, editing);
-        body.append(el("div", { class: "hint", style: { padding: 0 } }, "Connected sketch curves are picked as one chain. Body edges are added one click at a time and must connect end to end."));
+        body.append(el("div", { class: "hint", style: { padding: 0 } }, "Distance is the part of the path the pipe follows (0 to 1), as in Fusion 360. Click a face to run round its outer edge; Around a body follows a body's outline at a height (Offset pushes it out, or in when negative)."));
       },
       start() { scene.syncSketches(store.view); refresh(); },
       handler: {
         hover(e) {
-          const c = pickSketchCurve(e);
           let h = null;
-          if (c) h = { kind: "sketch", c, pts: pathPts(c) };
-          else { const eh = pickBaseEdge(e, (b) => !b.hole); if (eh) h = { kind: "edge", eh, pts: [edgeWorldPts(eh.base, eh.edge)] }; }
+          if (st.aroundPick) {
+            const f = pickBaseFace(e, (b) => !b.hole);
+            if (f) { const key = f.body + ":" + f.point.z.toFixed(2); if (st.hover && st.hover.key === key) return; const s = aroundLoop(f.base, f.point, st.aroundOff); if (s) h = { key, pts: segsPts([s]) }; }
+          } else {
+            const c = pickSketchCurve(e);
+            if (c) h = { kind: "sketch", c, pts: pathPts(c) };
+            else {
+              const eh = pickBaseEdge(e, (b) => !b.hole);
+              if (eh) h = { kind: "edge", eh, pts: (st.chain ? tangentChain(eh.base, eh.edge) : [eh.edge]).map((k) => edgeWorldPts(eh.base, k)) };
+              else { const f = pickBaseFace(e, (b) => !b.hole); if (f && f.face >= 0) h = { kind: "face", pts: faceLoopEdges(f.base, f.face).map((k) => edgeWorldPts(f.base, k)) }; }
+            }
+          }
           st.hover = h; draw();
           vp.canvas.style.cursor = h ? "pointer" : "default";
         },
         down(e) {
+          if (st.aroundPick) {
+            const f = pickBaseFace(e, (b) => !b.hole);
+            if (!f) return true;
+            st.around = { body: f.body, base: f.base, p: f.point.clone() }; st.aroundPick = false;
+            st.path = null; st.edges = [];
+            makeAround(); refresh();
+            return true;
+          }
           const c = pickSketchCurve(e);
           if (c) {
             const sk = findSketch(store.view, c.sketch);
-            st.path = { sketch: c.sketch, ents: pathChain(resolveSketch(sk), c.curve.id) };
-            st.edges = []; st.fixedSegs = null;
+            st.edges = []; st.fixedSegs = null; st.around = null;
+            if (st.chain || !st.path || st.path.sketch !== c.sketch) st.path = { sketch: c.sketch, ents: st.chain ? pathChain(resolveSketch(sk), c.curve.id) : [c.curve.id] };
+            else { const cur = st.path.ents; st.path = { sketch: c.sketch, ents: cur.includes(c.curve.id) ? cur.filter((x) => x !== c.curve.id) : [...cur, c.curve.id] }; if (!st.path.ents.length) st.path = null; }
             refresh();
             return true;
           }
           const eh = pickBaseEdge(e, (b) => !b.hole);
           if (eh) {
-            st.path = null; st.fixedSegs = null;
+            st.path = null; st.fixedSegs = null; st.around = null;
             const i = st.edges.findIndex((x) => x.body === eh.body && x.edge === eh.edge);
-            if (i >= 0) st.edges.splice(i, 1);
-            else st.edges.push({ body: eh.body, edge: eh.edge, segs: edgeSeg(eh), pts: edgeWorldPts(eh.base, eh.edge) });
-            try { pathSegsNow(); def.error = null; } catch (err) { def.error = err.message; }
-            refresh();
+            const chain = st.chain ? tangentChain(eh.base, eh.edge) : [eh.edge];
+            if (i >= 0) st.edges = st.edges.filter((x) => !(x.body === eh.body && chain.includes(x.edge)));
+            else addEdges(eh.base, chain);
+            checkPath(); refresh();
+            return true;
+          }
+          const f = pickBaseFace(e, (b) => !b.hole);
+          if (f && f.face >= 0) {
+            const loop = faceLoopEdges(f.base, f.face);
+            if (loop.length) { st.path = null; st.fixedSegs = null; st.around = null; st.edges = []; addEdges(f.base, loop); checkPath(); refresh(); }
           }
           return true;
         },
       },
     };
+    function makeAround() {
+      const s = st.around ? aroundLoop(st.around.base, st.around.p, st.aroundOff) : null;
+      st.fixedSegs = s ? [s] : null;
+      def.error = s ? null : "Couldn't find the body's outline at that height";
+    }
     function pathLines() {
-      if (st.path) return pathPts({ sketch: st.path.sketch, curve: { id: st.path.ents[0] } });
+      if (st.path) return st.path.ents.map((id) => pathPts({ sketch: st.path.sketch, curve: { id } })).flat();
       if (st.edges.length) return st.edges.map((x) => x.pts);
-      if (st.fixedSegs) return st.fixedSegs.map((s) => s.t === "circle" ? circlePts(s) : s.t === "arc" ? [V3(s.a), V3(s.m), V3(s.b)] : [V3(s.a), V3(s.b)]);
+      if (st.fixedSegs) return st.fixedSegs.map((s) => s.t === "circle" ? circlePts(s) : s.t === "bsp" ? s.pts.map((q) => V3(q)) : s.t === "arc" ? [V3(s.a), V3(s.m), V3(s.b)] : [V3(s.a), V3(s.b)]);
       return [];
     }
     function circlePts(s) {
@@ -279,5 +444,5 @@ export function initPipeCoil(app, X) {
     openCmd(def);
   }
 
-  return { pipeCmd, coilCmd, edgeSeg, chainSegs };
+  return { pipeCmd, coilCmd, edgeSeg, chainSegs, tangentChain, faceLoopEdges, aroundLoop, edgeHit, segsPts };
 }

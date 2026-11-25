@@ -150,52 +150,92 @@ export function initBeginner(app) {
   }
 
   // ---------------------------------------------------------------- toolbar
+  function closeMenus() { document.querySelectorAll(".bb-menu").forEach((m) => { m.hidden = true; }); document.querySelectorAll(".bb-dd").forEach((t) => t.setAttribute("aria-expanded", "false")); }
+  addEventListener("pointerdown", (e) => { if (!e.target.closest(".bb-menu, .bb-dd")) closeMenus(); }, true);
+  addEventListener("keydown", (e) => { if (e.key === "Escape") closeMenus(); });
   function renderRibbon() {
     ribbon.innerHTML = "";
     const bar = el("div", { class: "bbar" });
+    // the toolbar is grouped: the everyday buttons stay out, similar tools share a dropdown
+    let into = bar;
     const btn = (icon, label, title, fn, id, showLabel = false) => {
-      const b = el("button", { class: "ibtn", title, id, "aria-label": label, html: ICON[icon] });
-      if (showLabel) b.append(el("span", { class: "lbl" }, label));
-      b.onclick = fn;
-      bar.append(b);
+      const inMenu = into !== bar;
+      const b = el("button", { class: inMenu ? "ibtn bb-mi" : "ibtn", title, id, "aria-label": label, html: ICON[icon] || ICON.box, ...(inMenu ? { role: "menuitem" } : {}) });
+      if (showLabel || inMenu) b.append(el("span", { class: "lbl" }, label));
+      if (inMenu) {
+        // the line under the name: what it does (the title after "Name:", short)
+        let d = String(title); const ci = d.indexOf(": "); if (ci >= 0 && ci < 40) d = d.slice(ci + 2);
+        d = d.replace(/\s*\([^)]*\)\s*$/, ""); d = d.charAt(0).toUpperCase() + d.slice(1);
+        if (d.length > 74) d = d.slice(0, d.lastIndexOf(" ", 72)) + "…";
+        b.append(el("small", { class: "bb-mi-t" }, d));
+      }
+      b.onclick = (e) => { if (inMenu) closeMenus(); fn(e); };
+      into.append(b);
       return b;
     };
+    const dd = (icon, label, id, title, build) => {
+      const wrap = el("div", { class: "bb-dd-wrap" });
+      const t = el("button", { class: "ibtn bb-dd", id, title, "aria-label": label, "aria-haspopup": "menu", "aria-expanded": "false", html: ICON[icon] || ICON.box });
+      t.append(el("span", { class: "lbl" }, label), el("span", { class: "bb-caret", "aria-hidden": "true" }, "▾"));
+      const menu = el("div", { class: "bb-menu", role: "menu", "aria-label": label, id: id + "-menu" });
+      menu.hidden = true;
+      t.onclick = (e) => { e.stopPropagation(); const open = menu.hidden; closeMenus(); if (open) { menu.hidden = false; t.setAttribute("aria-expanded", "true"); const r = t.getBoundingClientRect(); menu.style.left = Math.max(4, Math.min(innerWidth - 300, r.left)) + "px"; menu.style.top = r.bottom + 4 + "px"; } };
+      wrap.append(t);
+      document.body.append(menu);
+      into = menu; build(); into = bar;
+      bar.append(wrap);
+      return t;
+    };
+    document.querySelectorAll(".bb-menu").forEach((m) => m.remove());
     btn("copy", "Copy", "Copy (Ctrl+C)", () => copy(), "bb-copy");
     btn("paste", "Paste", "Paste (Ctrl+V)", () => paste(), "bb-paste");
     btn("duplicate", "Duplicate", "Duplicate (Ctrl+D)", () => dup(), "bb-dup");
     btn("del", "Delete", "Delete (Del)", () => del(), "bb-del");
     bar.append(el("span", { class: "sep" }));
-    btn("sketch", "Sketch", "Draw a 2D sketch on the workplane or a flat face", () => app.advanced.createSketch(), "bb-sketch", true);
-    btn("spline", "3D Sketch", "Draw lines in 3D on a shape, a virtual sphere or cube, or in the air", () => app.sketch3d.open(), "bb-sketch3d", true);
-    btn("extrude", "Extrude", "Extrude a sketch into a shape (E)", () => app.quickExtrude(), "bb-extrude", true);
-    btn("import", "Import", "Import a 3D model (STL, 3MF or STEP), an SVG or DXF drawing (to extrude), or a picture to trace", () => app.insertFile("any"), "bb-import", true);
+    dd("sketch", "Draw", "bb-dd-draw", "Sketch, 3D Sketch, Extrude and Views to 3D", () => {
+      btn("sketch", "Sketch", "Draw a 2D sketch on the workplane or a flat face", () => app.advanced.createSketch(), "bb-sketch", true);
+      btn("spline", "3D Sketch", "Draw lines in 3D on a shape, a virtual sphere or cube, or in the air", () => app.sketch3d.open(), "bb-sketch3d", true);
+      btn("extrude", "Extrude", "Extrude a sketch into a shape (E)", () => app.quickExtrude(), "bb-extrude", true);
+      btn("views3d", "Views to 3D", "Views to 3D: pictures or drawings of the front, sides and top become a 3D object (type the sizes you know)", () => app.advanced.views3d(), "bb-views3d", true);
+    });
+    btn("import", "Import", "Import a 3D model (STL, 3MF or STEP, or a Layerscape 3D print kit), an SVG or DXF drawing (to extrude), or a picture to trace", () => app.insertFile("any"), "bb-import", true);
     bar.append(el("span", { class: "sep" }));
     btn("group", "Group", "Group (Ctrl+G): merges solids, cuts holes", () => group(), "bb-group", true);
     btn("ungroup", "Ungroup", "Ungroup (Ctrl+Shift+G)", () => ungroup(), "bb-ungroup", true);
     btn("align", "Align", "Align (A)", () => app.advanced.align(), "bb-align", true);
-    btn("pattern", "Pattern", "Make rows or circles of copies", () => app.advanced.pattern(), "bb-pattern", true);
-    btn("hinge", "Hinge", "Quick hinges: print-in-place, pin or living hinges, ready to put on your parts", () => app.advanced.hinge(), "bb-hinge", true);
-    btn("mirror", "Mirror", "Mirror (M)", (e) => mirrorPopover(e.currentTarget), "bb-mirror", true);
-    btn("drop", "Drop", "Drop to workplane (D)", () => drop(), "bb-drop", true);
-    btn("texture", "Texture", "Add a surface texture (T)", () => app.advanced.texture(), "bb-texture", true);
-    btn("fillet", "Fillet", "Round the edges of a shape: click edges or a face, or round all of its edges", () => app.advanced.fillet(), "bb-fillet", true);
-    btn("shell", "Shell", "Make a shape hollow inside with a wall you choose, or open it up like a cup or box", () => app.advanced.shell(), "bb-shell", true);
-    btn("facePattern", "Face pattern", "Raise or cut a hexagon, diamond plate or screen mesh pattern on a flat face", () => app.advanced.facePattern(), "bb-facepat", true);
-    btn("measure", "Measure", "Measure sizes, distances and angles (I)", () => app.advanced.measure(), "bb-measure", true);
-    btn("printsim", "3D Print Sim", "Simulate printing it: supports, layers, strength, print time", () => app.advanced.openPrintSim(), "bb-printsim", true);
+    dd("mirror", "Arrange", "bb-dd-arrange", "Mirror, Drop, Pattern", () => {
+      btn("mirror", "Mirror", "Mirror (M): flip the selection", (e) => mirrorPopover(document.getElementById("bb-dd-arrange")), "bb-mirror", true);
+      btn("drop", "Drop", "Drop to workplane (D)", () => drop(), "bb-drop", true);
+      btn("pattern", "Pattern", "Make rows or circles of copies", () => app.advanced.pattern(), "bb-pattern", true);
+    });
+    dd("fillet", "Shape it", "bb-dd-shape", "Fillet, Router, Shell, Texture, Face pattern, Hinge", () => {
+      btn("fillet", "Fillet", "Round the edges of a shape: click edges or a face, or round all of its edges", () => app.advanced.fillet(), "bb-fillet", true);
+      btn("router", "Router", "Freehand Router: draw on a shape with your finger, pen or mouse to carve a groove (ball, flat or V bit, any depth; SMART tidies your lines)", () => app.advanced.router(), "bb-router", true);
+      btn("shell", "Shell", "Make a shape hollow inside with a wall you choose, or open it up like a cup or box", () => app.advanced.shell(), "bb-shell", true);
+      btn("texture", "Texture", "Add a surface texture (T)", () => app.advanced.texture(), "bb-texture", true);
+      btn("facePattern", "Face pattern", "Raise or cut a hexagon, diamond plate or screen mesh pattern on a face, flat or curved", () => app.advanced.facePattern(), "bb-facepat", true);
+      btn("hinge", "Hinge", "Quick hinges: print-in-place, pin or living hinges, ready to put on your parts", () => app.advanced.hinge(), "bb-hinge", true);
+      btn("facePattern", "Lattice", "Lattice: turn a shape into honeycomb, triangles, circles or screen mesh right through it, inside a solid frame (flat or curved faces)", () => app.advanced.lattice(), "bb-lattice", true);
+      btn("shell", "Expandable", "Expandable: make a shape into rings that slide, twist or spin out, like a fidget toy, printed in one piece", () => app.openExpandable && app.openExpandable(), "bb-expand", true);
+    });
     bar.append(el("span", { class: "sep" }));
-    const sh = btn("holeToggle", "Hole", "Make hole (H)", () => setHole(true), "bb-hole", true);
-    sh.querySelector("svg").outerHTML;
+    btn("holeToggle", "Hole", "Make hole (H)", () => setHole(true), "bb-hole", true);
     btn("box", "Solid", "Make solid (S)", () => setHole(false), "bb-solid", true);
-    btn("lock", "Lock", "Lock or unlock (Ctrl+L)", () => toggleLock(), "bb-lock", true);
-    bar.append(el("span", { class: "sep" }));
-    const mb = btn("select", "Multi-select", "Tap shapes to add them to the selection (same as Shift+click)", () => { multi = !multi; mb.setAttribute("aria-pressed", multi); }, "bb-multi", true);
+    btn("lock", "Lock", "Lock or unlock (Ctrl+L)", () => toggleLock(), "bb-lock");
+    const mb = btn("select", "Multi-select", "Multi-select: tap shapes to add them to the selection (same as Shift+click)", () => { multi = !multi; mb.setAttribute("aria-pressed", multi); }, "bb-multi");
     mb.setAttribute("aria-pressed", multi);
     bar.append(el("span", { class: "sep" }));
-    btn("cosforge", "CosForge", "Design a cosplay costume on a body built from your measurements, then cut it into printable pieces (opens in its own window)", () => app.cosforge.open(), "bb-cosforge", true);
-    btn("chipcarve", "Chip Carve", "Chip carve a board or a shape with knives, like real wood carving (pen pressure sets the depth)", () => app.carve.open(), "bb-chipcarve", true);
-    btn("lathe", "Lathe", "Turn a shape or a wood blank on a virtual lathe, with chisels, then hollow it out", () => app.lathe.open(), "bb-lathe", true);
-    btn("stainedglass", "Stained Glass", "Turn a shape (or a lamp shade) into stained glass with a lead or copper frame, then paint the glass (opens in its own window)", () => app.stainedGlass.open(), "bb-sglass", true);
+    btn("measure", "Measure", "Measure sizes, distances and angles (I)", () => app.advanced.measure(), "bb-measure", true);
+    // the 3D Print Sim right on the toolbar: see how it prints before printing it
+    btn("printsim", "3D Print Sim", "3D Print Sim: simulate printing your design: supports, layers, strength, print time, and G-code for your printer", () => app.advanced.openPrintSim(), "bb-printsim", true);
+    dd("cosforge", "Makers", "bb-dd-makers", "Apps that make whole projects: flowers, miniature trees, costumes, dioramas, signs, bins", () => {
+      btn("flower", "Flower Studio", "Flower Studio: build flowers, arrangements, wreaths and miniature trees for tabletop scenery, lifelike or robotic, whole or as snap-together kits (opens in its own window)", () => app.flowers && app.flowers.open(), "bb-flowers", true);
+      btn("cosforge", "CosForge", "Design a cosplay costume on a body built from your measurements, then cut it into printable pieces (opens in its own window)", () => app.cosforge.open(), "bb-cosforge", true);
+      btn("layerscape", "Layerscape", "Layerscape: turn a photo into a layered, slot-together diorama or a puzzle to laser cut or 3D print (opens in its own window)", () => app.layerscape.open(), "bb-layerscape", true);
+      btn("neon", "Neon Sign", "Neon Sign Builder: glowing words, shapes and traced pictures as 3D-printed shells for LED strips, with a backing they snap into (opens in its own window)", () => app.neon.open(), "bb-neon", true);
+      btn("box", "Box Maker", "Bin & Box Maker: open bins with compartments, cases with drawers, tilt-out bins or doors, carousels, round drawer stacks, swivel trays and honeycomb, stacked and interlocking", () => app.advanced.openBins(), "bb-bins", true);
+      btn("box", "Shape Storage", "Storage from Shape: turn the selected shape into stacked bins that lock together, or a case with drawers", () => app.advanced.openStorage(), "bb-storage", true);
+    });
     bar.append(el("button", { class: "ibtn panel-toggle", onclick: () => $("shapes-tab").click() }, el("span", { class: "lbl" }, "Objects")));
     ribbon.append(bar);
     updateRibbon();
@@ -708,6 +748,14 @@ export function initBeginner(app) {
 
   // ---------------------------------------------------------------- pointer interaction
   let drag = null;
+  // a Bin & Box Maker set (its cases, drawers, bins, doors and lid) is picked and moved together
+  function setOf(id) {
+    const b = findBody(store.doc, id); if (!b) return [id];
+    const main = b.bin ? b : findBody(store.doc, b.binPart || b.binLid);
+    if (!main || !main.bin) return [id];
+    const ids = [main.id, ...Object.values(main.bin.ids || {}), ...(main.bin.lidId ? [main.bin.lidId] : [])];
+    return [...new Set(ids)].filter((x) => findBody(store.doc, x));
+  }
   let hot = null;
   let multi = false;
   const handler = {
@@ -724,7 +772,10 @@ export function initBeginner(app) {
     dblclick(e) {
       // double-click a sketch shape to edit the sketch
       const hits = vp.pick(e, app.scene.regionMeshes());
-      if (hits.length) app.enterSketch(hits[0].object.userData.region.sketch);
+      if (hits.length) { app.enterSketch(hits[0].object.userData.region.sketch); return; }
+      // double-click a bin or case set to change it in the Box Maker
+      const f = app.scene.pickFace(e), b = f && findBody(store.doc, f.body);
+      if (b && (b.bin || b.binPart || b.binLid) && !app.isLocked(b.id)) { drag = null; app.advanced.openBins(b.bin ? b.id : b.binPart || b.binLid); }
     },
     wantsTouch(e) { return !!(pickHandle(e) || app.scene.pickFace(e)); },
     down(e) {
@@ -735,13 +786,14 @@ export function initBeginner(app) {
       const f = app.scene.pickFace(e);
       if (f) {
         let sel = app.sel.slice();
+        const set = setOf(f.body);
         if (e.shiftKey || e.ctrlKey || e.metaKey || multi) {
-          sel = sel.includes(f.body) ? sel.filter((x) => x !== f.body) : [...sel, f.body];
+          sel = sel.includes(f.body) ? sel.filter((x) => !set.includes(x)) : [...sel, ...set.filter((x) => !sel.includes(x))];
           app.select(sel);
           drag = { kind: "none" };
           return true;
         }
-        if (!sel.includes(f.body)) { sel = [f.body]; app.select(sel); }
+        if (!sel.includes(f.body)) { sel = set; app.select(sel); }
         const movable = sel.filter((id) => !app.isLocked(id));
         if (!movable.length) { drag = { kind: "locked", start: vp.local(e) }; return true; }
         const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -f.point.z);
@@ -1007,6 +1059,17 @@ export function initBeginner(app) {
     inspKey = key;
     inspector.hidden = false;
     inspector.innerHTML = "";
+    // a whole Bin & Box Maker set selected: it shows as one thing, changed in the Box Maker
+    const setMain = sel.length && (() => { const ids = setOf(sel[0].id); return ids.length > 1 && ids.length === sel.length && sel.every((b) => ids.includes(b.id)) ? findBody(store.doc, ids[0]) : null; })();
+    if (setMain) {
+      inspector.append(el("header", {}, el("h4", {}, setMain.name), el("button", { class: "xbtn", "aria-label": "Deselect", title: "Deselect", html: ICON.close, onclick: () => app.select([]) })));
+      const bb = el("div", { class: "body" });
+      inspector.append(bb);
+      bb.append(el("p", { class: "hint", style: { padding: 0 } }, `A Box Maker set: ${sel.length} parts that move together. Drag it to move it.`));
+      bb.append(el("button", { class: "btn primary", id: "insp-bins", onclick: () => app.advanced.openBins(setMain.id) }, "Edit in Box Maker"));
+      bb.append(el("p", { class: "hint", style: { padding: 0 } }, "Or double-click it. Delete removes the whole set."));
+      return;
+    }
     const one = sel.length === 1 ? sel[0] : null;
     const title = one ? el("input", { class: "num", id: "insp-name", value: one.name, style: { fontFamily: "var(--f-ui)", fontWeight: 600 }, "aria-label": "Shape name" }) : el("h4", {}, `${sel.length} shapes`);
     if (one) {

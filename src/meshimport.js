@@ -44,7 +44,7 @@ export function parseSTL(buffer) { return repairMesh(stlPositions(buffer)).mesh;
 const inflateRaw = inflate;
 export const MAX_3MF_ENTRY_BYTES = 48 * 1024 * 1024;
 export const MAX_3MF_TOTAL_UNCOMPRESSED_BYTES = 64 * 1024 * 1024;
-function readZip(buf) {
+export function readZip(buf) {
   const u8 = new Uint8Array(buf), dv = new DataView(buf);
   let e = -1;
   for (let i = u8.length - 22; i >= Math.max(0, u8.length - 65557); i--) if (dv.getUint32(i, true) === 0x06054b50) { e = i; break; }

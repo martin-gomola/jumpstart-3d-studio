@@ -1,0 +1,328 @@
+// v2.9.9.9.6 tool tutorials: ten more for each section (Beginner, Advanced, Chisel, Architect),
+// each a small real project built around tools the other tutorials don't teach (or teach only in
+// passing). Same shape as the others: name the design, the steps (with a check that ticks the step
+// off by itself where the app can tell), save, and export for printing.
+import { nameStep, saveStep, exportStep, FIELDS, TABS } from "./tutorial_data.js";
+
+// ---------------------------------------------------------------- shared helpers
+const S = (sel, via) => (via ? { sel, via } : { sel });
+const step = (title, tool, icon, show, how, when, check, tip) => ({ title, tool, icon, show, how, when, ...(tip ? { tip } : {}), ...(check ? { check } : {}) });
+// a body made by a tool, on its own or joined / cut into another body
+const usesTool = (t, kind, pred = () => true) => t.bodies().some((b) => (b.node.t === kind && pred(b.node)) || (b.node.mods || []).some((m) => m.tool && m.tool.t === kind && pred(m.tool)));
+const named = (t, re) => t.bodies().some((b) => re.test(b.name || ""));
+const P = (t, kind, f = () => true, hole = false) => t.prim(kind, hole).some((b) => f(b.node.p || {}, b));
+const wdh = (t, w, d, h, tol = 1.5) => (p) => t.near(p.w, w, tol) && t.near(p.d, d, tol) && t.near(p.h, h, tol);
+const tile = (kind, label, size, when, check, extra = []) => step(`Add the ${label.toLowerCase()}`, label, kind === "cylinder" ? "cylinder" : "box", { tile: kind },
+  [`At the bottom, under <b>Objects</b>, click the <b>${label}</b> tile (use the arrows on the strip if you can't see it).`, FIELDS, ...(size ? [`Size: ${size}.`] : []), ...extra], when, check);
+const holeTile = (kind, label, size, pos, when, check) => step(`Cut the ${label.toLowerCase()}`, `Holes → ${label}`, "holeToggle", { tile: kind, hole: true },
+  [`At the bottom left, click <b>Holes</b>, then the <b>${label}</b> hole tile.`, `Size: ${size}.`, `Position: ${pos}.`], when, check);
+const group = (check) => step("Group everything", "Group", "group", S("#bb-group"),
+  ["Select everything: press <b>Ctrl+A</b>.", "Click <b>Group</b> in the toolbar (or press <b>Ctrl+G</b>)."],
+  "Group joins the solids and cuts out the holes. Ungroup any time to change a part.", check || ((t) => t.groups().length > 0));
+const pos = (what, xyz, check) => step(`Place the ${what}`, "Position", "move", S("#insp-pos0"),
+  [`Keep the ${what} selected. Under <b>Position</b> type ${xyz}.`], "Typing positions puts parts exactly where they belong.", check);
+const B = (o) => ({ mode: "beginner", ...o });
+const A = (o) => ({ mode: "advanced", ...o });
+const finishB = () => [saveStep(), exportStep()];
+
+// ---------------------------------------------------------------- BEGINNER
+const BEGINNER = [
+  B({ id: "b-t-pyramid", level: "Easy", minutes: "5-7", item: "Pyramid Paperweight", title: "Pyramid paperweight", blurb: "A desk pyramid with your initial carved into one side. Learn the Pyramid, a text hole and Rotate.",
+    learn: ["Pyramid", "Text hole", "Rotate"],
+    steps: [nameStep("Pyramid Paperweight", "Lopez, Maria, Pyramid Paperweight"),
+      tile("pyramid", "Pyramid", "<b>Width 50</b>, <b>Depth 50</b>, <b>Height 45</b>", "A pyramid is wide at the bottom and narrow at the top, so it never tips over and prints with no supports.", (t) => P(t, "pyramid", wdh(t, 50, 50, 45, 3))),
+      step("Make your initial a hole", "Text → Hole", "text", { tile: "text" },
+        ["Click the <b>Text</b> tile. Type your first initial in the <b>Text</b> box and press <b>Enter</b>. Set <b>Letter size 18</b>, <b>Height 10</b>.", "Click <b>Hole</b> in the toolbar: the letter turns see-through grey, so it will carve instead of stick out."],
+        "A text hole carves the letters into whatever it overlaps when you group.", (t) => P(t, "text", (p) => (p.text || "").trim() && p.text !== "TEXT", true)),
+      step("Stand the letter up", "Rotate 90°", "rotate", S("#insp-pos0"),
+        ["With the letter selected, in the panel on the right under <b>Rotate 90°</b>, click <b>↻ X</b> once. The letter now stands upright.", "Position it at <b>X 0</b>, <b>Y -14</b>, <b>Z (bottom) 8</b> so it sinks into the front slope."],
+        "Turning a shape lets the letters face the way you look at the paperweight.", (t) => t.prim("text", true).some((b) => { const x = t.box(b.id); return x && x.size.z > x.size.y; })),
+      group((t) => t.groups().some((g) => t.childKinds(g).includes("pyramid") && t.hasHole(g))), ...finishB()] }),
+  B({ id: "b-t-gem", level: "Easy", minutes: "5-7", item: "Gem Trophy", title: "Gem trophy", blurb: "A shiny gem on a round stand. Learn the Gem and lifting parts with Position Z.",
+    learn: ["Gem", "Cylinder", "Position (Z)"],
+    steps: [nameStep("Gem Trophy", "Lopez, Maria, Gem Trophy"),
+      tile("cylinder", "Cylinder", "<b>Width 40</b>, <b>Depth 40</b>, <b>Height 8</b>", "The stand: wide and low so the trophy stays put.", (t) => P(t, "cylinder", wdh(t, 40, 40, 8))),
+      tile("gem", "Gem", "<b>Width 30</b>, <b>Depth 30</b>, <b>Height 30</b>", "The Gem is a cut stone with flat facets, like a diamond.", (t) => P(t, "gem")),
+      pos("gem", "<b>X 0</b>, <b>Y 0</b>, <b>Z (bottom) 8</b>", (t) => t.prim("gem").some((b) => { const x = t.box(b.id); return x && t.near(x.min.z, 8, 1); })),
+      group((t) => t.groups().some((g) => t.childKinds(g).includes("gem"))), ...finishB()] }),
+  B({ id: "b-t-arrow", level: "Easy", minutes: "6-8", item: "Direction Sign", title: "Direction sign", blurb: "A signpost with two arrows pointing opposite ways. Learn the Arrow, Copy and Paste, and Mirror.",
+    learn: ["Arrow", "Copy / Paste", "Mirror"],
+    steps: [nameStep("Direction Sign", "Lopez, Maria, Direction Sign"),
+      tile("cylinder", "Cylinder", "<b>Width 8</b>, <b>Depth 8</b>, <b>Height 80</b>", "The post.", (t) => P(t, "cylinder", (p) => t.near(p.h, 80, 3))),
+      tile("arrow", "Arrow", "<b>Width 50</b>, <b>Depth 20</b>, <b>Height 4</b>", "The Arrow shape points the way.", (t) => P(t, "arrow"), ["It lies flat: under <b>Rotate 90°</b> click <b>↻ X</b> once to stand it up.", "Position it at <b>X 25</b>, <b>Y 0</b>, <b>Z (bottom) 58</b>."]),
+      step("Copy and paste the arrow", "Copy / Paste", "copy", S("#bb-copy"), ["With the arrow selected, click <b>Copy</b> then <b>Paste</b> (or Ctrl+C, Ctrl+V).", "Move the new arrow: <b>X 25</b>, <b>Y 0</b>, <b>Z (bottom) 36</b>."],
+        "Copy and Paste make an exact twin, with the same size and settings.", (t) => t.prim("arrow").length >= 2),
+      step("Mirror it to point the other way", "Mirror", "mirror", S("#bb-mirror", "#bb-dd-arrange"), ["Open <b>Arrange ▾ → Mirror</b> (or press <b>M</b>), click the lower arrow, then click <b>Flip X (left ↔ right)</b>.", "Close the Mirror box (<b>×</b>). The arrow's panel comes back: set its position to <b>X -25</b> so it sticks out on the other side of the post."],
+        "Mirror flips a shape like a reflection: left becomes right.", (t) => t.prim("arrow").some((b) => { const x = t.box(b.id); return x && x.center.x < -5; })),
+      group((t) => t.groups().some((g) => t.childKinds(g).filter((k) => k === "arrow").length >= 2)), ...finishB()] }),
+  B({ id: "b-t-barn", level: "Easy", minutes: "6-8", item: "Toy Barn", title: "Toy barn", blurb: "A little barn with a curved roof and a big door. Learn the Round roof and Align.",
+    learn: ["Round roof", "Align", "Box hole"],
+    steps: [nameStep("Toy Barn", "Lopez, Maria, Toy Barn"),
+      tile("box", "Box", "<b>Width 50</b>, <b>Depth 40</b>, <b>Height 30</b>", "The barn's walls.", (t) => P(t, "box", wdh(t, 50, 40, 30))),
+      tile("roundroof", "Round roof", "<b>Width 50</b>, <b>Depth 40</b>, <b>Height 18</b>", "A round roof is half a tube: barns, hangars and tunnels.", (t) => P(t, "roundroof"), ["Position: <b>Z (bottom) 30</b> so it sits on the walls."]),
+      step("Line them up", "Align", "align", S("#bb-align"), ["Select both shapes (click one, Shift-click the other).", "Click <b>Align</b> in the toolbar. Set <b>Align to: First shape</b>, click the middle black dots for left-right and front-back, then <b>OK</b>."],
+        "Align centres parts on each other exactly, without typing numbers.", (t) => { const r = t.prim("roundroof")[0], b = t.prim("box")[0]; const x = r && t.box(r.id), y = b && t.box(b.id); return !!x && !!y && t.near(x.center.x, y.center.x, 0.6) && t.near(x.center.y, y.center.y, 0.6); }),
+      holeTile("box", "Box", "<b>Width 20</b>, <b>Depth 10</b>, <b>Height 22</b>", "<b>X 0</b>, <b>Y -20</b>, <b>Z (bottom) 0</b> (in the front wall)", "The barn door: a box hole through the front wall.", (t) => t.prim("box", true).length > 0),
+      group((t) => t.groups().some((g) => t.childKinds(g).includes("roundroof") && t.hasHole(g))), ...finishB()] }),
+  B({ id: "b-t-lighthouse", level: "Proficient", minutes: "8-10", item: "Lighthouse", title: "Lighthouse", blurb: "A tower with a smooth rounded top and a ring of windows. Learn the Paraboloid and a circular Pattern of holes.",
+    learn: ["Paraboloid", "Box hole", "Circular Pattern"],
+    steps: [nameStep("Lighthouse", "Lopez, Maria, Lighthouse"),
+      tile("cylinder", "Cylinder", "<b>Width 30</b>, <b>Depth 30</b>, <b>Height 70</b>", "The tower.", (t) => P(t, "cylinder", wdh(t, 30, 30, 70, 2))),
+      tile("paraboloid", "Paraboloid", "<b>Width 30</b>, <b>Depth 30</b>, <b>Height 20</b>", "A paraboloid is a smooth rounded top, like a dome that comes to a soft point: lighthouse roofs, nose cones, bullets.", (t) => P(t, "paraboloid"), ["Position: <b>X 0</b>, <b>Y 0</b>, <b>Z (bottom) 70</b> so it sits on the tower."]),
+      holeTile("box", "Box", "<b>Width 6</b>, <b>Depth 10</b>, <b>Height 10</b>", "<b>X 0</b>, <b>Y -14</b>, <b>Z (bottom) 52</b> (through the front wall, near the top)", "One window: a box hole poking through the wall.", (t) => t.prim("box", true).length > 0),
+      step("A ring of windows", "Pattern (circular)", "pattern", S("#bb-pattern", "#bb-dd-arrange"), ["With the window hole selected, open <b>Arrange ▾ → Pattern</b>.", TABS, "Type: <b>Circular</b>. Around: <b>Z</b>. Through: <b>Origin</b>. <b>Count 6</b>, <b>Total angle 360</b>. Click <b>OK</b>."],
+        "A circular pattern copies a part evenly round a centre: windows, fins, spokes, petals.", (t) => t.prim("box", true).length >= 6),
+      group((t) => t.groups().some((g) => t.childKinds(g).includes("paraboloid") && t.countHoles(g) >= 6)), ...finishB()] }),
+  B({ id: "b-t-soap", level: "Easy", minutes: "5-7", item: "Soap Dish", title: "Soap dish", blurb: "A soft-edged dish with drain slots. Learn Fillet for rounded edges.",
+    learn: ["Fillet", "Box hole (slots)", "Duplicate"],
+    steps: [nameStep("Soap Dish", "Lopez, Maria, Soap Dish"),
+      tile("box", "Box", "<b>Width 90</b>, <b>Depth 60</b>, <b>Height 12</b>", "The dish.", (t) => P(t, "box", wdh(t, 90, 60, 12))),
+      holeTile("box", "Box", "<b>Width 82</b>, <b>Depth 52</b>, <b>Height 12</b>", "<b>X 0</b>, <b>Y 0</b>, <b>Z (bottom) 3</b>", "Hollows out the top, leaving a 4 mm rim and a 3 mm floor.", (t) => t.prim("box", true).length > 0),
+      holeTile("box", "Box", "<b>Width 60</b>, <b>Depth 3</b>, <b>Height 10</b>", "<b>X 0</b>, <b>Y -15</b>, <b>Z (bottom) -2</b>. Then click <b>Duplicate</b> (top left, or Ctrl+D) and set the copy to <b>Y 0</b>; duplicate again and set <b>Y 15</b>", "Drain slots let the water run out.", (t) => t.prim("box", true).length >= 4),
+      group((t) => t.groups().some((g) => t.countHoles(g) >= 4)),
+      step("Round the edges", "Fillet", "fillet", S("#bb-fillet", "#bb-dd-shape"), ["With the dish selected, open <b>Shape it ▾ → Fillet</b>.", "Click <b>Round all edges of the shape</b>, set <b>Radius 1</b> and click <b>OK</b>."],
+        "Fillet rounds sharp edges so the dish is nice to hold and looks finished.", (t) => t.hasMod("fillet")), ...finishB()] }),
+  B({ id: "b-t-planter", level: "Easy", minutes: "5-7", item: "Planter", title: "Planter pot", blurb: "A round pot with an open top and a drain hole. Learn Shell.",
+    learn: ["Shell", "Cylinder hole"],
+    steps: [nameStep("Planter", "Lopez, Maria, Planter"),
+      tile("cylinder", "Cylinder", "<b>Width 70</b>, <b>Depth 70</b>, <b>Height 60</b>", "The pot.", (t) => P(t, "cylinder", wdh(t, 70, 70, 60, 2))),
+      step("Hollow it out", "Shell", "shell", S("#bb-shell", "#bb-dd-shape"), ["With the cylinder selected, open <b>Shape it ▾ → Shell</b>.", "Type: <b>Openings</b>. Click the <b>top face</b> of the pot, set <b>Wall thickness 2.4</b> and click <b>OK</b>."],
+        "Shell makes a solid hollow with walls you choose. Leaving a face open makes a cup, a box or a pot.", (t) => t.hasMod("shell")),
+      holeTile("cylinder", "Cylinder", "<b>Width 8</b>, <b>Depth 8</b>, <b>Height 10</b>", "<b>X 0</b>, <b>Y 0</b>, <b>Z (bottom) -2</b>", "A drain hole in the floor so the roots don't sit in water.", (t) => t.prim("cylinder", true).length > 0),
+      group((t) => t.groups().some((g) => t.hasHole(g))), ...finishB()] }),
+  B({ id: "b-t-measure", level: "Easy", minutes: "5-7", item: "Phone Stand", title: "Phone stand (measure and lock)", blurb: "A stand with a slot sized to your phone. Learn Measure and Lock.",
+    learn: ["Measure", "Lock", "Wedge"],
+    steps: [nameStep("Phone Stand", "Lopez, Maria, Phone Stand"),
+      tile("box", "Box", "<b>Width 80</b>, <b>Depth 60</b>, <b>Height 10</b>", "The base.", (t) => P(t, "box", wdh(t, 80, 60, 10))),
+      tile("wedge", "Wedge", "<b>Width 80</b>, <b>Depth 40</b>, <b>Height 60</b>", "The back rest, leaning back.", (t) => P(t, "wedge"), ["Position: <b>Y 10</b>, <b>Z (bottom) 10</b>."]),
+      step("Lock the base", "Lock", "lock", S("#bb-lock"), ["Click the base, then click <b>Lock</b>. It can't be moved or changed by accident now."],
+        "Lock parts you've finished so a stray drag doesn't move them.", (t) => t.bodies().some((b) => b.locked)),
+      step("Measure the slot", "Measure", "measure", S("#bb-measure"), ["Click <b>Measure</b> (or press <b>I</b>).", "Click the front edge of the base, then the face of the wedge: the distance shows in the view. Your phone (with its case) must fit in that gap."],
+        "Measure checks real sizes and gaps before you print, so the part fits first time."),
+      holeTile("box", "Box", "<b>Width 80</b>, <b>Depth 12</b>, <b>Height 6</b>", "<b>X 0</b>, <b>Y -14</b>, <b>Z (bottom) 6</b>", "The slot your phone sits in. Make it 2 mm wider than your phone is thick.", (t) => t.prim("box", true).length > 0),
+      step("Unlock and group", "Group", "group", S("#bb-group"), ["Select the base and click <b>Unlock</b>.", "Press <b>Ctrl+A</b>, then <b>Group</b>."], "Locked parts can't be grouped: unlock them when you're ready.", (t) => t.groups().some((g) => t.hasHole(g))), ...finishB()] }),
+  B({ id: "b-t-cutter", level: "Proficient", minutes: "8-10", item: "Cookie Cutter", title: "Cookie cutter", blurb: "Draw your own shape and turn it into a cutter. Learn Sketch and Extrude.",
+    learn: ["Sketch", "Extrude", "Shell"],
+    steps: [nameStep("Cookie Cutter", "Lopez, Maria, Cookie Cutter"),
+      step("Start a sketch", "Sketch", "sketch", S("#bb-sketch", "#bb-dd-draw"), ["Open <b>Draw ▾ → Sketch</b>, then click the workplane."], "A sketch is a flat drawing that becomes a 3D shape.", (t) => t.sketches().length > 0),
+      step("Draw the outline", "Line", "line", S("#sk-line, #sk-rect"), ["Pick <b>Line</b> and click two points: that's one side. The Line tool puts itself down after each line.", "Pick <b>Line</b> again (or press <b>L</b>), click the end of the last line and click the next corner. Keep going round a shape about 60 mm across (a tree, a house, a star) and finish on your very first point.", "When the shape fills with colour it's closed. Stay in the sketch for the next step."],
+        "The outline must be closed (end where it started) so it becomes a solid.", (t) => t.sketchLines(3)),
+      step("Extrude it", "Extrude", "extrude", S("#sk-extrude"), ["In the sketch panel on the right, click <b>Extrude (E)</b>.", "Your shape is picked for you (it's shaded). Don't click it again, or you'll un-pick it. Type <b>Distance 15</b> and click <b>OK</b>."],
+        "Extrude pulls a flat sketch up into a solid.", (t) => t.feat("extrude").length > 0),
+      step("Make it a thin cutting wall", "Shell", "shell", S("#bb-shell", "#bb-dd-shape"), ["With the shape selected, open <b>Shape it ▾ → Shell</b>. Type: <b>Openings</b>. Click the <b>top</b> face, set <b>Wall thickness 1.2</b>, then <b>OK</b>."],
+        "A cutter is a thin wall: Shell hollows the shape and leaves a 1.2 mm wall.", (t) => t.hasMod("shell")),
+      holeTile("box", "Box", "<b>Width 120</b>, <b>Depth 120</b>, <b>Height 3</b>", "<b>X 0</b>, <b>Y 0</b>, <b>Z (bottom) -1</b> (under the whole shape)", "This hole cuts away the thin floor, so the cutter is open at both ends.", (t) => t.prim("box", true).length > 0),
+      group((t) => t.groups().some((g) => t.hasHole(g))), ...finishB()] }),
+  B({ id: "b-t-hinge", level: "Proficient", minutes: "8-10", item: "Hinged Box", title: "Hinged trinket box", blurb: "A small box with a lid on a print-in-place hinge. Learn the Hinge maker.",
+    learn: ["Hinge", "Shell", "Position"],
+    steps: [nameStep("Hinged Box", "Lopez, Maria, Hinged Box"),
+      tile("box", "Box", "<b>Width 50</b>, <b>Depth 40</b>, <b>Height 25</b>", "The box.", (t) => P(t, "box", wdh(t, 50, 40, 25))),
+      step("Hollow the box", "Shell", "shell", S("#bb-shell", "#bb-dd-shape"), ["Open <b>Shape it ▾ → Shell</b>. Type: <b>Openings</b>. Click the <b>top</b> face, <b>Wall thickness 2</b>, then <b>OK</b>."], "Walls 2 mm thick are strong and print quickly.", (t) => t.hasMod("shell")),
+      step("Add a hinge", "Hinge", "hinge", S("#bb-hinge", "#bb-dd-shape"), ["Open <b>Shape it ▾ → Hinge</b>. Pick <b>Print-in-place</b>, length <b>30</b>.", "Click <b>Add</b>: the hinge appears; move it to the back top edge of the box (<b>Y 20</b>, <b>Z (bottom) 22</b>)."],
+        "A print-in-place hinge prints already assembled and moves straight off the printer.", (t) => named(t, /hinge/i) || t.bodies().length >= 2),
+      tile("box", "Box", "<b>Width 50</b>, <b>Depth 40</b>, <b>Height 3</b>", "The lid, sitting on top.", (t) => t.prim("box").length >= 2, ["Position: <b>Z (bottom) 25</b>."]), ...finishB()] }),
+];
+
+// ---------------------------------------------------------------- ADVANCED
+const ADV_PRIM = (id, label, sizes, check, when) => step(`Add a ${label.toLowerCase()}`, label, "box", S("#" + id, "#ad-prims"),
+  [`Click <b>Primitives ▾</b>, then <b>${label}</b>. It appears where you're looking (or click the ground to place it).`, TABS, `Set ${sizes}, then <b>OK</b>.`], when || "Primitives are ready-made solids to start from.", check);
+const SHELL_TOP = (th, what = "top face") => step("Hollow it out", "Shell", "shell", S("#ad-shell"),
+  ["Click <b>Shell</b> in the ribbon. Type: <b>Openings</b>.", `Click the <b>${what}</b> (it turns blue: that face will be removed).`, `Set <b>Thickness ${th}</b> and click <b>OK</b>.`],
+  "Shell hollows a solid and leaves a wall. The faces you click are opened up, like the top of a cup.", (t) => t.hasMod("shell"));
+const SKETCH_CIRCLE = (d, where) => step("Draw the profile", "Sketch → Circle", "sketch", S("#ad-sketch"),
+  ["Click <b>Sketch</b>, then click the ground grid to sketch on it.", `Click <b>Circle</b>, click a centre point ${where}, then type <b>${d}</b> for the diameter and press <b>Enter</b>.`, "Click <b>Finish sketch</b>."],
+  "The profile is the shape of the cross-section that gets swept along the path.", (t) => t.sketches().some((s) => s.ents.some((e) => e.t === "circle")));
+const ADVANCED = [
+  A({ id: "a-t-rail", level: "Proficient", minutes: "6-8", item: "Tray With Rail", title: "Tray with a pipe rail", blurb: "A tray with a round rail all the way round its top, in one click. Learn Pipe on a face's edge.",
+    learn: ["Pipe", "Pipe round a face", "Shell"],
+    steps: [nameStep("Tray With Rail", "Lopez, Maria, Tray With Rail"),
+      ADV_PRIM("ad-box", "Box", "<b>Width 100</b>, <b>Depth 60</b>, <b>Height 15</b>", (t) => t.prim("box").some((b) => t.near(b.node.p.w, 100, 2) && t.near(b.node.p.h, 15, 1))),
+      SHELL_TOP(2),
+      step("Pipe round the top", "Pipe", "pipe", S("#ad-pipe", "#ad-features"), ["Click <b>Advanced Create ▾ → Pipe</b>.", "Click the <b>thin top rim</b> of the tray (zoom in if you need to): an orange line runs all the way round its outer edge. Click it.", TABS, "Set <b>Diameter 5</b>, Operation <b>Join</b>, then <b>OK</b>."],
+        "Pipe sweeps a round, square or triangular section along a path, like Fusion 360's Pipe. Clicking a face uses its whole outline as the path.", (t) => usesTool(t, "pipe")), ...finishB()] }),
+  A({ id: "a-t-mug", level: "Proficient", minutes: "8-10", item: "Mug", title: "Mug with a grip band", blurb: "A mug with a raised band round it, made with Pipe's Around a body. Learn Pipe → Around a body, Offset and Distance.",
+    learn: ["Cylinder primitive", "Shell", "Pipe (Around a body)", "Distance"],
+    steps: [nameStep("Mug", "Lopez, Maria, Mug"),
+      ADV_PRIM("ad-cyl", "Cylinder", "<b>Width 80</b>, <b>Depth 80</b>, <b>Height 95</b>", (t) => t.prim("cylinder").some((b) => t.near(b.node.p.h, 95, 2))),
+      SHELL_TOP(3),
+      step("A band round the mug", "Pipe → Around a body", "pipe", S("#ad-pipe", "#ad-features"), ["Open <b>Advanced Create ▾ → Pipe</b> and click <b>Around a body…</b>.", "Click the side of the mug about a third of the way up: an orange ring follows its outline at that height.", TABS, "Set <b>Diameter 6</b>, Operation <b>Join</b>, <b>OK</b>."],
+        "Around a body follows any body's outline at a height: rims, bands, bumpers and handles round odd shapes.", (t) => usesTool(t, "pipe", (n) => n.aroundOff != null)),
+      step("A half band higher up", "Pipe → Distance", "pipe", S("#ad-pipe", "#ad-features"), ["Open <b>Pipe</b> again, click <b>Around a body…</b> and click the mug two thirds of the way up.", "Set <b>Offset 1</b> and <b>Distance 0.5</b>: it goes only half way round. Tick <b>Start from the other end</b> to swap sides. Operation <b>Join</b>, <b>OK</b>."],
+        "Distance runs a pipe part of the way along its path (0 to 1), as in Fusion 360. Offset pushes the path out from the surface.", (t) => usesTool(t, "pipe", (n) => n.dist != null && n.dist < 1)), ...finishB()] }),
+  A({ id: "a-t-pot", level: "Proficient", minutes: "8-10", item: "Flower Pot", title: "Flower pot with a rolled lip", blurb: "Sweep your own profile all the way round a pot. Learn Sweep → Around a body and Snap the profile to the path.",
+    learn: ["Shell", "Sketch circle", "Sweep (Around a body)", "Snap the profile"],
+    steps: [nameStep("Flower Pot", "Lopez, Maria, Flower Pot"),
+      ADV_PRIM("ad-cyl", "Cylinder", "<b>Width 90</b>, <b>Depth 90</b>, <b>Height 80</b>", (t) => t.prim("cylinder").length > 0),
+      SHELL_TOP(2.5),
+      SKETCH_CIRCLE(8, "anywhere beside the pot"),
+      step("Sweep it round the rim", "Sweep → Around a body", "sweep", S("#ad-sweep", "#ad-features"), ["Open <b>Advanced Create ▾ → Sweep</b> and click inside your circle (it turns blue).", "Click <b>Around a body…</b> and click the pot's side just under the top edge. <b>Snap the profile to the path</b> turns on, so the circle jumps to the rim, wherever you drew it.", "Operation <b>Join</b>, <b>OK</b>."],
+        "Sweep carries any profile along a path. Around a body and Snap let you sweep round nearly any shape without lining things up by hand.", (t) => usesTool(t, "sweep", (n) => n.snap)), ...finishB()] }),
+  A({ id: "a-t-gears", level: "Proficient", minutes: "6-8", item: "Gear Pair", title: "Gear pair", blurb: "Two spur gears that mesh, with pegs to turn on. Learn the Gears tool.",
+    learn: ["Gears", "Gear pair", "Spin check"],
+    steps: [nameStep("Gear Pair", "Lopez, Maria, Gear Pair"),
+      step("Make the gears", "Gears", "gear", S("#ad-gears", "#ad-features"), ["Click <b>Advanced Create ▾ → Gears</b>.", "Type: <b>Gear pair</b>. Module: <b>2</b>. <b>Teeth (gear 1) 20</b>, <b>Teeth (gear 2) 12</b>, <b>Thickness 8</b>. Bore: <b>Round</b>, <b>Bore Ø 5</b>.", "Click <b>Spin</b> to watch them turn: the teeth must never cross. Then <b>OK</b>. They're placed exactly the right distance apart to mesh."],
+        "Gear teeth need an exact shape and spacing to turn smoothly: the Gears tool works it out for you, and Spin shows them running.", (t) => named(t, /gear/i)),
+      ADV_PRIM("ad-cyl", "Cylinder", "<b>Width 4.6</b>, <b>Depth 4.6</b>, <b>Height 12</b> (a peg 0.4 mm thinner than the bore, so the gear turns freely)", (t) => t.prim("cylinder").length > 0, "Pegs the gears turn on. Printed holes come out a little small, so the peg is thinner than the hole."), ...finishB()] }),
+  A({ id: "a-t-hinge", level: "Proficient", minutes: "8-10", item: "Hinged Lid Box", title: "Box with a print-in-place hinge", blurb: "A box and a hinge that prints already working. Learn Quick Hinge.",
+    learn: ["Quick Hinge", "Box primitive", "Shell"],
+    steps: [nameStep("Hinged Lid Box", "Lopez, Maria, Hinged Lid Box"),
+      ADV_PRIM("ad-box", "Box", "<b>Width 70</b>, <b>Depth 50</b>, <b>Height 30</b>", (t) => t.prim("box").length > 0),
+      SHELL_TOP(2),
+      step("Add the hinge", "Quick Hinge", "hinge", S("#ad-hinge", "#ad-features"), ["Click <b>Advanced Create ▾ → Quick Hinge</b>.", "Type: <b>Print-in-place</b>. Size: <b>Box lid</b>. Click <b>Spin</b> to see it open and close, then <b>OK</b>.", "Move it to the back top edge of the box with <b>Move/Copy</b>."],
+        "A print-in-place hinge has its pin and gaps already built in, so it comes off the printer working.", (t) => named(t, /hinge/i)), ...finishB()] }),
+  A({ id: "a-t-stand", level: "Proficient", minutes: "8-10", item: "Tablet Stand", title: "Tablet stand on a tilted plane", blurb: "Sketch on a plane leaning 20° back from upright, a comfortable viewing angle. Learn Plane at angle.",
+    learn: ["Plane at angle", "Sketch on a plane", "Extrude (Join)"],
+    steps: [nameStep("Tablet Stand", "Lopez, Maria, Tablet Stand"),
+      ADV_PRIM("ad-box", "Box", "<b>Width 120</b>, <b>Depth 80</b>, <b>Height 8</b>", (t) => t.prim("box").length > 0),
+      step("Tilt a plane", "Plane at angle", "plane", S("#ad-plane-ang", "#ad-construct"), ["Click <b>Planes ▾ → Plane at angle</b>.", "Click the base's <b>back top edge</b> (the long one at the back) for the axis.", "Type <b>Angle 20</b> and click <b>OK</b>. The plane leans 20° away from upright (0° would stand straight up)."],
+        "Construction planes let you sketch at any angle, not just flat or upright.", (t) => t.planes().length > 0),
+      step("Sketch the back rest", "Sketch", "sketch", S("#ad-sketch"), ["Click <b>Sketch</b> and click the new tilted plane.", "Click <b>Rectangle</b> and drag a rectangle about 110 × 70 on it, starting at its bottom edge. <b>Finish sketch</b>."], "The sketch lies on the tilted plane.", (t) => t.sketches().some((s) => Math.abs(s.plane.n[2]) > 0.05 && Math.abs(s.plane.n[2]) < 0.95)),
+      step("Extrude it", "Extrude", "extrude", S("#ad-extrude"), ["Click <b>Extrude</b>, click inside the rectangle, type <b>6</b>, Operation <b>Join</b>, <b>OK</b>."], "The back rest leans at exactly the plane's angle.", (t) => t.feat("extrude").length > 0 || t.extrudeMod("join")), ...finishB()] }),
+  A({ id: "a-t-lid", level: "Expert", minutes: "8-10", item: "Snug Lid", title: "Snug-fit lid", blurb: "Make a lid's lip fit a box by nudging its faces a fraction of a millimetre. Learn Offset face and Measure.",
+    learn: ["Offset face", "Measure", "Combine (Join)"],
+    steps: [nameStep("Snug Lid", "Lopez, Maria, Snug Lid"),
+      ADV_PRIM("ad-box", "Box", "<b>Width 60</b>, <b>Depth 40</b>, <b>Height 4</b>, Base position <b>Z 5</b> (the lid)", (t) => t.prim("box").length > 0),
+      ADV_PRIM("ad-box", "Box", "<b>Width 56</b>, <b>Depth 36</b>, <b>Height 5</b>, Base position <b>Z 0</b> (the lip under the lid)", (t) => t.prim("box").length >= 2),
+      step("Join them", "Combine", "combine", S("#ad-combine", "#ad-advmod"), ["Click <b>Advanced Modify ▾ → Combine</b>. Click the lid (target), then the lip (tool). Operation <b>Join</b>, <b>OK</b>."], "One lid with a lip underneath.", (t) => t.hasCombine("join")),
+      step("Measure the lip", "Measure", "measure", S("#ad-measure"), ["Click <b>Measure</b>, then two opposite sides of the lip: 56 mm. A box opening of 56 mm would be far too tight."], "Measure first, then adjust."),
+      step("Shrink the lip's sides", "Offset face", "offset", S("#ad-offset", "#ad-advmod"), ["Click <b>Advanced Modify ▾ → Offset face</b>. Click the four side faces of the lip.", "Type <b>Distance -0.2</b> and click <b>OK</b>. Each side moves in 0.2 mm."],
+        "Offset face moves faces in or out without redrawing anything: perfect for tuning fits by tenths of a millimetre.", (t) => t.hasMod("offset")), ...finishB()] }),
+  A({ id: "a-t-grip", level: "Proficient", minutes: "6-8", item: "Grip Handle", title: "Textured grip handle", blurb: "A handle with a raised non-slip pattern on top. Learn Pattern on face.",
+    learn: ["Pattern on face", "Box primitive"],
+    steps: [nameStep("Grip Handle", "Lopez, Maria, Grip Handle"),
+      ADV_PRIM("ad-box", "Box", "<b>Width 100</b>, <b>Depth 25</b>, <b>Height 20</b>", (t) => t.prim("box").length > 0),
+      step("Add a pattern to the face", "Pattern on face", "pattern", S("#ad-facepat", "#ad-decorate"), ["Click <b>Decorate ▾ → Pattern on face</b> and click the top face.", "Pick <b>Diamond plate</b>, Style <b>Raise</b>, <b>Height 0.8</b>, then <b>OK</b>."],
+        "Pattern on face adds raised (or cut-in) shapes over a face: grips, textures and non-slip feet.", (t) => t.hasMod("facepat")), ...finishB()] }),
+  A({ id: "a-t-badge", level: "Proficient", minutes: "8-10", item: "Badge", title: "Two-colour badge", blurb: "Split a face so part of it can print in another colour. Learn Split face and Appearance.",
+    learn: ["Split face", "Appearance", "Sketch on a face"],
+    steps: [nameStep("Badge", "Lopez, Maria, Badge"),
+      ADV_PRIM("ad-cyl", "Cylinder", "<b>Width 50</b>, <b>Depth 50</b>, <b>Height 4</b>", (t) => t.prim("cylinder").length > 0),
+      step("Draw the second colour area", "Sketch", "sketch", S("#ad-sketch"), ["Click <b>Sketch</b>, click the badge's top face.", "Click <b>Circle</b>, click the centre and type <b>30</b>, Enter. <b>Finish sketch</b>."], "The shape of the second colour.", (t) => t.sketchCircle(15)),
+      step("Split the face", "Split face", "split", S("#ad-splitface", "#ad-advmod"), ["Click <b>Advanced Modify ▾ → Split face</b>. Click the top face.", "Tool: <b>Sketch curve</b>, then click your circle. <b>OK</b>."], "Split face cuts one face into two along a curve, without changing the shape.", (t) => t.hasMod("splitface")),
+      step("Colour it", "Appearance", "appearance", S("#ad-appearance", "#ad-decorate"), ["Click <b>Decorate ▾ → Appearance</b>. Apply to: <b>Faces</b>.", "Pick <b>PLA</b> and a colour, then click the round face inside the circle. <b>OK</b>."], "Face colours go into 3MF files, so a multi-colour printer (or the 3D Print Sim) prints them."), ...finishB()] }),
+  A({ id: "a-t-ring", level: "Proficient", minutes: "6-8", item: "Napkin Ring", title: "Napkin ring with a name", blurb: "A torus ring with raised 3D letters. Learn the Torus, 3D text, Move/Copy and Combine.",
+    learn: ["Torus primitive", "3D text", "Move/Copy", "Combine (Join)"],
+    steps: [nameStep("Napkin Ring", "Lopez, Maria, Napkin Ring"),
+      ADV_PRIM("ad-torus", "Torus", "<b>Diameter 50</b>, <b>Tube 8</b>", (t) => t.prim("torus").length > 0),
+      step("Add your name", "3D text", "text", S("#ad-text3d", "#ad-prims"), ["Click <b>Primitives ▾ → 3D text</b> and click the ground in front of the ring.", "Type your name in <b>Text</b>, <b>Size 8</b>, <b>Height 3</b>, <b>OK</b>."], "3D text makes solid letters in many fonts.", (t) => t.prim("text").length > 0),
+      step("Put the name on the ring", "Move/Copy", "move", S("#ad-move", "#ad-transform"), ["Click <b>Transform ▾ → Move/Copy</b> and click the text.", "Drag the arrows, or type in <b>Move by</b>, until the letters sit on top of the ring, half sunk into it. <b>OK</b>."], "Move places bodies exactly with arrows or typed distances.", (t) => t.prim("text").some((b) => { const x = t.box(b.id); return x && x.max.z > 7; })),
+      step("Join them", "Combine", "combine", S("#ad-combine", "#ad-advmod"), ["Click <b>Advanced Modify ▾ → Combine</b>. Click the ring (target), then the text (tool). Operation <b>Join</b>, <b>OK</b>."], "Join makes one solid to print.", (t) => t.hasCombine("join")), ...finishB()] }),
+];
+
+// ---------------------------------------------------------------- CHISEL
+const CH = (sel) => ({ ch: sel });
+const chShape = (id, name, when) => step(`Add a ${name.toLowerCase()}`, name, "sphere", CH(`#shapes [data-shape="${id}"]`), [`In Chisel's panel on the right, under <b>Shapes</b>, click <b>${name}</b>.`], when, (t) => t.chCount(new RegExp("^" + name), 1));
+const chChar = (id, name, when) => step(`Start from a ${name.toLowerCase()}`, "Characters", "sculpt", CH(`#charShapes [data-char="${id}"]`), [`Under <b>Characters</b>, click <b>${name}</b>. It's built for you, ready to sculpt.`], when, (t) => t.chCount(new RegExp("^" + name), 1));
+const chBrush = (id, name, key, n, how, when) => step(name, name, "sculpt", CH(`#tools [data-easy="${id}"]`), [`Click <b>${name}</b> in the tools on the left.`, how], when, (t) => t.chUsed(key, n));
+const chPick = (id, name, tool, how, when) => step(name, name, "sculpt", CH(`#tools [data-easy="${id}"]`), [`Click <b>${name}</b> in the tools on the left.`, ...how], when, (t) => t.chTool(tool));
+const MIRROR = step("Mirror your strokes", "Mirror", "mirror", CH("#eSym, #symBtn"), ["Turn on <b>Mirror</b> above the view: strokes on one side copy to the other."], "Both sides match without doing the work twice.", (t) => t.chSym());
+const SAVE_CH = step("Save the sculpt into your design", "Save to design", "finish", CH("#js3dSave"), ["Click <b>Save to design</b> at the top right of Chisel."], "Your sculpts become bodies in the design.", (t) => t.chSaved());
+const EXPORT_CH = step("Export it for 3D printing", "Export", "import", CH("#exportBtn"), ["Click <b>Export</b> and pick <b>STL</b> (or OBJ for colours)."], "The file for your slicer or the 3D Print Sim.", (t) => t.chExported());
+const C = (o) => ({ mode: "chisel", ...o });
+const BUILD = (n, where) => chBrush("e-add", "Build up", "standard", n, `Drag over ${where} (at least ${n} strokes).`, "Build up adds clay.");
+const DIG = (n, where) => chBrush("e-dig", "Dig in", "standard-", n, `Drag on ${where} (at least ${n} strokes).`, "Dig in scoops clay out.");
+const SMOOTH = (n) => chBrush("e-smooth", "Smooth", "smooth", n, `Rub over the rough spots (at least ${n} strokes).`, "Smooth evens out bumps.");
+const PULL = (n, what) => chBrush("e-pull", "Pull", "move", n, `Grab and drag out ${what} (at least ${n} pulls).`, "Pull stretches clay out like soft dough.");
+const FLAT = (n, where) => chBrush("e-flat", "Flatten", "flatten", n, `Drag over ${where} (at least ${n} strokes).`, "Flatten presses areas flat.");
+const PAINT = (n, what) => chBrush("e-paint", "Paint", "paint", n, `Pick colours under the view and paint ${what} (at least ${n} strokes).`, "Colours go into 3MF and OBJ files for colour printers.");
+const CHISEL = [
+  C({ id: "c-t-dice", level: "Easy", minutes: "6-8", item: "D20 Dice", title: "Twenty-sided dice", blurb: "A role-playing D20 from an icosahedron, with dots dug into the faces. Learn the polyhedron shapes.",
+    learn: ["Icosahedron", "Dig in", "Paint"], steps: [nameStep("D20 Dice", "Lopez, Maria, D20 Dice"), chShape("icosa", "Icosahedron", "An icosahedron has 20 equal triangle faces: a D20. Try the Tetrahedron (D4), Octahedron (D8) and Dodecahedron (D12) too."), DIG(5, "the faces for dots"), PAINT(3, "the dice and its dots"), SAVE_CH, EXPORT_CH, saveStep()] }),
+  C({ id: "c-t-bunny", level: "Easy", minutes: "6-8", item: "Bunny", title: "Long-eared bunny", blurb: "Start from the Bunny and give it longer ears and a fluffy tail.",
+    learn: ["Bunny character", "Pull", "Build up", "Paint"], steps: [nameStep("Bunny", "Lopez, Maria, Bunny"), chChar("bunny", "Bunny", "A ready-shaped bunny to make your own."), MIRROR, PULL(2, "the ears longer"), BUILD(2, "a round tail"), PAINT(3, "the fur, nose and eyes"), SAVE_CH, saveStep()] }),
+  C({ id: "c-t-fish", level: "Easy", minutes: "6-8", item: "Fish", title: "Tropical fish", blurb: "A bright fish with flat fins. Learn Flatten on a character.",
+    learn: ["Fish character", "Flatten", "Paint"], steps: [nameStep("Fish", "Lopez, Maria, Fish"), chChar("fish", "Fish", "Fish are flat from side to side: a good one for Flatten."), FLAT(3, "the fins and tail"), SMOOTH(2), PAINT(4, "stripes and spots"), SAVE_CH, saveStep()] }),
+  C({ id: "c-t-tentacle", level: "Proficient", minutes: "8-10", item: "Tentacle Alien", title: "Tentacle alien", blurb: "A wiggly alien, made even stranger. Learn Mirror with Pull and Build up.",
+    learn: ["Tentacle alien", "Mirror", "Pull", "Paint"], steps: [nameStep("Tentacle Alien", "Lopez, Maria, Tentacle Alien"), chChar("tentacle", "Tentacle alien", "A body with tentacles to stretch."), MIRROR, PULL(3, "the tentacles"), BUILD(2, "suckers along them"), PAINT(3, "the skin"), SAVE_CH, saveStep()] }),
+  C({ id: "c-t-cyclops", level: "Proficient", minutes: "8-10", item: "Cyclops", title: "Cyclops", blurb: "One big eye and a grumpy brow. Learn Dig in and Smooth on a face.",
+    learn: ["Cyclops alien", "Dig in", "Build up", "Smooth"], steps: [nameStep("Cyclops", "Lopez, Maria, Cyclops"), chChar("cyclops", "Cyclops alien", "One eye in the middle: no Mirror needed."), DIG(2, "a deep eye socket"), BUILD(3, "a heavy brow"), SMOOTH(2), PAINT(3, "skin and eye"), SAVE_CH, saveStep()] }),
+  C({ id: "c-t-egg", level: "Proficient", minutes: "8-10", item: "Hollow Egg", title: "Hollow egg ornament", blurb: "Shape a sphere into an egg, paint it, and hollow it so it prints with far less plastic. Learn Hollow.",
+    learn: ["Sphere", "Pull", "Hollow", "Paint"], steps: [nameStep("Hollow Egg", "Lopez, Maria, Hollow Egg"), chShape("sphere", "Sphere", "The egg's starting lump."), PULL(2, "the top up into an egg shape"), SMOOTH(2),
+      chPick("e-hollow", "Hollow", "hollow", ["Set <b>Wall thickness 2</b> mm (or click <b>2 mm</b>).", "Click <b>Hollow Sphere</b>. The outside stays the same; the inside becomes empty."], "Hollow leaves an empty space inside with a wall all round: a lighter print that uses far less filament."),
+      PAINT(3, "a pattern on the egg"), SAVE_CH, EXPORT_CH, saveStep()] }),
+  C({ id: "c-t-charm", level: "Proficient", minutes: "8-10", item: "Hex Charm", title: "Hex charm from a sketch", blurb: "Draw a hexagon, pull it up into a solid, then sculpt and paint it. Learn Chisel's Sketch and Extrude.",
+    learn: ["Sketch", "Polygon", "Extrude", "Dig in", "Paint"], steps: [nameStep("Hex Charm", "Lopez, Maria, Hex Charm"),
+      chPick("e-sketch", "Sketch", "sketch", ["Click <b>XY · Top</b> to sketch on the ground.", "Pick <b>Polygon</b> (Sides <b>6</b>), click the centre, then click a corner about 20 mm out.", "Click <b>Extrude (E)</b>, drag the arrow up (or type <b>Distance 6</b>) and click <b>OK (Enter)</b>."], "Sketch draws rectangles, circles and polygons, then Extrude pulls them up into clay you can sculpt."),
+      DIG(2, "a pattern into the top"), SMOOTH(1), PAINT(2, "the charm"), SAVE_CH, EXPORT_CH, saveStep()] }),
+  C({ id: "c-t-fidget", level: "Proficient", minutes: "8-10", item: "Fidget Capsule", title: "Fidget capsule", blurb: "Turn a capsule into rings that slide out of each other, printed in one piece. Learn Expandable.",
+    learn: ["Capsule", "Expandable", "Play"], steps: [nameStep("Fidget Capsule", "Lopez, Maria, Fidget Capsule"), chShape("capsule", "Capsule", "A rounded shape with upright sides: just right for rings."),
+      chPick("e-expand", "Expandable", "expand", ["Click <b>Move</b>, click the capsule to pick it, then click <b>Expandable</b> again.", "Click <b>Make Capsule expandable…</b>. In the window, set the number of rings to <b>4</b> (a small capsule only has room for a few; if it says the rings are too short, use fewer).", "Click <b>Make it expandable</b>, then <b>Play</b> to watch the rings slide out.", "Click <b>Add rings to the design</b>."], "Expandable cuts a shape into nested rings that slide, twist or spin, printed in one piece with no supports."),
+      saveStep()] }),
+  C({ id: "c-t-knot", level: "Easy", minutes: "5-7", item: "Knot Pendant", title: "Knot pendant", blurb: "A torus knot polished into a pendant. Learn the Torus knot shape.",
+    learn: ["Torus knot", "Smooth", "Paint"], steps: [nameStep("Knot Pendant", "Lopez, Maria, Knot Pendant"), chShape("knot", "Torus knot", "A tube that loops through itself: impossible to carve by hand, easy to print."), SMOOTH(2), PAINT(2, "the knot"), SAVE_CH, EXPORT_CH, saveStep()] }),
+  C({ id: "c-t-bust", level: "Advanced", minutes: "10-12", item: "Portrait Bust", title: "Portrait bust", blurb: "Sculpt a face from the Head. Learn to work a portrait with Mirror, Build up, Dig in and Smooth.",
+    learn: ["Head character", "Mirror", "Build up", "Dig in", "Smooth"], steps: [nameStep("Portrait Bust", "Lopez, Maria, Portrait Bust"), chChar("head", "Head", "Realistic proportions to start a portrait."), MIRROR, BUILD(3, "cheekbones and the nose"), DIG(2, "the eye sockets"), SMOOTH(3), PAINT(3, "skin, hair and eyes"), SAVE_CH, saveStep()] }),
+];
+
+// ---------------------------------------------------------------- ARCHITECT
+const H = (o) => ({ mode: "arch", ...o });
+const ROOM = (w, d, ft) => step("Draw the room", "Room", "archRoom", S("#ar-room"), [`Click <b>Room</b> (R) and drag a rectangle <b>${ft}</b> on the grid, corner to corner (the size shows as you drag).`, "If no walls appear the first time, just drag again."], "Four walls in one go.", (t) => t.archRect(w, d, 400));
+const RAISE = (n = 1) => step(n > 1 ? "Raise the upper walls" : "Raise the walls", "Raise walls", "archRaise", S("#ar-raise-all, #ar-raise"), [n > 1 ? "With <b>Level 2</b> showing in the Level box, click <b>Raise walls</b> (E), then <b>Raise all walls</b>." : "Click <b>Raise walls</b> (E), then <b>Raise all walls</b> (8', or 2.4 m)."], "Walls go up to full height.", (t) => t.archRaised(null, 100, n));
+const ROOF = (kind, label) => step(`Add a ${label.toLowerCase()} roof`, "Roof", "archRoof", S("#ar-roof"), [`Click <b>Roof</b> (O) and pick <b>${label}</b>.`, "Click <b>Cover the whole level</b>."], "Every house needs a lid.", (t) => t.archRoof(kind));
+const SEND = step("Export it for printing", "Export", "import", S("#ar-export"), ["Click <b>Export</b>. Pick <b>STL</b> (or <b>3MF</b> to keep the colours) and click <b>Export</b>. It's scaled to fit the build plate."], "A scale model ready to print.", (t) => t.exported("stl") || t.exported("3mf"));
+const WINDOWS = (n, which = "Single hung") => step("Add windows", "Window", "archWindow", S("#ar-window"), [`Click <b>Window</b> (N) and pick <b>${which}</b>.`, `Point at a wall (a blue preview snaps along it) and click to put one in. Add ${n} or more. Press <b>Esc</b> when done.`], "Windows cut real openings with frames.", (t) => t.archOpens("window").length >= n);
+const DOOR = (which, where, check) => step(`Add the ${which.toLowerCase()}`, "Door", "archDoor", S("#ar-door"), [`Click <b>Door</b> (D) and pick <b>${which}</b>.`, `Point at ${where} and click. Press <b>Esc</b> when done.`], "Doors cut openings with frames, so they print.", check || ((t) => t.archOpens("door").length > 0));
+const a = (t, k) => (t.arch()[k] || []).length;
+const ARCH = [
+  H({ id: "h-t-stairs", level: "Proficient", minutes: "10-12", item: "Loft Cabin", title: "Loft cabin with stairs", blurb: "A cabin with a second floor reached by stairs, with a railing round the stairwell. Learn Levels, Stairs and Railing.",
+    learn: ["Levels", "Stairs", "Railing"],
+    steps: [nameStep("Loft Cabin", "Lopez, Maria, Loft Cabin"), ROOM(6100, 4900, "20' × 16'"), RAISE(),
+      step("Add a second level", "Levels", "archLevel", S("#ar-addlevel"), ["In the Architect panel, click <b>+ Level</b>. Level 2 sits on top, and the Level box at the top now says <b>Level 2</b>."], "Levels stack floors, each with its own walls.", (t) => t.arch().levels.length >= 2),
+      RAISE(2),
+      step("Add stairs", "Stairs", "archStairs", S("#ar-stairs"), ["Pick <b>Level 1</b> in the Level box at the top (stairs start on the floor they climb from).", "Click <b>Stairs</b> (K), pick <b>Straight stairs</b>, and click inside the room near a wall where the bottom step goes. They climb away from you (Q turns them).", "The opening in the floor above is cut for you."], "Stairs work out the number of steps from the floor height.", (t) => a(t, "stairs") > 0),
+      step("Rail the stairwell", "Railing", "archRail", S("#ar-rail"), ["Pick <b>Level 2</b>. Click <b>Railing</b> (J), pick a style, then click where the railing starts and where it ends, along the open side of the stairwell."], "Railings stop people falling: building codes require them at open edges.", (t) => a(t, "rails") > 0),
+      ROOF("gable", "Gable"), SEND, saveStep()] }),
+  H({ id: "h-t-porch", level: "Easy", minutes: "8-10", item: "Porch House", title: "House with a front porch", blurb: "A small house with a covered porch, posts and steps. Learn the Porch tool.",
+    learn: ["Porch", "Front door", "Gable roof"],
+    steps: [nameStep("Porch House", "Lopez, Maria, Porch House"), ROOM(7300, 6100, "24' × 20'"), RAISE(), DOOR("Front door 36\"", "the middle of the front wall"),
+      step("Add the porch", "Porch", "archPorch", S("#ar-porch"), ["Click <b>Porch</b> (Y). Pick a roof (Shed slopes away from the house) and posts.", "Drag the porch's outline in front of the door, corner to corner, about 8' deep: posts, railing, steps and its own roof appear."], "A porch is a deck with a roof, posts and steps, all in one tool.", (t) => a(t, "porches") > 0),
+      ROOF("gable", "Gable"), SEND, saveStep()] }),
+  H({ id: "h-t-furnish", level: "Easy", minutes: "8-10", item: "Studio", title: "Furnish a studio", blurb: "One room with a bed, a sofa, a kitchen and a bathroom set. Learn Furniture.",
+    learn: ["Furniture", "Turning furniture (Q)"],
+    steps: [nameStep("Studio", "Lopez, Maria, Studio"), ROOM(7300, 4900, "24' × 16'"), RAISE(),
+      step("Place furniture", "Furniture", "archFurn", S("#ar-furn-tool"), ["Click <b>Furniture</b> (U). Pick <b>Bedroom</b>, then a bed, and click in a corner of the room: it backs up to the nearest wall by itself.", "Add a sofa (<b>Living room</b>), a kitchen run (<b>Kitchen</b>) and a toilet and shower (<b>Bathroom</b>). Press <b>Q</b> to turn a piece before you click. <b>Esc</b> when done."],
+        "Furniture shows whether a room really works, and helps you plan where doors and windows go.", (t) => a(t, "furn") >= 3),
+      DOOR("Front door 36\"", "a wall with space beside the furniture"), SEND, saveStep()] }),
+  H({ id: "h-t-photos", level: "Easy", minutes: "6-8", item: "House Tour", title: "Photo tour of a house", blurb: "Walk inside at eye height and take photos of the rooms. Learn the Staging camera.",
+    learn: ["Staging camera", "Window", "Hip roof"],
+    steps: [nameStep("House Tour", "Lopez, Maria, House Tour"), ROOM(9100, 7300, "30' × 24'"), RAISE(), WINDOWS(2), ROOF("hip", "Hip"),
+      step("Walk inside", "Staging camera", "archCamera", S("#ar-camera"), ["Click <b>Staging camera</b> (C). Drag to look around; walk with <b>W A S D</b> or the arrow keys; double-click a floor to walk there."], "See your design the way a visitor would."),
+      step("Take photos", "Take photo", "archCamera", S("#ar-cam-shot"), ["Click <b>Take photo</b> in two or three spots, then <b>Exit</b>."], "Photos are great for a presentation or a portfolio."), saveStep()] }),
+  H({ id: "h-t-brick", level: "Easy", minutes: "6-8", item: "Brick Cottage", title: "Brick cottage", blurb: "A cottage with brick walls, a shingle roof and a floor. Learn Floor and Finishes.",
+    learn: ["Floor", "Finishes (walls and roofs)", "Gable roof"],
+    steps: [nameStep("Brick Cottage", "Lopez, Maria, Brick Cottage"), ROOM(7300, 6100, "24' × 20'"), RAISE(),
+      step("Add the floor", "Floor", "archFloor", S("#ar-floor"), ["Click <b>Floor</b> (G), then <b>Floor under all walls</b>."], "A floor slab under the house.", (t) => t.archSlab()), ROOF("gable", "Gable"),
+      step("Brick the walls", "Finishes", "archFinish", S("#ar-fin-presets", "#ar-finish"), ["Click <b>Finishes</b> (T). Under the presets, click <b>Brick</b>.", "Click <b>All walls on Level 1</b>."], "Finishes give walls, roofs and floors real textures that print as raised patterns.", (t) => t.archFinished("wall") > 0),
+      step("Shingle the roof", "Finishes", "archFinish", S("#ar-fin-presets", "#ar-finish"), ["Click the <b>Shingles</b> preset, then <b>All roofs</b>."], "Roof textures print too.", (t) => t.archFinished("roof") > 0), SEND, saveStep()] }),
+  H({ id: "h-t-garage", level: "Proficient", minutes: "8-10", item: "Garage", title: "Garage workshop", blurb: "A garage drawn wall by wall, with a big door and a shed roof. Learn the Wall tool and the Garage door.",
+    learn: ["Wall (typed lengths)", "Garage door", "Shed roof"],
+    steps: [nameStep("Garage", "Lopez, Maria, Garage"),
+      step("Draw the walls one by one", "Wall", "archWall", S("#ar-wall"), ["Click <b>Wall</b> (W). Click a start point on the grid.", "Move the pointer to the right, type <b>24'</b> and press <b>Enter</b>. Move up, type <b>22'</b>, Enter. Move left, <b>24'</b>, Enter.", "Click your first point to close the shape (or move down, type 22', Enter), then press <b>Enter</b> again to finish."], "The Wall tool draws any shape of building, corner by corner, with exact lengths.", (t) => t.archWalls().length >= 4),
+      RAISE(), DOOR("Garage door 16'", "the middle of a long wall", (t) => t.archPreset(["garage16", "garage9"]).length > 0), ROOF("shed", "Shed"), SEND, saveStep()] }),
+  H({ id: "h-t-plan", level: "Easy", minutes: "6-8", item: "Floor Plan", title: "Floor plan drawing", blurb: "Save your floor plan as a drawing with every wall length. Learn inside walls, Plan view and Floor plan export.",
+    learn: ["Inside wall", "Plan view", "Floor plan (PDF, SVG, DXF)"],
+    steps: [nameStep("Floor Plan", "Lopez, Maria, Floor Plan"), ROOM(9100, 7300, "30' × 24'"),
+      step("Add an inside wall", "Wall", "archWall", S("#ar-wall"), ["Click <b>Wall</b> (W). Click on the front wall about a third of the way along: it snaps to the wall.", "Click straight across on the back wall, then press <b>Enter</b>. Now there are two rooms."], "Inside walls divide the space.", (t) => t.archWalls().length >= 5),
+      DOOR("Interior door 30\"", "the new inside wall"),
+      step("Look from above", "Plan view", "archPlan", S("#ar-plan"), ["Click <b>Plan view</b> to see it like a blueprint."], "Plans are how builders read a house.", (t) => t.archPlanSeen()),
+      step("Save the drawing", "Floor plan", "archPlanDoc", S("#ar-planexp"), ["Click <b>Floor plan</b>. Format <b>PDF</b>, paper <b>Letter</b>, leave the wall lengths and door swings ticked, and click <b>Save</b>."], "A PDF to print or hand in; SVG and DXF open in other drawing and CAD programs."), saveStep()] }),
+  H({ id: "h-t-island", level: "Proficient", minutes: "10-12", item: "Island Cabin", title: "Island cabin", blurb: "A cabin on a little island in a lake. Learn Lower, Pond / lake and Plant in Landscape.",
+    learn: ["Landscape", "Lower", "Pond / lake", "Plant"],
+    steps: [nameStep("Island Cabin", "Lopez, Maria, Island Cabin"), ROOM(4900, 4300, "16' × 14'"), RAISE(), ROOF("gable", "Gable"),
+      step("Make the ground", "Landscape", "archLand", S("#ar-land-make", "#ar-land"), ["Click <b>Landscape</b> (L) and <b>25' around</b>."], "Ground to shape round the house.", (t) => t.archLand()),
+      step("Dig round the cabin", "Lower", "archLand", S("#ar-landtools", "#ar-land"), ["Pick <b>Lower</b> and set <b>Strength 100</b>.", "Drag a ring all the way round the cabin, a little way out from it. Go round four or five times so it gets deep."], "Lower digs the ground down, leaving the cabin on an island.", (t) => { const r = t.archLandArr(); if (!r) return false; let lo = Infinity; for (const v of r.h) lo = Math.min(lo, v); return lo < -150; }),
+      step("Fill the lake", "Pond / lake", "archLand", S("#ar-landtools", "#ar-land"), ["Pick <b>Pond / lake</b> and click in the dug ring: water fills it to the level you clicked."], "Water finds its own level, like a real lake.", (t) => t.archLandWater()),
+      step("Plant trees", "Plant", "archLand", S("#ar-landtools", "#ar-land"), ["Pick <b>Plant</b>, choose a tree and click on the island three or four times."], "Plants make the model come alive.", (t) => t.archPlants() >= 3), SEND, saveStep()] }),
+  H({ id: "h-t-twostory", level: "Advanced", minutes: "12-15", item: "Townhouse", title: "Two-storey townhouse", blurb: "A narrow two-storey house with a flat roof and a railing round the roof terrace. Learn upper levels and Railing.",
+    learn: ["Levels", "Raise the upper walls", "Railing", "Flat roof"],
+    steps: [nameStep("Townhouse", "Lopez, Maria, Townhouse"), ROOM(6100, 10900, "20' × 36'"), RAISE(),
+      step("Add the upper level", "Levels", "archLevel", S("#ar-addlevel"), ["Click <b>+ Level</b>. Level 2 starts with the same outline as Level 1."], "Each level has its own walls, doors and windows.", (t) => t.arch().levels.length >= 2),
+      RAISE(2), ROOF("flat", "Flat"),
+      step("A roof-terrace railing", "Railing", "archRail", S("#ar-rail"), ["Click <b>Railing</b> (J), pick a style, click one front corner of the roof and then the other."], "Railings keep people safe at the edge of a terrace.", (t) => a(t, "rails") > 0), SEND, saveStep()] }),
+  H({ id: "h-t-shop", level: "Proficient", minutes: "8-10", item: "Corner Shop", title: "Corner shop", blurb: "A small shop with big windows, a double door and a coloured front. Learn Picture windows, Double doors and wall colours.",
+    learn: ["Picture window", "Double door", "Wall colour"],
+    steps: [nameStep("Corner Shop", "Lopez, Maria, Corner Shop"), ROOM(9100, 7300, "30' × 24'"), RAISE(), WINDOWS(2, "Picture 72×48"), DOOR("Double door 60\"", "the front wall between the windows", (t) => t.archPreset(["dbl60"]).length > 0),
+      step("Colour the front", "Select → Colour", "archFinish", S("#ar-select"), ["Click <b>Select</b> (V) and click the front wall.", "In its panel, pick a bright <b>Colour</b>."], "Shops are bright so people notice them."), ROOF("flat", "Flat"), SEND, saveStep()] }),
+];
+
+export const TOOL_TUTORIALS = [...BEGINNER, ...ADVANCED, ...ARCH];

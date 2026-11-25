@@ -33,20 +33,34 @@ const listeners = new Set();
 export const store = {
   doc: newDoc(),
   preview: null, // a proposed doc while a command dialog is open
+  // Timeline rollback: the design shown as it was after the step with this sequence number
+  // (null: the whole design). Only the view changes; the design itself is never touched.
+  rollTo: null,
+  rolled: null,
   undoStack: [],
   redoStack: [],
-  get view() { return this.preview || this.doc; },
+  get view() { return this.preview || (this.rollTo != null && this.rolled) || this.doc; },
+  // show the design as it was after step `seq` (null: back to the latest step)
+  setRoll(seq) {
+    this.rollTo = seq == null ? null : seq;
+    this.rolled = this.rollTo == null ? null : rolledBack(this.doc, this.rollTo);
+    this.emit("roll");
+  },
+  // any edit goes on the whole design: leave the rolled-back view first
+  endRoll() { if (this.rollTo == null) return false; this.rollTo = null; this.rolled = null; return true; },
   on(fn) { listeners.add(fn); return () => listeners.delete(fn); },
   emit(kind) { for (const f of listeners) f(kind); },
   load(doc) {
     this.doc = migrate(doc);
     this.preview = null;
+    this.endRoll();
     this.undoStack = [];
     this.redoStack = [];
     this.emit("load");
   },
   // mutate a copy of the doc; push the old one on the undo stack
   update(fn, label = "Edit") {
+    this.endRoll();
     const next = clone(this.doc);
     const r = fn(next);
     if (r === false) return;
@@ -59,9 +73,10 @@ export const store = {
     return next;
   },
   // replace doc without history (live drags); call update() at the end
-  setTransient(doc) { this.preview = doc; this.emit("preview"); },
+  setTransient(doc) { this.endRoll(); this.preview = doc; this.emit("preview"); },
   setPreview(fn) {
     if (!fn) { if (this.preview) { this.preview = null; this.emit("preview"); } return; }
+    this.endRoll();
     const next = clone(this.doc);
     fn(next);
     this.preview = next;
@@ -78,6 +93,7 @@ export const store = {
   },
   undo() {
     if (!this.undoStack.length) return null;
+    this.endRoll();
     const { doc, label } = this.undoStack.pop();
     this.redoStack.push({ doc: this.doc, label });
     this.doc = doc;
@@ -87,6 +103,7 @@ export const store = {
   },
   redo() {
     if (!this.redoStack.length) return null;
+    this.endRoll();
     const { doc, label } = this.redoStack.pop();
     this.undoStack.push({ doc: this.doc, label });
     this.doc = doc;
@@ -340,8 +357,8 @@ export function resolveNode(node, doc) {
           n.axis = c && c.t === "line" ? { a: c.a, b: c.b } : null;
         }
       }
-    } else {
-      n.regions = [];
+    } else if (!(node.regions && node.regions.length)) {
+      n.regions = []; // (gears carry their own profile, with no sketch)
     }
     delete n.sketch;
     delete n.profiles;
