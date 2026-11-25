@@ -88,10 +88,11 @@ export function initToolSearch(app) {
         list = list.concat(adv);
       } catch (e) { console.error(e); }
     }
+    if (mode !== "arch") list.push({ id: "file-import-content", label: "Import into design", title: "Add a 3D model, SVG, DXF, or image", group: "Open/Export", run: () => app.insertFile("any") });
     // everything else, from the index: other modes, apps, Chisel's panel, the print sim's settings
     const have = new Set(list.map((t) => (t.group.split(" › ")[0] + "|" + t.label).toLowerCase()));
     for (const t of STATIC_TOOLS) {
-      if (t.sel === "#btn-toolsearch") continue;
+      if (t.sel === "#btn-toolsearch" || t.sel === "#bb-import") continue;
       const k = (t.group.split(" › ")[0] + "|" + t.label).toLowerCase();
       if (have.has(k)) continue;
       have.add(k);

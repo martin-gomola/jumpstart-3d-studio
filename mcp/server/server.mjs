@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { createLanEditor } from "./lan-editor.mjs";
 import { createArShares } from "./ar-shares.mjs";
+import { createSlicerHandoff } from "./slicer-handoff.mjs";
 import { createAgentTrace } from "./agent-trace.mjs";
 
 import { createServer } from "node:http";
@@ -645,7 +646,7 @@ async function serveStatic(req, res, pathname, networkEditor = false) {
     // the final shell payload rather than the file on disk.
     try {
       let shell = await readFile(file, "utf8");
-      const capabilityMeta = '<meta name="jumpstart-ar-sharing" content="1">' +
+      const capabilityMeta = '<meta name="jumpstart-ar-sharing" content="1"><meta name="jumpstart-slicer-handoff" content="1">' +
         (networkEditor ? '' : '<meta name="jumpstart-mcp-bridge" content="1">');
       shell = shell.includes("</head>")
         ? shell.replace("</head>", `${capabilityMeta}\n</head>`)
@@ -708,8 +709,13 @@ async function serveStatic(req, res, pathname, networkEditor = false) {
 }
 
 const handleAr = createArShares();
+const handleSlicer = createSlicerHandoff();
 const server = createServer((req, res) => {
   const pathname = new URL(req.url || "/", `http://${req.headers.host || `${HOST}:${PORT}`}`).pathname;
+  if (pathname === "/slicer-handoff" || pathname.startsWith("/slicer-handoff/")) {
+    void handleSlicer(req, res, pathname, allowedLocalRequest(req) && req.headers.origin === `http://${req.headers.host}`);
+    return;
+  }
   if (pathname === "/__mcp/ar" || pathname.startsWith("/ar/")) { void handleAr(req, res, pathname, allowedLocalRequest(req)); return; }
   if (pathname === "/__mcp/rpc") { void handleHttpRpc(req, res); return; }
   if (pathname.startsWith("/__mcp/")) { void handleBridge(req, res, pathname); return; }
@@ -737,7 +743,7 @@ for (const origin of lanOrigins) {
   if (!["http:", "https:"].includes(url.protocol) || url.origin !== origin) throw new Error("LAN origins must be HTTP(S) origins without paths or credentials");
 }
 if (lanPort && !lanOrigins.length) throw new Error("JUMPSTART_LAN_ORIGINS is required for network editor access");
-const lanServer = lanPort ? createLanEditor({ origins: lanOrigins, serveStatic, handleAr }) : null;
+const lanServer = lanPort ? createLanEditor({ origins: lanOrigins, serveStatic, handleAr, handleSlicer: createSlicerHandoff() }) : null;
 if (lanServer) {
   lanServer.on("error", error => { process.stderr.write(`JumpStart LAN editor failed: ${error.message}\n`); process.exitCode = 1; close(); });
   lanServer.listen(lanPort, process.env.JUMPSTART_LAN_HOST || "127.0.0.1");

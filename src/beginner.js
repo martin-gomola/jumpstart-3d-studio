@@ -160,7 +160,7 @@ export function initBeginner(app) {
     ribbon.append(host);
     ribbonView = mountBeginnerRibbon(host, {
       copy: () => copy(), paste: () => paste(), dup: () => dup(), del: () => del(),
-      sketch: () => app.advanced.createSketch(), sketch3d: () => app.sketch3d.open(), extrude: () => app.quickExtrude(), import: () => app.insertFile("any"),
+      sketch: () => app.advanced.createSketch(), sketch3d: () => app.sketch3d.open(), extrude: () => app.quickExtrude(),
       gridfinity: () => app.advanced.gridfinityPart(), drawer: () => app.mcp?.openWorkspace("drawer"), fastener: () => app.advanced.fastener(), gear: () => app.advanced.gear(), nameplate: () => app.advanced.namePlate(), knurl: () => app.advanced.knurl(), spring: () => app.advanced.spring(),
       group: () => group(), ungroup: () => ungroup(), hole: () => setHole(true), solid: () => setHole(false),
       align: () => app.advanced.align(), mirror: (anchor) => mirrorPopover(anchor), pattern: () => app.advanced.pattern(), drop: () => drop(), lock: () => toggleLock(),

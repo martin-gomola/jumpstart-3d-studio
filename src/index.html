@@ -76,14 +76,10 @@ button { cursor: pointer; }
 .topbar { display: flex; align-items: center; gap: 12px; padding: 0 12px; height: var(--ai-status-panelTop, 46px); background: var(--block); color: var(--block-ink); min-width: 0; padding-top: env(safe-area-inset-top, 0px); }
 .brand { display: flex; align-items: center; gap: 8px; min-width: 0; font: 700 18px/1 var(--f-label); letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; }
 .brand svg { flex: none; }
-.brand span { overflow: hidden; text-overflow: ellipsis; }
 .docname { min-width: 60px; width: 220px; max-width: 28vw; background: transparent; border: 1px solid transparent; border-radius: 4px; padding: 5px 7px; color: var(--block-ink); font-weight: 500; text-overflow: ellipsis; }
 .docname:hover { border-color: var(--block-2); }
 .docname:focus { background: var(--block-2); outline: none; border-color: var(--hover-line); }
-.autosave-btn { margin-left: 8px; font: 600 11px/1 var(--f-ui); padding: 4px 8px; border-radius: 999px; border: 1px solid #4a5869; background: transparent; color: #9fb0c2; cursor: pointer; white-space: nowrap; }
-.autosave-btn:hover { border-color: #7d8fa3; color: #dfe7f0; }
-.autosave-btn[aria-pressed="true"] { background: #1f7a45; border-color: #2a9a5a; color: #fff; }
-.savestate { flex: 0 1 22ch; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 11.5px; color: #9fb0c2; white-space: nowrap; }
+.savestate { flex: 0 1 16ch; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 11.5px; color: #9fb0c2; white-space: nowrap; }
 .spacer { flex: 1; }
 .modeswitch { display: inline-flex; background: #0f151c; border-radius: 999px; padding: 3px; gap: 2px; flex: none; }
 .modeswitch button { display: inline-flex; align-items: center; gap: 7px; border: 0; background: transparent; color: #aeb9c6; padding: 5px 14px; border-radius: 999px; font: 600 13.5px/1 var(--f-label); letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
@@ -105,8 +101,17 @@ button { cursor: pointer; }
 .tb-btn svg { width: 17px; height: 17px; }
 .menu-wrap { position: relative; }
 .menu { position: absolute; right: 0; top: calc(100% + 6px); background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: var(--r); box-shadow: 0 10px 30px rgba(20,30,45,.18); min-width: 230px; padding: 5px; z-index: 50; }
+#menu-theme, #menu-export { box-sizing: border-box; max-height: calc(100dvh - var(--ai-status-panelTop, 46px) - 16px); overflow: auto; }
+#menu-theme { width: min(300px, calc(100vw - 16px)); }
+#menu-theme .phone-history { display: none; }
+.file-actions .menu { right: auto; left: 0; width: min(300px, calc(100vw - 56px)); }
+.view-settings summary { padding: 8px 10px; border-radius: 4px; cursor: pointer; }
+.view-settings summary:hover { background: var(--accent-soft); }
+.view-settings[open] { border-bottom: 1px solid var(--line-2); margin-bottom: 4px; }
+@media (max-width: 960px) { .ts-btn-l { display: none; } }
 .menu button { display: flex; width: 100%; text-align: left; border: 0; background: none; padding: 8px 10px; border-radius: 4px; gap: 10px; align-items: baseline; }
-.menu button:hover { background: var(--accent-soft); }
+.menu button:disabled { opacity: .45; cursor: default; }
+.menu button:not(:disabled):hover { background: var(--accent-soft); }
 .menu small { color: var(--ink-3); margin-left: auto; font-size: 11px; }
 .menu .menu-head { padding: 6px 10px 2px; font: 600 11px/1.2 var(--f-label); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
 .menu .menu-note { padding: 4px 10px 6px; font-size: 11.5px; line-height: 1.4; color: var(--ink-3); max-width: 250px; }
@@ -504,7 +509,7 @@ input[type=range] { accent-color: var(--accent); width: 100%; min-width: 0; }
 :root[data-device="tablet"] .eye, :root[data-device="tablet"] .xbtn { width: 36px; height: 36px; }
 :root[data-device="tablet"] .btn { padding: 10px 16px; }
 :root[data-device="tablet"] .navbtns button { width: 44px; height: 40px; }
-:root[data-device="tablet"] #btn-keys, :root[data-device="tablet"] #btn-undo, :root[data-device="tablet"] #btn-redo { display: none; }
+:root[data-device="tablet"] #btn-undo, :root[data-device="tablet"] #btn-redo { display: none; }
 :root[data-device="tablet"] .topbar { gap: 6px; padding: 0 8px; }
 :root[data-device="tablet"] .docname { width: 150px; }
 @media (max-width: 1100px) { :root[data-device="tablet"] .modeswitch button { padding: 5px 9px; letter-spacing: .04em; } :root[data-device="tablet"] .docname { width: 110px; } }
@@ -577,13 +582,6 @@ input[type=range] { accent-color: var(--accent); width: 100%; min-width: 0; }
 .sp-msg { margin: 10px 0 0; font-size: 12.5px; color: #9fb0c2; min-height: 1.3em; max-width: 360px; }
 @media (prefers-reduced-motion: reduce) { .sp-grid, .sp-logo path { animation: none; opacity: 1; } }
 /* ---------------------------------------------------------------- full screen */
-#btn-full { gap: 6px; }
-#btn-full .fs-off, #btn-full .fs-lbl { display: none; }
-:root.is-full #btn-full .fs-on { display: none; }
-:root.is-full #btn-full .fs-off { display: block; }
-:root.is-full #btn-full .fs-lbl { display: inline; font-size: 12.5px; font-weight: 600; }
-:root.is-full #btn-full { background: #2d63c8; color: #fff; border-color: #2d63c8; }
-:root.is-full #btn-full:hover { background: #3a71d8; }
 .fs-tip { position: fixed; top: 54px; right: 14px; z-index: 120; max-width: 320px; background: #172231; color: #e9eef4; border-radius: 9px; padding: 12px 14px 12px 14px; font-size: 12.5px; line-height: 1.45; box-shadow: 0 10px 30px rgba(0,0,0,.3); }
 .fs-tip b { color: #fff; }
 .fs-tip::before { content: ""; position: absolute; top: -6px; right: var(--ax, 20px); width: 12px; height: 12px; background: #172231; transform: rotate(45deg); }
@@ -689,7 +687,6 @@ body.fp-on .toasts { position: fixed; z-index: 175 !important; }
 .rd-info { font-size: 12.5px; color: var(--ink-2); }
 .rd-btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
 /* ---------------------------------------------------------------- about */
-.about-btn { font: 600 12.5px/1 var(--f-label); letter-spacing: .08em; text-transform: uppercase; padding: 0 10px; width: auto !important; }
 .modal.about { width: min(680px, 100%); }
 .modal.v3d { width: min(1040px, 100%); max-height: 94vh; }
 .v3d-intro, .v3d-note { margin: 0 0 10px; color: var(--ink-2); font-size: 13px; line-height: 1.45; }
@@ -754,6 +751,9 @@ body.fp-on .toasts { position: fixed; z-index: 175 !important; }
 .modal header { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--line-2); }
 .modal header h2 { margin: 0; flex: 1; font: 600 20px/1 var(--f-label); letter-spacing: .06em; text-transform: uppercase; }
 .modal .mbody { padding: 14px 18px 18px; overflow: auto; }
+.modal.slicer-handoff { width: min(480px, 100%); }
+.slicer-handoff-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.slicer-handoff-actions a { text-decoration: none; }
 .modal.chisel-intro { width: min(520px, 100%); }
 .chisel-intro .ci-icon { display: grid; color: var(--amber); }
 :root[data-ui="contrast"] .chisel-intro .ci-icon { color: var(--accent); }
@@ -792,17 +792,16 @@ body.fp-on .toasts { position: fixed; z-index: 175 !important; }
 #snap-more[aria-expanded="true"] svg { transform: rotate(180deg); }
 /* responsive */
 /* the top bar compacts step by step so it always fits (three modes need the room) */
-@media (max-width: 1480px) { .savestate { display: none; } .docname { width: 150px; } }
+@media (max-width: 1200px) { .savestate { position: absolute; width: 1px; height: 1px; clip-path: inset(50%); } .docname { width: 150px; } }
 @media (max-width: 1340px) { .topbar .tb-btn .lbl { display: none; } .modeswitch button { padding: 5px 10px; } }
-@media (max-width: 1180px) { .topbar { gap: 8px; } .brand span { display: none; } .docname { width: 130px; } }
-@media (max-width: 960px) { .topbar { gap: 4px; } .docname { width: 96px; } .topbar .spacer { min-width: 0; } .modeswitch button { padding: 5px 8px; font-size: 12.5px; letter-spacing: .05em; } .modeswitch button::before { display: none; } .autosave-btn { padding-left: 6px; padding-right: 6px; } }
-@media (max-width: 860px) { #btn-keys { display: none; } }
-@media (max-width: 800px) { #btn-about, #btn-full, .autosave-btn, .docname { display: none; } .modeswitch button { padding: 5px 7px; font-size: 11.5px; letter-spacing: .02em; } .modeswitch { padding: 2px; } }
+@media (max-width: 1180px) { .topbar { gap: 8px; } .docname { width: 130px; } }
+@media (max-width: 960px) { .topbar { gap: 4px; } .docname { width: 96px; } .topbar .spacer { min-width: 0; } .modeswitch button { padding: 5px 8px; font-size: 12.5px; letter-spacing: .05em; } .modeswitch button::before { display: none; } }
+@media (max-width: 800px) { .docname { display: none; } .modeswitch button { padding: 5px 7px; font-size: 11.5px; letter-spacing: .02em; } .modeswitch { padding: 2px; } }
 @media (max-width: 480px) { .brand, #btn-redo { display: none; } .topbar { gap: 3px; padding-left: 6px; padding-right: 4px; } .modeswitch button { padding: 4px 6px; font-size: 11px; } }
-@media (max-width: 420px) { .topbar .tb-btn { padding-left: 4px; padding-right: 4px; } .modeswitch button { padding: 4px 5px; font-size: 10.5px; letter-spacing: 0; } .topbar .menu-wrap:has(#btn-theme) { display: none; } }
+@media (max-width: 420px) { .topbar .tb-btn { padding-left: 4px; padding-right: 4px; } .modeswitch button { padding: 4px 5px; font-size: 10.5px; letter-spacing: 0; } }
 @media (max-width: 860px) {
   .docname { width: 120px; }
-  .savestate, .brand span, .tb-btn .lbl { display: none; }
+  .tb-btn .lbl { display: none; }
   .side { position: absolute; top: 0; bottom: 0; z-index: 8; box-shadow: 0 0 30px rgba(0,0,0,.15); }
   .side.right { right: 0; }
   .side.left { left: 0; }
@@ -816,7 +815,7 @@ body.fp-on .toasts { position: fixed; z-index: 175 !important; }
 }
 @media (max-width: 560px) {
   .topbar { gap: 6px; padding-left: 8px; padding-right: 6px; }
-  .docname, .savestate { display: none; }
+  .docname { display: none; }
   .modeswitch button { padding: 5px 9px; font-size: 12.5px; letter-spacing: .04em; }
   .modeswitch button::before { display: none; }
   .tb-btn { padding: 6px 6px; }
@@ -1056,17 +1055,20 @@ body.s3d-on .tut-panel { z-index: 96; }
 .fp-tile svg { display: block; border-radius: 4px; }
 /* ---- Save (versions) and Tutorials */
 .docver { font: 600 11px/1 var(--f-mono, monospace); color: #cfe0ff; background: #2d63c8; border-radius: 999px; padding: 3px 7px; white-space: nowrap; }
-.tb-btn.save-btn, .tb-btn.tut-btn { display: inline-flex; align-items: center; gap: 5px; }
-.tb-btn.save-btn .lbl, .tb-btn.tut-btn .lbl { font-size: 12.5px; font-weight: 600; }
-.tb-btn.tut-btn { color: #ffd66b; }
-@media (max-width: 1760px) { .savestate { display: none; } }
-@media (max-width: 1660px) { #btn-projects .lbl, #btn-export .lbl { display: none; } .docname { width: 170px; } }
+.tb-btn.save-btn { display: inline-flex; align-items: center; gap: 5px; }
+.tb-btn.save-btn .lbl { font-size: 12.5px; font-weight: 600; }
+@media (max-width: 1200px) { #btn-export .lbl { display: none; } .docname { width: 170px; } }
 @media (max-width: 1340px) and (min-width: 1101px) { .topbar .tb-btn.save-btn .lbl { display: inline; } }
 @media (max-width: 1340px) { .docname { width: 140px; } }
-@media (max-width: 1480px) { .topbar .brand span { display: none; } }
-@media (max-width: 560px) { #btn-tutorials { display: none; } .docver { display: none; } }
+@media (max-width: 560px) { .docver { display: none; } }
 @media (max-width: 420px) { .topbar { gap: 3px; } .topbar .tb-btn { padding-left: 3px; padding-right: 3px; } }
-@media (max-width: 1100px) { .topbar .brand { display: none; } #btn-keys { display: none; } .docname { width: 110px; } .modeswitch button { padding: 5px 8px; letter-spacing: .04em; } .autosave-btn { padding-left: 6px; padding-right: 6px; } }
+@media (max-width: 1100px) { .topbar .brand { display: none; } .docname { width: 110px; } .modeswitch button { padding: 5px 8px; letter-spacing: .04em; } }
+@media (max-width: 480px) {
+  .topbar .spacer, .topbar > #btn-undo { display: none; }
+  .topbar .modeswitch { margin-inline: auto; }
+  :root .topbar .modeswitch button { padding-inline: 3px; font-size: 11px; letter-spacing: 0; }
+  #menu-theme .phone-history { display: block; }
+}
 .tut-modal { width: min(780px, 100%); }
 .tut-intro { color: var(--ink-2); margin: 0 0 10px; }
 .tut-remind { background: var(--panel-2); border: 1px solid var(--line); border-left: 4px solid #e8a317; border-radius: 6px; padding: 8px 12px; margin: 0 0 12px; color: var(--ink-2); line-height: 1.5; }
@@ -1267,9 +1269,29 @@ html.ios .topbar { padding-left: max(12px, env(safe-area-inset-left, 0px)); padd
     </div>
     <input id="docname" class="docname" aria-label="Design name" value="Untitled design">
     <span id="docver" class="docver" hidden>v1</span>
-    <button class="tb-btn save-btn" id="btn-save" title="Save (Ctrl+S): each save is a new version, v1, v2, v3…"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h11l3 3v15H5z"/><path d="M8 3v6h8V3"/><rect x="8" y="13" width="8" height="6" rx="1"/></svg><span class="lbl">Save</span></button>
+    <button class="tb-btn save-btn" id="btn-save" aria-label="Save" title="Save (Ctrl+S): each save is a new version, v1, v2, v3…"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h11l3 3v15H5z"/><path d="M8 3v6h8V3"/><rect x="8" y="13" width="8" height="6" rx="1"/></svg><span class="lbl">Save</span></button>
+    <div class="menu-wrap file-actions">
+      <button class="tb-btn" id="btn-export" aria-label="Open/Export" aria-expanded="false" aria-controls="menu-export" title="Open a project file, save a copy, or export"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg><span class="lbl">Open/Export</span></button>
+      <div class="menu" id="menu-export" hidden>
+        <button id="btn-projects">Designs</button>
+        <button data-act="import">Open a project file…</button>
+        <button id="file-import-content" data-act="import-content" title="Add to the current design: STL, 3MF, STEP, SVG, DXF, or an image">Import into design…</button>
+        <button data-act="json">Save Project File <small>.json</small></button>
+        <hr>
+        <div id="file-export-heading" class="menu-head">Export</div>
+        <button data-act="ar">View in AR / QR <small>iPhone</small></button>
+        <button data-act="stl">STL for 3D printing <small>.stl</small></button>
+        <button data-act="3mf">3MF for 3D printing (with colors) <small>.3mf</small></button>
+        <button data-act="bambu">Open in Bambu Studio… <small>.3mf</small></button>
+        <button data-act="step">STEP for other CAD <small>.step</small></button>
+        <button data-act="dxf" title="Every sketch, flat, for laser or vinyl cutters and other CAD">Sketches as DXF <small>.dxf</small></button>
+        <button data-act="laser-svg" id="exp-laser-svg" title="Flat parts (like a 3 mm acrylic lamp panel) as a laser file: the outline and holes to cut (red), recesses in the top to engrave (black)">Laser cut file <small>.svg</small></button>
+        <button data-act="laser-dxf" id="exp-laser-dxf" title="Flat parts as a laser file with layers CUT and ENGRAVE">Laser cut file <small>.dxf</small></button>
+        <hr>
+        <button data-act="savedl" id="save-dl-toggle" role="menuitemcheckbox" aria-checked="true" title="Every Save (Ctrl+S) also downloads the project file (.json) to your Downloads, so work isn't lost when the browser is cleared">Download a file on every Save <small>on</small></button>
+      </div>
+    </div>
     <span id="savestate" class="savestate" role="status"></span>
-    <button id="btn-autosave" class="autosave-btn" aria-pressed="false" title="Autosave backups: copies of your work every few moments, offered back if the app crashes or closes before saving">Autosave: Off</button>
     <div class="spacer"></div>
     <div class="modeswitch" role="group" aria-label="Mode">
       <button id="mode-beginner" aria-pressed="true" title="Drag shapes and combine them">Beginner</button>
@@ -1286,58 +1308,51 @@ html.ios .topbar { padding-left: max(12px, env(safe-area-inset-left, 0px)); padd
     <button class="tb-btn" id="btn-undo" title="Undo (Ctrl+Z)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg></button>
     <button class="tb-btn" id="btn-redo" title="Redo (Ctrl+Shift+Z)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h3"/></svg></button>
     <div class="menu-wrap">
-      <button class="tb-btn" id="btn-theme" aria-haspopup="true" title="Theme and performance"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z" fill="currentColor"/></svg></button>
-      <div class="menu" id="menu-theme" role="menu" hidden>
-        <button data-theme="system" role="menuitemradio">Match my device</button>
-        <button data-theme="light" role="menuitemradio">Light</button>
-        <button data-theme="dark" role="menuitemradio">Dark</button>
-        <button data-theme="contrast" role="menuitemradio">High contrast</button>
+      <button class="tb-btn" id="btn-theme" type="button" aria-label="More actions" aria-expanded="false" aria-controls="menu-theme" title="More actions"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.75"/><circle cx="12" cy="12" r="1.75"/><circle cx="19" cy="12" r="1.75"/></svg></button>
+      <div class="menu" id="menu-theme" hidden>
+        <div class="phone-history">
+          <button id="more-undo" type="button" disabled>Undo</button>
+          <button id="more-redo" type="button" disabled>Redo</button>
+          <hr>
+        </div>
+        <details class="view-settings">
+          <summary>View settings</summary>
+          <div role="group" aria-label="View settings">
+            <button data-theme="system" role="menuitemradio">Match my device</button>
+            <button data-theme="light" role="menuitemradio">Light</button>
+            <button data-theme="dark" role="menuitemradio">Dark</button>
+            <button data-theme="contrast" role="menuitemradio">High contrast</button>
+            <hr>
+            <div class="menu-head">Layout</div>
+            <button data-layout="default" role="menuitemradio" title="Tools across the top, as JumpStart 3D has always been">Default <small>tools on top</small></button>
+            <button data-layout="simple" role="menuitemradio" title="Bigger buttons with names, no group titles: easy to read and tap">Simplified <small>big, labelled buttons</small></button>
+            <button data-layout="clean" role="menuitemradio" title="A slim column of icons on the left (hover for names), a quieter top bar and more room to work">Clean <small>icon rail on the left</small></button>
+            <button data-layout="classic" role="menuitemradio" title="A labelled tool palette down the right side, like many desktop CAD programs">Classic CAD <small>tool palette on the right</small></button>
+            <button data-layout="tablet" role="menuitemradio" title="Big, touch-sized tools along the bottom, near your thumbs">Tablet <small>tools at the bottom</small></button>
+            <div class="menu-note">Only where the tools sit changes; every tool is in every layout.</div>
+            <hr>
+            <div class="menu-head">Device</div>
+            <button data-device="tablet" role="menuitemcheckbox" aria-checked="false" title="For iPad and other tablets: big touch targets, the Apple Pencil draws and picks precisely, fingers move the view, and keys on screen">Tablet &amp; Pencil mode <small>iPad, Apple Pencil</small></button>
+            <div class="menu-note">Pencil: click, draw and drag precisely. One finger orbits, two pan and zoom. Two-finger tap undoes, three-finger tap redoes, a long press opens the menu.</div>
+            <hr>
+            <div class="menu-head">Performance</div>
+            <button data-perf="auto" role="menuitemradio" title="Picks a mode for this computer, and switches to a faster one if things get slow">Auto <small id="perf-auto-note"></small></button>
+            <button data-perf="normal" role="menuitemradio" title="The lightest drawing, for slower or older computers">Normal <small>slower computers</small></button>
+            <button data-perf="high" role="menuitemradio" title="Fewer pixels while you move the view; lighter shadows">High <small>most laptops, Chromebooks</small></button>
+            <button data-perf="ultra" role="menuitemradio" title="The sharpest picture and softest shadows, for powerful computers">Ultra <small>powerful computers</small></button>
+            <div class="menu-note">Every tool works the same in every mode; only how the view is drawn changes.</div>
+            <hr>
+            <div class="menu-head">Sketch lines</div>
+            <div class="sk-widths" id="sk-widths" role="group" aria-label="Sketch line width"></div>
+            <div class="sk-colors" id="sk-colors" role="group" aria-label="Sketch line colour"></div>
+          </div>
+        </details>
+        <button id="btn-autosave" aria-pressed="false" title="Autosave backups: copies of your work every few moments, offered back if the app crashes or closes before saving">Autosave: Off</button>
+        <button id="btn-full" type="button" aria-pressed="false">Full screen</button>
         <hr>
-        <div class="menu-head">Layout</div>
-        <button data-layout="default" role="menuitemradio" title="Tools across the top, as JumpStart 3D has always been">Default <small>tools on top</small></button>
-        <button data-layout="simple" role="menuitemradio" title="Bigger buttons with names, no group titles: easy to read and tap">Simplified <small>big, labelled buttons</small></button>
-        <button data-layout="clean" role="menuitemradio" title="A slim column of icons on the left (hover for names), a quieter top bar and more room to work">Clean <small>icon rail on the left</small></button>
-        <button data-layout="classic" role="menuitemradio" title="A labelled tool palette down the right side, like many desktop CAD programs">Classic CAD <small>tool palette on the right</small></button>
-        <button data-layout="tablet" role="menuitemradio" title="Big, touch-sized tools along the bottom, near your thumbs">Tablet <small>tools at the bottom</small></button>
-        <div class="menu-note">Only where the tools sit changes; every tool is in every layout.</div>
-        <hr>
-        <div class="menu-head">Device</div>
-        <button data-device="tablet" role="menuitemcheckbox" aria-checked="false" title="For iPad and other tablets: big touch targets, the Apple Pencil draws and picks precisely, fingers move the view, and keys on screen">Tablet &amp; Pencil mode <small>iPad, Apple Pencil</small></button>
-        <div class="menu-note">Pencil: click, draw and drag precisely. One finger orbits, two pan and zoom. Two-finger tap undoes, three-finger tap redoes, a long press opens the menu.</div>
-        <hr>
-        <div class="menu-head">Performance</div>
-        <button data-perf="auto" role="menuitemradio" title="Picks a mode for this computer, and switches to a faster one if things get slow">Auto <small id="perf-auto-note"></small></button>
-        <button data-perf="normal" role="menuitemradio" title="The lightest drawing, for slower or older computers">Normal <small>slower computers</small></button>
-        <button data-perf="high" role="menuitemradio" title="Fewer pixels while you move the view; lighter shadows">High <small>most laptops, Chromebooks</small></button>
-        <button data-perf="ultra" role="menuitemradio" title="The sharpest picture and softest shadows, for powerful computers">Ultra <small>powerful computers</small></button>
-        <div class="menu-note">Every tool works the same in every mode; only how the view is drawn changes.</div>
-        <hr>
-        <div class="menu-head">Sketch lines</div>
-        <div class="sk-widths" id="sk-widths" role="group" aria-label="Sketch line width"></div>
-        <div class="sk-colors" id="sk-colors" role="group" aria-label="Sketch line colour"></div>
-        <div class="menu-note">How sketch lines look in Advanced, Beginner and Chisel. Thinner lines make small profiles easier to pick.</div>
-      </div>
-    </div>
-    <button class="tb-btn tut-btn" id="btn-tutorials" title="Tutorials: step-by-step projects for Beginner and Advanced"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c3 2.5 9 2.5 12 0v-5"/><path d="M22 9v6"/></svg><span class="lbl">Tutorials</span></button>
-    <button class="tb-btn about-btn" id="btn-about" title="About __JUMPSTART_PRODUCT_NAME__: versions, features and help">About</button>
-    <button class="tb-btn" id="btn-keys" title="Keyboard shortcuts (?)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg></button>
-    <button class="tb-btn" id="btn-full" title="Full screen" aria-label="Full screen" aria-pressed="false"><svg class="fs-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg><svg class="fs-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg><span class="fs-lbl">Exit full screen</span></button>
-    <button class="tb-btn" id="btn-projects" title="Your designs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span class="lbl">Designs</span></button>
-    <div class="menu-wrap">
-      <button class="tb-btn" id="btn-export" aria-haspopup="true" title="Open a project file, save a copy, or export"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg><span class="lbl">Open/Export</span></button>
-      <div class="menu" id="menu-export" hidden>
-        <button data-act="ar">View in AR / QR <small>iPhone</small></button>
-        <button data-act="stl">STL for 3D printing <small>.stl</small></button>
-        <button data-act="3mf">3MF for 3D printing (with colors) <small>.3mf</small></button>
-        <button data-act="step">STEP for other CAD <small>.step</small></button>
-        <button data-act="dxf" title="Every sketch, flat, for laser or vinyl cutters and other CAD">Sketches as DXF <small>.dxf</small></button>
-        <button data-act="laser-svg" id="exp-laser-svg" title="Flat parts (like a 3 mm acrylic lamp panel) as a laser file: the outline and holes to cut (red), recesses in the top to engrave (black)">Laser cut file <small>.svg</small></button>
-        <button data-act="laser-dxf" id="exp-laser-dxf" title="Flat parts as a laser file with layers CUT and ENGRAVE">Laser cut file <small>.dxf</small></button>
-        <hr>
-        <button data-act="json">Save Project File <small>.json</small></button>
-        <button data-act="import">Open a project file…</button>
-        <hr>
-        <button data-act="savedl" id="save-dl-toggle" role="menuitemcheckbox" aria-checked="true" title="Every Save (Ctrl+S) also downloads the project file (.json) to your Downloads, so work isn't lost when the browser is cleared">Download a file on every Save <small>on</small></button>
+        <button id="btn-tutorials" type="button">Tutorials</button>
+        <button id="btn-keys" type="button">Keyboard shortcuts <small>?</small></button>
+        <button id="btn-about" type="button">About JumpStart 3D Studio</button>
       </div>
     </div>
   </header>

@@ -2,7 +2,7 @@
 // ribbon runs out of room (lowest first); sections without it always stay open.
 export const BEGINNER_SECTIONS = [
   { id: "edit", title: "Edit", tools: ["copy", "paste", "dup", "del"] },
-  { id: "create", title: "Create", fold: 5, tools: ["sketch", "sketch3d", "extrude", "import"] },
+  { id: "create", title: "Create", fold: 5, tools: ["sketch", "sketch3d", "extrude"] },
   { id: "parts", title: "Parts", fold: 1, tools: ["gridfinity", "drawer", "fastener", "gear", "nameplate", "knurl", "spring"] },
   { id: "combine", title: "Combine", tools: ["group", "ungroup", "hole", "solid"] },
   { id: "arrange", title: "Arrange", fold: 4, tools: ["align", "mirror", "pattern", "drop", "lock"] },

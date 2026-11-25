@@ -5,6 +5,7 @@ import { ICON } from "./icons.js";
 import { initRecovery } from "./recovery.js";
 import { selectExportBodies } from "./bodyRoles.js";
 import { packMesh, unpackMesh } from "./meshpack.js";
+import { openSlicerHandoff } from "./slicer-handoff.jsx";
 
 const LS_INDEX = "workplane.index.v1";
 const LS_DOC = "workplane.doc.v1.";
@@ -292,8 +293,13 @@ export function initProjects(app) {
       el("div", { class: "mbody" }, el("p", { class: "hint", style: { margin: "0 0 12px", color: "var(--ink-3)" } }, where), grid));
     back.append(modal);
     document.body.append(back);
-    const close = () => back.remove();
-    back.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
+    modal.querySelector(".xbtn").focus();
+    const close = () => { back.remove(); $("btn-export").focus(); };
+    back.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape") return;
+      e.stopPropagation();
+      close();
+    });
     await saveNow();
     const list = await listAll();
     grid.innerHTML = "";
@@ -383,7 +389,7 @@ export function initProjects(app) {
   };
   function renderScope() {
     let box = $("export-scope");
-    if (!box) { box = el("div", { id: "export-scope", class: "exscope", role: "radiogroup", "aria-label": "Bodies to export" }); menu.prepend(box, el("hr")); }
+    if (!box) { box = el("div", { id: "export-scope", class: "exscope", role: "radiogroup", "aria-label": "Bodies to export" }); $("file-export-heading").after(box); }
     const nSel = selectedSolids().length, nAll = allSolids().length;
     box.innerHTML = "";
     box.append(el("div", { class: "exhead" }, "Bodies to export"));
@@ -541,7 +547,7 @@ export function initProjects(app) {
   }
   async function makeZipBytes(files) { return new Uint8Array(await makeZip(files).arrayBuffer()); }
   async function export3MF() {
-    const bytes = threeMFBytes(await exportItems());
+    const bytes = threeMFBytes();
     if (!bytes) { app.toast("Nothing to export yet. Holes on their own aren't exported."); return; }
     await offerModel(exportName() + ".3mf", await bytes);
     app.onExport && app.onExport("3mf");
@@ -587,25 +593,45 @@ export function initProjects(app) {
     };
     r.readAsText(file);
   }
-  const menu = $("menu-export");
-  $("btn-export").onclick = () => {
+  const menu = $("menu-export"), fileButton = $("btn-export");
+  function showFileMenu(open) {
+    menu.hidden = !open;
+    fileButton.setAttribute("aria-expanded", String(open));
+  }
+  fileButton.parentElement.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || menu.hidden) return;
+    e.preventDefault();
+    e.stopPropagation();
+    showFileMenu(false);
+    fileButton.focus();
+  });
+  window.addEventListener("pointerdown", (e) => {
+    if (!menu.hidden && !menu.contains(e.target) && !fileButton.contains(e.target)) showFileMenu(false);
+  });
+  fileButton.onclick = () => {
     // files hold the finished design: leave the stepped-back timeline view first
     if (store.rollTo != null) { app.timelineRoll && app.timelineRoll.stop(); store.setRoll(null); app.toast("Back to the last step: files hold the finished design."); }
-    menu.hidden = !menu.hidden;
+    showFileMenu(menu.hidden);
     // default: just the selection if something is selected, otherwise every body
     if (!menu.hidden) { exportScope = selectedSolids().length ? "sel" : "all"; renderScope(); }
   };
   menu.addEventListener("click", (e) => {
     const a = e.target.closest("button")?.dataset.act;
     if (!a) return;
-    menu.hidden = true;
+    showFileMenu(false);
+    fileButton.focus();
     if (a === "stl") exportSTL();
     if (a === "3mf") export3MF();
+    if (a === "bambu") {
+      const bodies = exportBodies();
+      openSlicerHandoff(() => threeMFBytes(bodies), exportName() + ".3mf");
+    }
     if (a === "step") exportSTEP();
     if (a === "dxf") app.advanced.exportSketchesDXF(null);
     if (a === "laser-svg" || a === "laser-dxf") exportLaser(a === "laser-svg" ? "svg" : "dxf");
     if (a === "json") exportJSON();
     if (a === "import") $("file-import").click();
+    if (a === "import-content" && app.mode !== "arch") app.insertFile("any");
     if (a === "savedl") {
       const on = !saveDownloads();
       try { localStorage.setItem(SAVE_DL_KEY, on ? "on" : "off"); } catch (e) {}
@@ -615,7 +641,7 @@ export function initProjects(app) {
   });
   renderSaveDl();
   $("file-import").onchange = (e) => { const f = e.target.files[0]; if (f) importJSON(f); e.target.value = ""; };
-  $("btn-projects").onclick = () => openModal();
+  $("btn-projects").onclick = () => { showFileMenu(false); openModal(); };
   window.addEventListener("beforeunload", () => { if (dirty) saveNow(); });
 
   return {

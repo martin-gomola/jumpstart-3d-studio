@@ -8323,13 +8323,6 @@ export function initAdvanced(app) {
           { id: "sk-fh-smooth", label: "Smoothing: " + smLabel, title: "How much to even out the wobble of your hand", icon: "spline", dropdown: SM.map(([v, n]) => ({ id: "sk-fh-sm-" + n.toLowerCase(), label: n, icon: "spline", on: Math.abs(v - fo.smooth) < 0.01, fn: () => { fo.smooth = v; app.onSketchTool && app.onSketchTool("freehand"); } })) },
         ]);
       }
-      group("Insert", "sketch", [
-        { id: "sk-insert", label: "Insert", title: "Insert an SVG, DXF or picture into this sketch", icon: "import", dropdown: [
-          { id: "sk-ins-svg", label: "SVG drawing", title: "Insert an SVG drawing into this sketch", icon: "svgfile", fn: () => app.insertFile("svg") },
-          { id: "sk-ins-dxf", label: "DXF drawing", title: "Insert a DXF drawing into this sketch", icon: "dxffile", fn: () => app.insertFile("dxf") },
-          { id: "sk-ins-img", label: "Image to trace", title: "Place a picture on this sketch plane to trace over", icon: "image", fn: () => app.insertFile("image") },
-        ] },
-      ]);
       const CICON = { coincident: "cCoincident", horizontal: "cHorizontal", vertical: "cVertical", parallel: "cParallel", perpendicular: "cPerpendicular", tangent: "cTangent", concentric: "cConcentric", equal: "cEqual", midpoint: "cMidpoint" };
       const cTool = tool.startsWith("c-") ? tool : null;
       group("Constrain", "sketch", [
@@ -8483,17 +8476,6 @@ export function initAdvanced(app) {
         { id: "ad-plane-off", label: "Offset plane", title: "Plane parallel to a plane or face", icon: "planeOffset", fn: () => offsetPlaneCmd() },
         { id: "ad-plane-ang", label: "Plane at angle", title: "Plane through an axis or edge, at an angle", icon: "planeAngle", fn: () => anglePlaneCmd() },
         { id: "ad-plane-mid", label: "Midplane", title: "Plane halfway between two faces", icon: "planeMid", fn: () => midPlaneCmd() },
-      ] },
-    ]);
-    group("Insert", "", [
-      { id: "ad-insert", label: "Insert", title: "Insert an SVG, DXF or picture", icon: "import", dropdown: [
-        { id: "ad-ins-svg", label: "SVG drawing", title: "Insert an SVG drawing as a sketch", icon: "svgfile", fn: () => insertFile("svg") },
-        { id: "ad-ins-dxf", label: "DXF drawing", title: "Insert a DXF drawing as a sketch", icon: "dxffile", fn: () => insertFile("dxf") },
-        { id: "ad-ins-img", label: "Image on a face", title: "Put a picture on a flat face of a body (or the workplane) to trace over by hand or with Auto trace", icon: "image", fn: () => insertFile("image") },
-        { id: "ad-ins-fast", label: "Fasteners (bolts, nuts…)", title: "Parts library: bolts, screws, nuts, washers, heat-set inserts and pins in metric and inch sizes, with optional modeled threads", icon: "thread", fn: () => fastenerCmd() },
-        { id: "ad-ins-hinge", label: "Quick Hinge", title: "Ready-made hinges: print-in-place, pin or living", icon: "hinge", fn: () => hingeCmd() },
-        { id: "ad-ins-gear", label: "Gears", title: "Gear library: accurate involute spur gears, gear pairs, ring gears, rack and pinion and planetary sets, ready for a motion study and 3D printing", icon: "gear", fn: () => gearCmd() },
-        { id: "ad-ins-model", label: "STL / 3MF / STEP model", title: "Import a 3D model: an STL or 3MF mesh, a STEP solid, or a Layerscape 3D print kit (.zip or .3mf, one object per part)", icon: "import", fn: () => insertFile("model") },
       ] },
     ]);
     group("Modify", "", [

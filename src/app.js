@@ -181,7 +181,6 @@ app.voxel = initVoxel(app);
   // Save makes a new version (v1, v2...); the number shows next to the name
   app.onVersion = () => app.refreshUI && app.refreshUI("version");
   $("btn-save").onclick = () => app.projects.saveVersion();
-  $("btn-tutorials").onclick = () => app.tutorials.open();
   app.flexigen = initFlexiGen(app);
   app.floorplan = initFloorPlan(app);
   app.meshstep = initMeshStep(app);
@@ -268,17 +267,43 @@ app.voxel = initVoxel(app);
   app.syncSnapMenu = syncSnapMenu;
   // the sketch palette's snap checkbox drives the same setting
   Object.defineProperty(app.sketcher, "snapOn", { get: () => app.snapOn, set: (v) => app.setSnap(v) });
-  // theme menu
-  const tmenu = $("menu-theme");
-  $("btn-theme").onclick = () => { tmenu.hidden = !tmenu.hidden; };
-  tmenu.addEventListener("click", (e) => { const b = e.target.closest("button"); const t = b?.dataset.theme, pf = b?.dataset.perf, ly = b?.dataset.layout, dv = b?.dataset.device; if (t) { app.setTheme(t); tmenu.hidden = true; } else if (pf) { app.setPerf(pf); tmenu.hidden = true; } else if (ly) { app.setLayout(ly); tmenu.hidden = true; } else if (dv) { app.setTabletMode(!app.tabletOn); tmenu.hidden = true; } });
-  window.addEventListener("pointerdown", (e) => { if (!tmenu.hidden && !tmenu.contains(e.target) && !e.target.closest("#btn-theme")) tmenu.hidden = true; });
+  const tmenu = $("menu-theme"), more = $("btn-theme");
+  function showMore(open, restoreFocus = false) {
+    tmenu.hidden = !open;
+    more.setAttribute("aria-expanded", String(open));
+    if (!open) {
+      tmenu.querySelector("details").open = false;
+      if (restoreFocus) more.focus();
+    }
+  }
+  more.onclick = () => showMore(tmenu.hidden);
+  tmenu.addEventListener("click", (e) => {
+    const data = e.target.closest("button")?.dataset;
+    if (data?.theme) app.setTheme(data.theme);
+    else if (data?.perf) app.setPerf(data.perf);
+    else if (data?.layout) app.setLayout(data.layout);
+    else if (data?.device) app.setTabletMode(!app.tabletOn);
+    else return;
+    showMore(false, true);
+  });
+  window.addEventListener("pointerdown", (e) => {
+    if (!tmenu.hidden && !tmenu.contains(e.target) && !more.contains(e.target)) showMore(false);
+  });
+  more.parentElement.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || tmenu.hidden) return;
+    e.preventDefault();
+    e.stopPropagation();
+    showMore(false, true);
+  });
+  $("btn-tutorials").onclick = () => { showMore(false, true); app.tutorials.open(); };
+  $("more-undo").onclick = () => { showMore(false, true); app.undo(); };
+  $("more-redo").onclick = () => { showMore(false, true); app.redo(); };
   // sketch line width and colour (the menu stays open so choices can be compared)
   const hex = (n) => "#" + n.toString(16).padStart(6, "0");
   $("sk-widths").append(...SKETCH_WIDTHS.map(([k, label, w]) => el("button", { "data-skw": k, role: "menuitemradio", title: label + " sketch lines", onclick: (e) => { e.stopPropagation(); app.setSketchStyle({ width: k }); } }, el("i", { style: { height: Math.max(1, w) + "px", opacity: w < 1 ? 0.7 : 1 } }), label.replace("Extra thick", "Extra"))));
   $("sk-colors").append(...SKETCH_COLORS.map(([k, label, c]) => el("button", { "data-skc": k, role: "menuitemradio", class: c == null ? "sk-theme" : "", title: label + (c == null ? " (follows Light, Dark or High contrast)" : ""), "aria-label": label, onclick: (e) => { e.stopPropagation(); app.setSketchStyle({ color: k }); } }, el("span", { style: c == null ? {} : { background: hex(c) } }))));
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if (app.themePref === "system") app.setTheme("system"); });
-  $("btn-keys").onclick = () => app.showShortcuts();
+  $("btn-keys").onclick = () => { showMore(false, true); app.showShortcuts(); };
   // Full screen, like a video player's. Esc stays with the tools: where the browser allows it the
   // Esc key is kept for the app (hold Esc to leave), and the highlighted button always goes back.
   const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
@@ -286,7 +311,7 @@ app.voxel = initVoxel(app);
     const on = !!fsEl();
     document.documentElement.classList.toggle("is-full", on);
     $("btn-full").setAttribute("aria-pressed", on);
-    $("btn-full").title = on ? "Exit full screen (back to normal size)" : "Full screen";
+    $("btn-full").textContent = on ? "Exit full screen" : "Full screen";
     if (!on) { document.querySelector(".fs-tip")?.remove(); try { navigator.keyboard && navigator.keyboard.unlock(); } catch (e) {} }
   };
   // iPhone has no full screen for web pages (Add to Home Screen gives the full screen there)
@@ -304,32 +329,29 @@ app.voxel = initVoxel(app);
     try { if (navigator.keyboard && navigator.keyboard.lock) { await navigator.keyboard.lock(["Escape"]); escKept = true; } } catch (e) {}
     const tip = el("div", { class: "fs-tip", role: "status" },
       el("div", { html: escKept
-        ? "<b>Full screen.</b> Esc still works for your tools. To go back to normal size, click the blue <b>Exit full screen</b> button at the top, or hold Esc for a moment."
-        : "<b>Full screen.</b> To go back to normal size, click the blue <b>Exit full screen</b> button at the top. In this browser, Esc also leaves full screen." }),
+        ? "<b>Full screen.</b> Esc still works for your tools. To go back to normal size, choose <b>Exit full screen</b> from More actions, or hold Esc for a moment."
+        : "<b>Full screen.</b> To go back to normal size, choose <b>Exit full screen</b> from More actions. In this browser, Esc also leaves full screen." }),
       el("button", { onclick: () => tip.remove() }, "Got it"));
     document.querySelector(".fs-tip")?.remove();
     document.body.append(tip);
     // point the tip at the button
     requestAnimationFrame(() => {
-      const r = $("btn-full").getBoundingClientRect(), tr = tip.getBoundingClientRect();
+      const r = more.getBoundingClientRect(), tr = tip.getBoundingClientRect();
       const right = Math.max(8, innerWidth - r.right - 8);
       tip.style.top = r.bottom + 10 + "px"; tip.style.right = right + "px";
       tip.style.setProperty("--ax", Math.max(10, Math.min(tr.width - 22, innerWidth - right - (r.left + r.width / 2) - 6)) + "px");
     });
     setTimeout(() => tip.remove(), 9000);
   };
-  $("btn-full").onclick = () => app.toggleFullscreen();
-  $("btn-about").onclick = () => app.showAbout();
+  $("btn-full").onclick = () => { showMore(false, true); app.toggleFullscreen(); };
+  $("btn-about").onclick = () => { showMore(false, true); app.showAbout(); };
   loadPrefs();
   vp.onContext = (e) => app.contextMenu && app.contextMenu(e);
   // Tablet & Pencil mode: a two-finger tap undoes, a three-finger tap redoes
   vp.onFingerTap = (n) => { if (n === 2) app.undo(); else if (n >= 3) app.redo(); };
 
   document.addEventListener("keydown", onKey);
-  window.addEventListener("pointerdown", (e) => {
-    const menu = $("menu-export");
-    if (!menu.hidden && !menu.contains(e.target) && e.target.closest("#btn-export") == null) menu.hidden = true;
-  });
+
 
   app.projects.start().then(() => {
     app.setMode(store.doc.mode || "beginner", true);
@@ -482,7 +504,7 @@ function loadPrefs() {
   app.tabletPrevLayout = p.tabletPrevLayout || null;
   app.setTabletMode(!!p.tablet, true);
   // an iPad (or other tablet) that hasn't chosen yet: suggest Tablet & Pencil mode once
-  if (p.tablet === undefined && isTablet()) setTimeout(() => app.toast("On an iPad or tablet? Turn on Tablet & Pencil mode in the theme menu (◐): fingers move the view, the Apple Pencil draws and picks precisely."), 4000);
+  if (p.tablet === undefined && isTablet()) setTimeout(() => app.toast("On an iPad or tablet? Turn on Tablet & Pencil mode in More actions under View settings: fingers move the view, the Apple Pencil draws and picks precisely."), 4000);
   // realistic lighting starts off (faster); it stays on only for someone who turned it on themselves
   app.setLighting(p.lightOn === true, true);
   app.setAppearances(p.appear !== false, true);
@@ -552,10 +574,10 @@ function onSlow() {
     const next = PERF_ORDER[i + 1];
     try { localStorage.setItem(PERF_AUTO_KEY, next); } catch (e) {}
     app.setPerf("auto", true);
-    app.toast("Switched to " + PERF_NAMES[next] + " to keep things smooth. You can change it in the theme menu (◐).");
+    app.toast("Switched to " + PERF_NAMES[next] + " to keep things smooth. You can change it in More actions under View settings.");
   } else if (app.perfPref !== "auto" && i < 2 && !slowTold) {
     slowTold = true;
-    app.toast("Things look slow on this computer. Try " + (i === 0 ? "High or Normal" : "Normal") + " in the theme menu (◐): " + (i === 0 ? "they draw" : "it draws") + " less, and every tool still works.");
+    app.toast("Things look slow on this computer. Try " + (i === 0 ? "High or Normal" : "Normal") + " in More actions under View settings: " + (i === 0 ? "they draw" : "it draws") + " less, and every tool still works.");
   }
 }
 
@@ -587,7 +609,7 @@ app.setLayout = function (name, quiet) {
   requestAnimationFrame(() => { window.dispatchEvent(new Event("resize")); app.vp && app.vp.request(); });
   if (!quiet) {
     savePrefs();
-    app.toast(LAYOUTS[name] + " layout: " + ({ default: "tools across the top.", simple: "bigger buttons with names.", clean: "icons down the left side (hover for names).", classic: "a tool palette down the right side.", tablet: "big tools along the bottom." })[name] + " Change it any time in the theme menu (◐).");
+    app.toast(LAYOUTS[name] + " layout: " + ({ default: "tools across the top.", simple: "bigger buttons with names.", clean: "icons down the left side (hover for names).", classic: "a tool palette down the right side.", tablet: "big tools along the bottom." })[name] + " Change it any time in More actions under View settings.");
   }
 };
 
@@ -796,7 +818,7 @@ app.showAbout = function () {
         ["Roland MDX-50:", "CAM Studio has Roland MDX-50 profiles (with the 5-tool changer, and with the ZCL-50A rotary axis) and a Roland NC code post processor for MDX-series mills."],
       ]),
       sec("Editor core 2.7.4 changes", [
-        ["Sketch line style:", "choose how thick sketch lines are (Hairline, Thin, Medium, Thick or Extra thick) and their colour (the theme's own colour, or black, white, blue, red, green, orange, purple, yellow or cyan) in the theme menu (◐), under Sketch lines. It applies in Advanced, Beginner and Chisel and is remembered. The new default, Thin, is thinner than before."],
+        ["Sketch line style:", "choose how thick sketch lines are (Hairline, Thin, Medium, Thick or Extra thick) and their colour (the theme's own colour, or black, white, blue, red, green, orange, purple, yellow or cyan) in More actions under View settings, under Sketch lines. It applies in Advanced, Beginner and Chisel and is remembered. The new default, Thin, is thinner than before."],
         ["Shell → Hollow:", "the Shell tool now has two types. Openings removes the faces you click (an open box or cup); Hollow makes the whole model hollow inside, closed all round, with a 2 mm wall to start that you can change (quick picks 1, 2, 3 and 5 mm). Hollow works on the selected shapes, or click shapes to add them."],
         ["Shell and Fillet in Beginner:", "Beginner's toolbar has Fillet (click edges or a face, or Round all edges of the shape) and Shell (Hollow to start). The shape's panel lists its fillets and shells with Edit and Remove, plus Round edges and Make hollow buttons. Fillet and Chamfer in Advanced have the all-edges button too."],
         ["Hollow in Chisel:", "a new Hollow tool (in Easy and full Chisel) makes a sculpted model hollow inside with the wall thickness you choose."],
@@ -910,7 +932,7 @@ app.showAbout = function () {
       sec("Viewing", [
         ["Lighting:", "realistic shading and shadows (sun button), light, dark or high-contrast themes, orthographic view and the view cube."],
         ["Projection & animation:", "Projector (a second window that shows your objects on black, for a projector or second screen), Media (pictures and videos on objects: facing view, wrap around, all sides or ball), and Picture to 3D model (puffs a picture's subject up into a rounded, printable solid with the picture painted on)."],
-        ["Performance:", "Auto, Normal (slower computers), High (most laptops and Chromebooks) or Ultra (powerful computers, sharpest) in the theme menu (◐): lighter modes draw fewer pixels while the view moves and simpler shadows, with every tool and export unchanged. Auto picks a mode for the computer and steps down if things get slow."],
+        ["Performance:", "Auto, Normal (slower computers), High (most laptops and Chromebooks) or Ultra (powerful computers, sharpest) in More actions under View settings: lighter modes draw fewer pixels while the view moves and simpler shadows, with every tool and export unchanged. Auto picks a mode for the computer and steps down if things get slow."],
         ["Tutorials:", "sixteen step-by-step projects (eight in Beginner, eight in Advanced, marked Easy, Proficient or Advanced, 5-15 minutes each), from a name keychain and a rocket to a chess pawn, a wall hook, a box with a drawer and a candy jar with a screw-on lid. Each step shows which tool to use, how and when, with a short animation, and ticks itself off when it's done."],
         ["Help:", "press ? for every keyboard shortcut; right-click a shape for copy, paste, duplicate and delete."]]),
       el("p", { class: "ab-credit" }, "Created with Vibe Coding Assistance"),
@@ -999,8 +1021,9 @@ app.redo = function () {
 };
 
 app.refreshUI = function (kind) {
-  $("btn-undo").disabled = !store.undoStack.length;
-  $("btn-redo").disabled = !store.redoStack.length;
+  $("file-import-content").disabled = app.mode === "arch";
+  $("btn-undo").disabled = $("more-undo").disabled = !store.undoStack.length;
+  $("btn-redo").disabled = $("more-redo").disabled = !store.redoStack.length;
   const nameEl = $("docname");
   if (document.activeElement !== nameEl) nameEl.value = store.doc.name;
   { const v = app.projects ? app.projects.version() : 0, ve = $("docver"); ve.hidden = !v; ve.textContent = "v" + v; ve.title = v ? `Saved ${v} time${v > 1 ? "s" : ""}: the next Save makes v${v + 1}` : ""; }
