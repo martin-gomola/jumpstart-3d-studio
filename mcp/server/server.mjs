@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { createLanEditor } from "./lan-editor.mjs";
 import { AR_TTL_MINUTES, createArShares, PUBLIC_AR_TTL_MINUTES } from "./ar-shares.mjs";
-import { createSlicerHandoff } from "./slicer-handoff.mjs";
+import { buildSlicerHandoffLinks, createSlicerHandoff } from "./slicer-handoff.mjs";
 import { createAgentTrace } from "./agent-trace.mjs";
 
 import { createServer } from "node:http";
@@ -345,10 +345,10 @@ const tools = extendMcpTools([
   {
     name: "jumpstart_export_model",
     title: "Export an editable or printable model",
-    description: "Export visible design solids to STL, 3MF or STEP. Default printable scope excludes reference and hardware bodies; assembly includes design and hardware, never references. Optional bodyIds selects an eligible subset. Writes to the configured exports directory under a content-hashed name and returns the path, a file resource link, selected body ids and, for STL, meshValidation per body. STEP preserves CAD solids when supported by the kernel.",
+    description: "Export visible design solids to STL, 3MF or STEP. Default printable scope excludes reference and hardware bodies; assembly includes design and hardware, never references. Optional bodyIds selects an eligible subset. Writes to the configured exports directory under a content-hashed name and returns the path, a file resource link, selected body ids and, for STL, meshValidation per body. For 3MF, slicerHandoff registers a 5-minute localhost /slicer-handoff link with Bambu Studio open URLs, and x2dProfile embeds a loaded editor X2D profile. STEP preserves CAD solids when supported by the kernel.",
     inputSchema: {
       type: "object", additionalProperties: false, required: ["format"],
-      properties: { ...commonEditor, format: { type: "string", enum: ["stl", "step", "3mf"] }, name: { type: "string", maxLength: 80 }, scope: { type: "string", enum: ["printable", "assembly"], default: "printable" }, bodyIds: { type: "array", minItems: 1, maxItems: 128, uniqueItems: true, items: { type: "string", minLength: 1, maxLength: 80 } } },
+      properties: { ...commonEditor, format: { type: "string", enum: ["stl", "step", "3mf"] }, name: { type: "string", maxLength: 80 }, scope: { type: "string", enum: ["printable", "assembly"], default: "printable" }, bodyIds: { type: "array", minItems: 1, maxItems: 128, uniqueItems: true, items: { type: "string", minLength: 1, maxLength: 80 } }, slicerHandoff: { type: "boolean" }, x2dProfile: { oneOf: [{ type: "boolean" }, { type: "string", minLength: 1, maxLength: 120 }] } },
     },
   },
 ], planSchema);
@@ -872,14 +872,22 @@ async function executeTool(name, args) {
     case "jumpstart_apply_model": return await run("apply_model", { editorId: host(args), previewId: args.previewId });
     case "jumpstart_undo": return await run("undo", { editorId: host(args), expectedRevision: args.expectedRevision });
     case "jumpstart_export_model": {
+      if (args.slicerHandoff && args.format !== "3mf") throw new Error("slicerHandoff is only supported for 3mf exports");
+      if (args.x2dProfile && args.format !== "3mf") throw new Error("x2dProfile is only supported for 3mf exports");
       const name = sanitizeName(args.name || "design");
-      const result = await run("export_model", { editorId: host(args), format: args.format, name, scope: args.scope, bodyIds: args.bodyIds });
+      const result = await run("export_model", { editorId: host(args), format: args.format, name, scope: args.scope, bodyIds: args.bodyIds, x2dProfile: args.x2dProfile });
       if (!result?.base64 || !["stl", "step", "3mf"].includes(args.format)) throw new Error("Editor returned an invalid export payload");
       const bytes = Buffer.from(result.base64, "base64");
       if (bytes.length !== result.byteLength || bytes.length > 32 * 1024 * 1024) throw new Error("Export payload failed size validation");
       const digest = createHash("sha256").update(bytes).digest("hex").slice(0, 12);
       if (args.format === "3mf" && (bytes.length < 30 || bytes.readUInt32LE(0) !== 0x04034b50 || !bytes.includes(Buffer.from("3D/3dmodel.model")))) throw new Error("Malformed 3MF export");
       const path = await writeExport(`${name}-${digest}.${args.format}`, bytes);
+      let slicerHandoff;
+      if (args.slicerHandoff) {
+        const registered = handleSlicer.register(bytes);
+        const origin = `http://${BROWSER_HOST}:${server.address().port}`;
+        slicerHandoff = { ...registered, ...buildSlicerHandoffLinks(origin, registered.id) };
+      }
       let meshValidation;
       if (args.format === "stl") {
         const count = bytes.length >= 84 ? bytes.readUInt32LE(80) : 0;
@@ -903,7 +911,7 @@ async function executeTool(name, args) {
         } else meshValidation = { valid: null, status: "not_checked", reason: "Export exceeds the 200000 triangle inspection budget" };
       }
       await run("export_complete", { editorId: host(args), format: args.format, expectedRevision: result.revision });
-      return { format: args.format, revision:result.revision, path, scope: result.scope, bodyIds: result.bodyIds, roles: result.roles, byteLength: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex"), meshValidation, physicalFit: "unverified", manufacturingPerformance: "unverified" };
+      return { format: args.format, revision:result.revision, path, scope: result.scope, bodyIds: result.bodyIds, roles: result.roles, byteLength: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex"), meshValidation, ...(result.x2dProject ? { x2dProject: result.x2dProject } : {}), ...(slicerHandoff ? { slicerHandoff } : {}), physicalFit: "unverified", manufacturingPerformance: "unverified" };
     }
     case "jumpstart_render_drawing": return await run("render_drawing", { editorId: host(args), expectedRevision: args.expectedRevision, scope: args.scope, bodyIds: args.bodyIds, drawing: args.drawing });
     case "jumpstart_export_drawing": {

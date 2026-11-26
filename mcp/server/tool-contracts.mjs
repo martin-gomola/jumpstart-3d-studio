@@ -103,6 +103,8 @@ const PARAMETER_DESCRIPTIONS = {
   "jumpstart_export_model.name": "File name stem; a content hash and extension are appended.",
   "jumpstart_export_model.scope": "printable (default) exports design bodies; assembly adds hardware. References are never exported.",
   "jumpstart_export_model.bodyIds": "Export only these eligible bodies.",
+  "jumpstart_export_model.slicerHandoff": "3MF only. Register a 5-minute localhost /slicer-handoff link and return Bambu Studio open URLs.",
+  "jumpstart_export_model.x2dProfile": "3MF only. Embed a loaded editor X2D profile (true for default filament, or a loaded filament name/id) and ground/center on the 256x256 plate.",
   "jumpstart_select_geometry.query": "Predicate: kind edge or face plus optional type, axis, extreme, coordinate, near, normal, radius and external.",
   "jumpstart_preview_feature_edit.edit": "Feature id and the update or removal to preview.",
 };
@@ -137,6 +139,6 @@ const OUTPUT_SCHEMAS = {
   jumpstart_apply_model: { type: "object", required: ["applied", "previewId", "revision", "meshValidation"], properties: { applied: { type: "boolean" }, previewId: { type: "string" }, revision: revisionOut, bodyIds: { type: "array", items: { type: "string" } }, meshValidation: { type: "object", required: ["valid", "bodies"], properties: { valid: { type: "boolean" }, bodies: { type: "object" } } } } },
   jumpstart_undo: { type: "object", required: ["undone", "revision"], properties: { undone: { type: "boolean" }, revision: revisionOut, document: { type: "object" } } },
   jumpstart_save_document: { type: "object", required: ["saved", "documentId", "revision"], properties: { saved: { type: "boolean" }, documentId: { type: "string" }, revision: revisionOut, version: {} } },
-  jumpstart_export_model: { type: "object", required: ["format", "revision", "path", "bodyIds", "byteLength", "sha256"], properties: { format: { type: "string" }, revision: revisionOut, path: { type: "string" }, bodyIds: { type: "array", items: { type: "string" } }, byteLength: { type: "integer" }, sha256: { type: "string" }, meshValidation: { type: "object", description: "STL only; bodies holds per-body results for multi-body files." } } },
+  jumpstart_export_model: { type: "object", required: ["format", "revision", "path", "bodyIds", "byteLength", "sha256"], properties: { format: { type: "string" }, revision: revisionOut, path: { type: "string" }, bodyIds: { type: "array", items: { type: "string" } }, byteLength: { type: "integer" }, sha256: { type: "string" }, meshValidation: { type: "object", description: "STL only; bodies holds per-body results for multi-body files." }, x2dProject: { type: "object", properties: { printer: { type: "string" }, process: { type: "string" }, filament: { type: "string" }, label: { type: "string" }, bedType: { type: "string" } } }, slicerHandoff: { type: "object", properties: { id: { type: "string" }, modelUrl: { type: "string" }, macosUrl: { type: "string" }, desktopUrl: { type: "string" }, expiresAt: { type: "string" }, ttlSeconds: { type: "integer" } } } } },
   jumpstart_export_drawing: { type: "object", required: ["path", "sha256", "warnings"], properties: { path: { type: "string" }, sha256: { type: "string" }, warnings: { type: "array" } } },
 };

@@ -96,6 +96,8 @@ test("stdio MCP discovery and localhost registration work through mcp/server/ser
     assert.deepEqual(exportSchema.properties.scope.enum, ["printable", "assembly"]);
     assert.equal(exportSchema.properties.scope.default, "printable");
     assert.equal(exportSchema.properties.bodyIds.maxItems, 128);
+    assert.equal(exportSchema.properties.slicerHandoff.type, "boolean");
+    assert.deepEqual(exportSchema.properties.x2dProfile.oneOf.map((v) => v.type), ["boolean", "string"]);
     const importOperation = listing.result.tools.find((tool) => tool.name === "jumpstart_preview_model").inputSchema.properties.plan.properties.operations.items.oneOf.find((operation) => operation.properties.type.const === "import");
     assert.equal(importOperation.properties.assetId.pattern, "^[a-f0-9]{64}$");
     assert.equal(importOperation.properties.units.description.includes("Required for STL"), true);
@@ -222,6 +224,42 @@ test("stdio MCP discovery and localhost registration work through mcp/server/ser
     assert.ok(result.editors[0].lastSeenAt);
     const imports = await send({ jsonrpc: "2.0", id: 32, method: "tools/call", params: { name: "jumpstart_list_imports", arguments: {} } });
     assert.deepEqual(JSON.parse(imports.result.content[0].text).assets, [asset]);
+    const badHandoff = await send({ jsonrpc: "2.0", id: 33, method: "tools/call", params: { name: "jumpstart_export_model", arguments: { editorId: "test-editor", format: "stl", slicerHandoff: true } } });
+    assert.equal(badHandoff.result.isError, true);
+    assert.match(JSON.parse(badHandoff.result.content[0].text).error, /slicerHandoff is only supported for 3mf/);
+    const badX2D = await send({ jsonrpc: "2.0", id: 34, method: "tools/call", params: { name: "jumpstart_export_model", arguments: { editorId: "test-editor", format: "stl", x2dProfile: true } } });
+    assert.equal(badX2D.result.isError, true);
+    assert.match(JSON.parse(badX2D.result.content[0].text).error, /x2dProfile is only supported for 3mf/);
+
+    const sampleThreeMf = Buffer.from(await makeZip([{ name: "3D/3dmodel.model", data: new TextEncoder().encode("<model/>") }]).arrayBuffer());
+    const x2dProject = { printer: "Bambu Lab X2D 0.4 nozzle", process: "0.20mm Standard @BBL X2D", filament: "Bambu PLA Basic @BBL X2D 0.4 nozzle", label: "Bambu PLA Basic", bedType: "Textured PEI Plate" };
+    const exportCall = send({ jsonrpc: "2.0", id: 35, method: "tools/call", params: { name: "jumpstart_export_model", arguments: { editorId: "test-editor", format: "3mf", name: "handoff-test", slicerHandoff: true, x2dProfile: "Bambu PLA Basic" } } });
+    const poll1 = await (await fetch(`http://127.0.0.1:${port}/__mcp/poll`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ editorId: "test-editor" }) })).json();
+    assert.equal(poll1.command.action, "export_model");
+    assert.equal(poll1.command.params.x2dProfile, "Bambu PLA Basic");
+    await fetch(`http://127.0.0.1:${port}/__mcp/result`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ editorId: "test-editor", commandId: poll1.command.id, ok: true, data: { format: "3mf", revision: "rev-1", scope: "printable", bodyIds: ["b1"], roles: [{ id: "b1", role: "design" }], byteLength: sampleThreeMf.length, base64: sampleThreeMf.toString("base64"), x2dProject } }),
+    });
+    const poll2 = await (await fetch(`http://127.0.0.1:${port}/__mcp/poll`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ editorId: "test-editor" }) })).json();
+    assert.equal(poll2.command.action, "export_complete");
+    await fetch(`http://127.0.0.1:${port}/__mcp/result`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ editorId: "test-editor", commandId: poll2.command.id, ok: true, data: { notified: true } }),
+    });
+    const exported = await exportCall;
+    assert.equal(exported.result.isError, false);
+    const exportedData = exported.result.structuredContent;
+    assert.deepEqual(exportedData.x2dProject, x2dProject);
+    assert.match(exportedData.slicerHandoff.id, /^[a-f0-9]{48}$/);
+    assert.equal(exportedData.slicerHandoff.modelUrl, `http://localhost:${port}/slicer-handoff/${exportedData.slicerHandoff.id}/model.3mf`);
+    assert.equal(exportedData.slicerHandoff.macosUrl, `bambustudioopen://${encodeURIComponent(exportedData.slicerHandoff.modelUrl)}`);
+    assert.equal(exportedData.slicerHandoff.desktopUrl, `bambustudio://open?file=${encodeURIComponent(exportedData.slicerHandoff.modelUrl)}`);
+    const fetched = await fetch(`http://127.0.0.1:${port}/slicer-handoff/${exportedData.slicerHandoff.id}/model.3mf`);
+    assert.equal(fetched.status, 200);
+    assert.deepEqual(Buffer.from(await fetched.arrayBuffer()), sampleThreeMf);
+    await rm(exportedData.path, { force: true });
+
     await fetch(`http://127.0.0.1:${port}/__mcp/heartbeat`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ editorId: "second-tab", documentId: "doc-1", documentName: "Same design", focused: true }),

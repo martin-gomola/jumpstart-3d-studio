@@ -27,6 +27,7 @@ import { buildHolePattern } from "./plans/hole-pattern.js";
 import { fitPreviewCamera } from "./preview-camera.js";
 import { tutorialSession } from "./tutorial-session.js";
 import { fromB64, isZip, packMesh, readMeshFile, simplify, toB64, MESH_LIMIT } from "../../src/meshimport.js";
+import { loadStoredX2DProfiles, selectX2DProfile, x2dFilamentLabel, X2D_PRINTER, X2D_PROCESS } from "../../src/bambu-project.js";
 
 const BRIDGE = "/__mcp";
 const HEARTBEAT_MS = 5_000;
@@ -143,6 +144,7 @@ function documentSummary(app, editorId, revision, includeGeometry = false, optio
   const bodies = doc.bodies.filter((body) => !body.cutPreview && (!wanted || wanted.has(body.id)));
   const sketchIds = new Set();
   if (wanted) for (const body of bodies) for (const id of referencedSketchIds(body, doc)) sketchIds.add(id);
+  const x2d = loadStoredX2DProfiles(globalThis.localStorage);
   return {
     editorId,
     revision,
@@ -170,6 +172,7 @@ function documentSummary(app, editorId, revision, includeGeometry = false, optio
     drawerLayouts: summarizeDrawerLayouts(doc).filter(layout => !wanted || layout.bodyIds.some(id => wanted.has(id))),
     ...(wanted ? { selection: { bodyIds: [...wanted], totalBodies: doc.bodies.filter((body) => !body.cutPreview).length, returnedBodies: bodies.length } } : {}),
     parametricModels: (doc.mcpModels || []).filter((model) => !wanted || model.bodyIds.some((id) => wanted.has(id))).map(({ bodyState, sketchState, planeState, ...model }) => ({ ...clone(model), editedOutside: mcpModelEdited(doc, { bodyState, sketchState, planeState, ...model }), sourceState: "saved parameter template; native edits are checked before regeneration" })),
+    ...(x2d.length ? { x2dProfiles: { printer: X2D_PRINTER, process: X2D_PROCESS, filaments: x2d.map((profile) => ({ id: profile.filament_settings_id[0], label: x2dFilamentLabel(profile), bedType: profile.curr_bed_type })) } } : {}),
   };
 }
 
@@ -689,11 +692,15 @@ export function initMcp(app) {
     const errors = statuses.filter((entry) => entry.error || entry.pending).map((entry) => ({ id: entry.id, error: entry.error || "Geometry is still building" }));
     if (errors.length) throw new Error(`Cannot export while geometry errors remain: ${JSON.stringify(errors)}`);
     if (format === "3mf") {
-      const bytes = await app.projects.threeMFBytes(bodies);
+      const profile = options.x2dProfile ? selectX2DProfile(loadStoredX2DProfiles(globalThis.localStorage), options.x2dProfile) : null;
+      const bytes = await app.projects.threeMFBytes(bodies, profile);
       checkRevision(revision);
+      if (!bytes) throw new Error("No built solid bodies are available to export");
       if (bytes.byteLength > MAX_EXPORT_BYTES) throw new Error("3MF export exceeds the local export budget");
-      return { format, name, ...selection, revision, byteLength: bytes.byteLength, base64: base64(bytes) };
+      const x2dProject = profile ? { printer: profile.printer_settings_id, process: profile.print_settings_id, filament: profile.filament_settings_id[0], label: x2dFilamentLabel(profile), bedType: profile.curr_bed_type } : undefined;
+      return { format, name, ...selection, revision, byteLength: bytes.byteLength, base64: base64(bytes), ...(x2dProject ? { x2dProject } : {}) };
     }
+    if (options.x2dProfile) throw new Error("x2dProfile is only supported for 3mf exports");
     if (format === "stl") {
       const { bytes, bodyTriangles } = buildStl(app, bodies);
       return { format, name, ...selection, revision, byteLength: bytes.byteLength, base64: base64(bytes), bodyTriangles };
@@ -843,7 +850,7 @@ export function initMcp(app) {
         checkRevision(p.expectedRevision);
         if (!["stl", "step", "3mf"].includes(p.format)) throw new Error("Unknown export completion format");
         app.onExport && app.onExport(p.format); return { notified: true };
-      case "export_model": return exportModel(p.format, p.name || store.doc.name || "design", { scope: p.scope, bodyIds: p.bodyIds });
+      case "export_model": return exportModel(p.format, p.name || store.doc.name || "design", { scope: p.scope, bodyIds: p.bodyIds, x2dProfile: p.x2dProfile });
       case "render_drawing": {
         const { revision, bodyIds, sheet } = await drawingSheet(p);
         return { revision, bodyIds, ...sheet.report, imageDataUrl: await drawingImage(drawingSVG(sheet), sheet.sheet, sheet.sheet.size === "A3" ? 2000 : 1600) };

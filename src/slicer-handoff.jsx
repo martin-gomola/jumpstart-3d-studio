@@ -1,9 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { openToolWindow, closeToolWindow } from "./tool-window.js";
-import { readX2DProfiles, X2D_DEFAULT_FILAMENT } from "./bambu-project.js";
-
-const PROFILE_KEY = "jumpstart.bambu-x2d.profiles";
+import { loadStoredX2DProfiles, readX2DProfiles, x2dFilamentLabel, X2D_DEFAULT_FILAMENT, X2D_PROFILE_KEY } from "./bambu-project.js";
 
 function studioLink(id) {
   const file = encodeURIComponent(new URL(`/slicer-handoff/${id}/model.3mf`, location.origin).href);
@@ -15,10 +13,7 @@ function studioLink(id) {
 function Handoff({ prepare, filename, close, x2d }) {
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
-  const [profiles, setProfiles] = useState(() => {
-    if (!x2d) return [];
-    try { return readX2DProfiles(localStorage.getItem(PROFILE_KEY) || ""); } catch { return []; }
-  });
+  const [profiles, setProfiles] = useState(() => (x2d ? loadStoredX2DProfiles(localStorage) : []));
   const [filament, setFilament] = useState(X2D_DEFAULT_FILAMENT);
   const profile = profiles.find(p => p.filament_settings_id[0] === filament) ?? profiles[0];
   const [job, setJob] = useState(x2d ? null : { profile: null });
@@ -72,7 +67,7 @@ function Handoff({ prepare, filename, close, x2d }) {
       if (file.size > 1024 * 1024) throw new Error("The profile pack is too large.");
       const raw = await file.text();
       const loaded = readX2DProfiles(raw);
-      try { localStorage.setItem(PROFILE_KEY, raw); } catch {}
+      try { localStorage.setItem(X2D_PROFILE_KEY, raw); } catch {}
       setProfiles(loaded);
       setJob(null);
       setResult(null);
@@ -93,7 +88,7 @@ function Handoff({ prepare, filename, close, x2d }) {
             const name = p.filament_settings_id[0];
             return <label className="slicer-filament" key={name}><input type="radio" name="x2d-filament" checked={p === profile} onChange={() => {
               setFilament(name); setJob(null); setResult(null); setError("");
-            }} /> {name.replace(" @BBL X2D 0.4 nozzle", "")}</label>;
+            }} /> {x2dFilamentLabel(p)}</label>;
           })}
         </fieldset>}
       </>}

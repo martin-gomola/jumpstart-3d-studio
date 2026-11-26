@@ -1,6 +1,40 @@
 export const X2D_PRINTER = "Bambu Lab X2D 0.4 nozzle";
 export const X2D_PROCESS = "0.20mm Standard @BBL X2D";
 export const X2D_DEFAULT_FILAMENT = "Bambu PETG Basic @BBL X2D 0.4 nozzle";
+export const X2D_PROFILE_KEY = "jumpstart.bambu-x2d.profiles";
+const X2D_FILAMENT_SUFFIX = " @BBL X2D 0.4 nozzle";
+
+export function x2dFilamentLabel(profile) {
+  return profile.filament_settings_id[0].replace(X2D_FILAMENT_SUFFIX, "");
+}
+
+export function loadStoredX2DProfiles(storage) {
+  try {
+    const raw = storage?.getItem(X2D_PROFILE_KEY) || "";
+    return raw ? readX2DProfiles(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function selectX2DProfile(profiles, filament) {
+  if (!Array.isArray(profiles) || !profiles.length) {
+    throw new Error("No X2D profile pack is loaded in the editor. Load one in Open/Export -> Export X2D project first.");
+  }
+  if (!filament || filament === true) {
+    return profiles.find(p => p.filament_settings_id[0] === X2D_DEFAULT_FILAMENT) ?? profiles[0];
+  }
+  const wanted = String(filament).trim().toLowerCase();
+  const match = profiles.find(p => {
+    const full = p.filament_settings_id[0].toLowerCase();
+    const label = x2dFilamentLabel(p).toLowerCase();
+    return full === wanted || label === wanted;
+  });
+  if (!match) {
+    throw new Error(`Unknown X2D filament "${filament}". Loaded filaments: ${profiles.map(x2dFilamentLabel).join(", ")}.`);
+  }
+  return match;
+}
 
 export function readX2DProfiles(text) {
   if (text.length > 1024 * 1024) throw new Error("The profile pack is too large.");
