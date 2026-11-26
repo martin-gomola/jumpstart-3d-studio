@@ -121,3 +121,7 @@ latch in the same orientation, profile, and material. The coupon checks
 insertion, retention, and removal. A valid mesh, a passed pair check, or a
 nominal strain does not prove cycle life, opening force, or that the beam
 returns. Report those as unverified until the coupon is printed.
+
+A crate or box made from corners, rails, panels, and small clips is a
+[modular clip crate](modular-clip-crates.md). Size every latch in that crate
+with this reference.

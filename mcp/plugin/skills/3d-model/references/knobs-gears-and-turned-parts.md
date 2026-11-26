@@ -49,7 +49,8 @@ For gear models, supply module, tooth count, pressure angle, face width, bore,
 cone angle, and placement as needed. Straight bevel gears are a conical loft
 approximation; do not claim tooth-contact accuracy or a matched gear pair.
 Measure the bore, face width and outside diameter in the preview rather than
-relying on the formula alone.
+relying on the formula alone. A machine with one crank and several outputs is
+a [geared machine](geared-machines.md). Use `gear` operations for its wheels.
 
 ## Turned parts
 

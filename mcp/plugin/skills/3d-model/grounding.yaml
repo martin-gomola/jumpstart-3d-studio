@@ -278,3 +278,43 @@ rules:
     skillFile: references/snap-fit-joints.md
     sources: [snap-fit-fdm-adaptation, pair-contract]
     locator: "Static seated clearance is not an insertion simulation"
+  - instruction: "A photo of a commercial system, including a Blokz-style crate, shows the part roles only."
+    skillFile: references/modular-clip-crates.md
+    sources: [blokz-style-crate-photos]
+    locator: "Unscaled commercial photo is not a drawing"
+  - instruction: "Do not copy its labels, mesh artwork, or section, and do not claim the result fits the commercial parts."
+    skillFile: references/modular-clip-crates.md
+    sources: [blokz-style-crate-photos]
+    locator: "Original design, no compatibility claim"
+  - instruction: "The corner and the rail shoulders carry the load. The clip only resists pull-off."
+    skillFile: references/modular-clip-crates.md
+    sources: [blokz-style-crate-photos, snap-fit-fdm-adaptation]
+    locator: "Locate on shoulders and latch with the clip"
+  - instruction: "A seated pair check cannot prove that the jaw can pass the bead."
+    skillFile: references/modular-clip-crates.md
+    sources: [snap-fit-fdm-adaptation, pair-contract]
+    locator: "Seated crate check is not clip insertion"
+  - instruction: "A pair that meshes uses one module. Its centre distance is module times (driver teeth plus driven teeth) divided by two."
+    skillFile: references/geared-machines.md
+    sources: [gear-train-kinematics]
+    locator: "External spur centre distance and shared module"
+  - instruction: "When the train crosses onto a carrier that itself rotates, add that carrier's turns to the output's turns relative to the ground."
+    skillFile: references/geared-machines.md
+    sources: [gear-train-kinematics, orrery-42179-reviews]
+    locator: "Carrier rotation adds to the train on that carrier"
+  - instruction: "Build the machine from gear operations and plain frames. Do not invent a custom tooth profile or a one-piece gearbox."
+    skillFile: references/geared-machines.md
+    sources: [gear-operation]
+    locator: "Compose the machine from the native gear operation"
+  - instruction: "Use at least 17 teeth on spur and bevel gears at a 20-degree pressure angle, and stay within the operation limit of 120 teeth."
+    skillFile: references/geared-machines.md
+    sources: [gear-kernel, gear-operation]
+    locator: "Avoid rubbing on un-undercut profiles below 17 teeth"
+  - instruction: "Do not require `maximumOverlapVolume` 0 on an un-backlashed nominal mesh, because touching involute flanks can fail that check or force teeth out of engagement."
+    skillFile: references/geared-machines.md
+    sources: [gear-kernel, pair-contract]
+    locator: "Zero-overlap pair checks belong on non-meshing clearances, not un-backlashed gear teeth"
+  - instruction: "A seated pair check cannot prove that the gears turn."
+    skillFile: references/geared-machines.md
+    sources: [gear-operation, pair-contract]
+    locator: "Static mesh clearance is not a turning gear"

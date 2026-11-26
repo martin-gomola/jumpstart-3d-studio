@@ -1,4 +1,4 @@
-version: 10
+version: 12
 status: not-run
 cases:
   - prompt: "Keep the exact hooks from this original STL and thin the surrounding holder walls in JumpStart."
@@ -131,3 +131,9 @@ cases:
   - prompt: "Make a glue-free dovetail box with a keyed mortise and wedge, and no flexing clips."
     expected: do-not-invoke
     neighbor: woodwork-joints-3d
+  - prompt: "Design a stackable clip-together crate in JumpStart, with corners, rails, mesh panels, and small clips, like a Blokz box."
+    expected: invoke
+    mode: implicit
+  - prompt: "Design a printable orrery like LEGO Technic 42179, with one crank turning the earth, moon, and year arm in JumpStart."
+    expected: invoke
+    mode: implicit

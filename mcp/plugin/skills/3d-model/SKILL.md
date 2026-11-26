@@ -1,8 +1,8 @@
 ---
 name: 3d-model
-description: Creates and revises editable CAD parts, measured drawer layouts, Gridfinity bins, baseplates and custom inserts, household objects, and imported-part assemblies in JumpStart through local MCP. Use for drawer organization, magnet pockets, measured cutouts, trays, brackets, enclosures, snap-fit clips and multi-part lids, hooks, phone holders and cases, spacers, knobs, fit checks, imported STL resizing, dimensioned SVG or PDF drawings, and tutorial models. Avoid generic 3D illustration, rendering, website design, and standalone product comparisons.
+description: Creates and revises editable CAD parts, measured drawer layouts, Gridfinity bins, baseplates and custom inserts, household objects, and imported-part assemblies in JumpStart through local MCP. Use for drawer organization, magnet pockets, measured cutouts, trays, brackets, enclosures, snap-fit clips, modular clip crates, hooks, phone holders and cases, spacers, knobs, geared machines, fit checks, imported STL resizing, dimensioned SVG or PDF drawings, and tutorial models. Avoid generic 3D illustration, rendering, website design, and standalone product comparisons.
 metadata:
-  version: "1.24.0"
+  version: "1.26.0"
 ---
 
 # Model a part in JumpStart
@@ -25,7 +25,7 @@ copy the entire tool catalog into working notes.
 | Gridfinity inserts, bins, baseplates, measured cutouts and item-source research for those models | [Gridfinity](references/gridfinity.md) |
 | Frames, trays, brackets, hooks, cups, parameter models | [Household parts](references/household-parts.md) |
 | Rebuilding an STL housing, softer corners, honeycomb or other wall perforations | [Perforated housings](references/perforated-housings.md) |
-| Knurled knobs, shaft bores, gears, turned (Lathe) parts | [Knobs, gears and turned parts](references/knobs-gears-and-turned-parts.md) |
+| Knobs, gears, turned parts, or a geared machine such as an orrery | [Knobs, gears and turned parts](references/knobs-gears-and-turned-parts.md); [Geared machines](references/geared-machines.md) |
 | Phone holders, cradles and cases, board mounts, imported assemblies | [Mounts and assemblies](references/mounts-and-assemblies.md) |
 | A dimensioned drawing to model from, or a drawing (SVG, PDF) of the model | [Dimensioned drawings](references/dimensioned-drawings.md) |
 | Existing native part, feature or interface edits | [Edit existing parts](references/edit-existing-parts.md) |
@@ -33,7 +33,7 @@ copy the entire tool catalog into working notes.
 | A shaped insert or sleeve fitted into an existing imported holder | [Fitted adapters](references/fitted-adapters.md) |
 | A named or pictured JumpStart tutorial | [Tutorial models](references/tutorial-models.md) |
 | Clearances, mating parts, pair checks, fit coupons | [Fit and print checks](references/fit-and-print-checks.md) |
-| Snap-fit clips, lids, split pins, detents, and locating pins | [Snap-fit joints](references/snap-fit-joints.md) |
+| Snap-fit clips, lids, detents, or a modular clip crate or box | [Snap-fit joints](references/snap-fit-joints.md); [Modular clip crates](references/modular-clip-crates.md) |
 | Sliding lids that catch a flange, including lids that retain the original foil | [Sliding lids](references/sliding-lids.md) |
 | Printed parts, the default printer profile, print pose, screw, nut and insert holes | [Print setup and hardware](references/print-and-hardware.md) |
 | Acceptance checks, revisions, failures or final export | [Inspection and recovery](references/inspection-and-recovery.md) |

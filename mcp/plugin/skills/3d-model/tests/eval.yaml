@@ -1,4 +1,4 @@
-version: 10
+version: 12
 status: not-run
 baseline:
   source: "Observed spacer workflow and MCP workflow-polish work; not a controlled no-skill trial."
@@ -527,3 +527,25 @@ cases:
       - "Uses the woodwork-joints-3d companion rather than a cantilever snap."
     fail_if:
       - "Designs a snap beam and describes it as the requested rigid tenon."
+  - id: blokz-style-crate
+    prompt: "Design a crate like the Blokz box in this photo. I want corners, clip rails, and mesh panels."
+    setup: "The photo shows separate corner posts, rails, mesh panels, and small clips, plus H and 2H labels. It has no scale and no license to copy the product."
+    expect:
+      - "Loads modular clip crates and snap-fit joints, and keeps corners, rails, panels, and clips as separate bodies."
+      - "Asks for the outside size and module height or labels both assumed. Does not trace the photo into dimensions."
+      - "Gives shear to the corner and rail shoulders, sizes the clip as a flexing jaw over a bead, and prints the jaw flex in XY."
+      - "Checks the seated pose for no overlap, sections the bead and pocket, and exports one clip coupon before the full crate."
+    fail_if:
+      - "Copies the commercial labels or mesh artwork, or claims the crate fits Blokz parts."
+      - "Uses the photo's pixels as millimetres."
+  - id: orrery-from-function
+    prompt: "Design a machine like LEGO Technic 42179. One crank should spin the earth, orbit the moon, and carry them around the sun. Do not make me invent the gears."
+    setup: "Published reviews give the function: about 3 Earth spins per crank, a Moon orbit near every 27 of those spins, a year near 121.5 cranks, 22.5 degree tilt, and a Sun path that crosses the rotating year arm. No LEGO part list is supplied."
+    expect:
+      - "Loads geared machines, writes the function first, and builds each wheel with a gear operation rather than a custom tooth sketch."
+      - "Uses one module, keeps spur and bevel tooth counts at 17 or above, phases the mesh with a parameterized backlash allowance, and states the achieved ratio against the requested one."
+      - "Adds the year arm's rotation when reporting the Sun's turns relative to the ground."
+      - "Checks non-meshing clearances with pair checks, sections the mesh plane instead of requiring zero overlap on an un-backlashed nominal mesh, and exports one meshing pair on a test plate as a coupon before the whole machine."
+    fail_if:
+      - "Copies LEGO elements or instruction steps, or claims the model fits official 42179 parts."
+      - "Uses pinions below 17 teeth without addressing undercutting, claims the CAD preview proves the gears turn, or fuses the machine into one custom gearbox."

@@ -226,3 +226,23 @@ sources:
     locator: "Existing X2D print rules, pair checks, and fit coupons applied to a flexing latch."
     trust: "Workflow adaptation only. A static CAD check does not measure insertion force, return, creep, or cycle life."
     mutable: false
+  - id: gear-operation
+    path: mcp/browser/plans/operations/gear.js
+    trust: "One native spur, rack, or straight bevel from module, tooth count, pressure angle, face width, and optional bore or cone angle. No automatic pair placement and no motion."
+    mutable: true
+  - id: gear-kernel
+    path: src/kernel.js
+    trust: "buildGear generates nominal zero-backlash involute teeth with no root undercut (6 to 120 teeth). src/gears.js warns that below 17 teeth an un-undercut profile can rub against a larger mate."
+    mutable: true
+  - id: gear-train-kinematics
+    locator: "Standard external spur ratio, centre distance, rack travel, and adding a carrier's rotation to rotation measured on that carrier."
+    trust: "Textbook placement of separate gear bodies. Not a measurement of a LEGO set and not proof that a printed pair will turn."
+    mutable: false
+  - id: orrery-42179-reviews
+    url: https://josephshoer.com/blog/2024/06/a-spacecraft-engineers-review-of-lego-42179-planet-earth-and-moon-in-orbit/
+    trust: "Published crank counts for set 42179: about 3 Earth spins per crank, a Moon orbit near 27 of those spins, a year near 121.5 cranks, a 22.5 degree tilt, and a Sun path that inherits the arm. BrickNerd reports the same year and Moon period at https://bricknerd.com/home/falling-down-the-gravity-well-orbits-of-the-lego-orrery-6-24-24. Function targets only, not the set's tooth list."
+    mutable: true
+  - id: blokz-style-crate-photos
+    locator: "User-supplied screenshots of a Blokz-style crate and clip sections, with the Blokz Instagram account and one reel as context."
+    trust: "Shows separate corners, rails, panels, clips, and a rounded bead in a jaw. No scale, no license to copy the product, and no evidence the result fits those commercial parts."
+    mutable: false
