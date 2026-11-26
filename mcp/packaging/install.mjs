@@ -14,23 +14,35 @@ export function managedRegistration(entry, root = ROOT) {
     !entry.enabled_tools && !entry.disabled_tools && !entry.startup_timeout_sec && !entry.tool_timeout_sec;
 }
 
+function pluginRegistration(entry) {
+  const arg = entry?.transport?.args?.[0];
+  return (arg === '${PLUGIN_ROOT}/server/stdio-proxy.mjs' || arg === 'server/stdio-proxy.mjs') &&
+    Boolean(entry.transport?.cwd?.includes(`/plugins/cache/${PLUGIN}/${PLUGIN}/`));
+}
+
+function getExistingMcp(run) {
+  try {
+    return run(['mcp', 'get', 'jumpstart', '--json']) || null;
+  } catch (error) {
+    if (/No MCP server named ['"]jumpstart['"] found/i.test(error?.message || '')) return null;
+    throw error;
+  }
+}
+
 export async function installPlugin({ cli = 'codex', run = commandRunner(cli), root = ROOT, nodePath = process.execPath } = {}) {
   clientConfig(nodePath);
   await syncPluginRuntime(root);
   const built = await buildPlugin({ root, nodePath });
-  const entries = run(['mcp', 'list', '--json']);
-  const currentPlugin = run(['plugin', 'list', '--json']).installed.find(entry => entry.pluginId === `${PLUGIN}@${PLUGIN}` && entry.enabled);
-  let old = entries.some(entry => entry.name === 'jumpstart') ? run(['mcp', 'get', 'jumpstart', '--json']) : null;
-  if (old && currentPlugin && (old.transport?.args?.[0] === '${PLUGIN_ROOT}/server/stdio-proxy.mjs' || old.transport?.args?.[0] === 'server/stdio-proxy.mjs') && old.transport.cwd?.includes(`/plugins/cache/${PLUGIN}/${PLUGIN}/${currentPlugin.version}`)) old = null;
+  let old = getExistingMcp(run);
+  if (old && pluginRegistration(old)) old = null;
   if (old && !managedRegistration(old, root)) throw new Error('A custom jumpstart MCP registration exists. Preserve its settings and remove it explicitly before installing the plugin. No configuration was changed.');
   const marketplaces = run(['plugin', 'marketplace', 'list', '--json']).marketplaces;
   const existing = marketplaces.find(entry => entry.name === built.marketplace);
   if (existing && resolve(existing.root) !== resolve(built.root)) throw new Error(`Marketplace ${built.marketplace} already points elsewhere: ${existing.root}. No registration was replaced.`);
   if (!existing) run(['plugin', 'marketplace', 'add', built.root, '--json']);
   const id = `${PLUGIN}@${built.marketplace}`;
-  run(['plugin', 'add', id, '--json']);
-  const installed = run(['plugin', 'list', '--json']).installed.find(entry => entry.pluginId === id);
-  if (!installed?.installed || !installed.enabled || installed.version !== built.version) throw new Error('Plugin installation could not be verified. The old MCP registration was retained.');
+  const installed = run(['plugin', 'add', id, '--json']);
+  if (installed?.pluginId !== id || installed?.version !== built.version) throw new Error('Plugin installation could not be verified. The old MCP registration was retained.');
   if (old) run(['mcp', 'remove', 'jumpstart']);
   return { id, version: built.version, migrated: Boolean(old) };
 }

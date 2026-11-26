@@ -44,26 +44,32 @@ test('local bundle pins Node; unsafe output and stale runtime are rejected', asy
   await assert.rejects(buildPlugin({ root }), /stale/);
 });
 
-test('installer rebuilds an ignored marketplace before asking Codex to load plugins', async t => {
+test('installer rebuilds marketplace and reinstalls directly without listing all plugins or MCP servers', async t => {
   const root = await fixture(t), calls = [];
-  let version;
   const marketplaceRoot = join(root, 'build/codex-marketplace');
   const run = args => {
     calls.push(args.join(' '));
-    if (args[0] === 'mcp' && args[1] === 'list') return [];
-    if (args[0] === 'plugin' && args[1] === 'list') {
-      assert.ok(existsSync(join(marketplaceRoot, '.agents/plugins/marketplace.json')));
-      return { installed: version ? [{ pluginId: 'jumpstart-3d@jumpstart-3d', installed: true, enabled: true, version }] : [] };
+    if (args[0] === 'mcp' && args[1] === 'get') {
+      throw new Error("codex mcp get jumpstart failed: Error: No MCP server named 'jumpstart' found.");
     }
-    if (args[1] === 'marketplace' && args[2] === 'list') return { marketplaces: [{ name: 'jumpstart-3d', root: marketplaceRoot }] };
+    if (args[1] === 'marketplace' && args[2] === 'list') {
+      assert.ok(existsSync(join(marketplaceRoot, '.agents/plugins/marketplace.json')));
+      return { marketplaces: [{ name: 'jumpstart-3d', root: marketplaceRoot }] };
+    }
     if (args[0] === 'plugin' && args[1] === 'add') {
-      version = JSON.parse(readFileSync(join(marketplaceRoot, 'mcp/plugin/.codex-plugin/plugin.json'), 'utf8')).version;
+      const version = JSON.parse(readFileSync(join(marketplaceRoot, 'mcp/plugin/.codex-plugin/plugin.json'), 'utf8')).version;
+      return { pluginId: 'jumpstart-3d@jumpstart-3d', version };
     }
     return {};
   };
   const result = await installPlugin({ root, run, nodePath: '/bin/node' });
   assert.equal(result.id, 'jumpstart-3d@jumpstart-3d');
-  assert.ok(calls.indexOf('plugin list --json') > calls.indexOf('mcp list --json'));
+  assert.equal(result.migrated, false);
+  assert.deepEqual(calls, [
+    'mcp get jumpstart --json',
+    'plugin marketplace list --json',
+    'plugin add jumpstart-3d@jumpstart-3d --json',
+  ]);
 });
 
 test('custom standalone settings are never automatically migrated', () => {
@@ -73,21 +79,43 @@ test('custom standalone settings are never automatically migrated', () => {
   assert.equal(managedRegistration({ ...entry, transport: { ...entry.transport, env: { SECRET: 'custom' } } }), false);
 });
 
-test('installer removes old registration only after verified plugin installation', async t => {
+test('reinstalling an existing cached plugin entry skips migration without calling plugin list', async t => {
   const root = await fixture(t), calls = [];
-  let version;
+  const marketplaceRoot = join(root, 'build/codex-marketplace');
   const run = args => {
     calls.push(args.join(' '));
-    if (args[0] === 'mcp' && args[1] === 'list') return [oldEntry(root)];
-    if (args[0] === 'mcp' && args[1] === 'get') return oldEntry(root);
-    if (args[1] === 'marketplace' && args[2] === 'list') return { marketplaces: [] };
-    if (args[0] === 'plugin' && args[1] === 'list') return { installed: version ? [{ pluginId: 'jumpstart-3d@jumpstart-3d', installed: true, enabled: true, version }] : [] };
-    if (args[0] === 'plugin' && args[1] === 'add') version = JSON.parse(requireManifest());
+    if (args[0] === 'mcp' && args[1] === 'get') {
+      return {
+        name: 'jumpstart',
+        enabled: true,
+        transport: { type: 'stdio', command: '/bin/node', args: ['server/stdio-proxy.mjs'], cwd: '/Users/me/.codex/plugins/cache/jumpstart-3d/jumpstart-3d/0.1.3/.' },
+      };
+    }
+    if (args[1] === 'marketplace' && args[2] === 'list') return { marketplaces: [{ name: 'jumpstart-3d', root: marketplaceRoot }] };
+    if (args[0] === 'plugin' && args[1] === 'add') {
+      const version = JSON.parse(readFileSync(join(marketplaceRoot, 'mcp/plugin/.codex-plugin/plugin.json'), 'utf8')).version;
+      return { pluginId: 'jumpstart-3d@jumpstart-3d', version };
+    }
     return {};
   };
-  // Read generated metadata synchronously inside the fake CLI, as a real CLI does.
-  const { readFileSync } = await import('node:fs');
-  function requireManifest() { return JSON.stringify(JSON.parse(readFileSync(join(root, 'build/codex-marketplace/mcp/plugin/.codex-plugin/plugin.json'))).version); }
+  const result = await installPlugin({ root, run, nodePath: '/bin/node' });
+  assert.equal(result.migrated, false);
+  assert.ok(!calls.includes('mcp remove jumpstart'));
+  assert.ok(!calls.some(call => call.startsWith('plugin list')));
+});
+
+test('installer removes old registration only after verified plugin installation', async t => {
+  const root = await fixture(t), calls = [];
+  const run = args => {
+    calls.push(args.join(' '));
+    if (args[0] === 'mcp' && args[1] === 'get') return oldEntry(root);
+    if (args[1] === 'marketplace' && args[2] === 'list') return { marketplaces: [] };
+    if (args[0] === 'plugin' && args[1] === 'add') {
+      const version = JSON.parse(readFileSync(join(root, 'build/codex-marketplace/mcp/plugin/.codex-plugin/plugin.json'), 'utf8')).version;
+      return { pluginId: 'jumpstart-3d@jumpstart-3d', version };
+    }
+    return {};
+  };
   assert.equal((await installPlugin({ root, run })).migrated, true);
   assert.equal(calls.at(-1), 'mcp remove jumpstart');
 });
@@ -96,10 +124,9 @@ test('failed plugin verification retains standalone registration', async t => {
   const root = await fixture(t), calls = [];
   const run = args => {
     calls.push(args.join(' '));
-    if (args[0] === 'mcp' && args[1] === 'list') return [oldEntry(root)];
     if (args[0] === 'mcp' && args[1] === 'get') return oldEntry(root);
     if (args[1] === 'marketplace' && args[2] === 'list') return { marketplaces: [] };
-    if (args[0] === 'plugin' && args[1] === 'list') return { installed: [] };
+    if (args[0] === 'plugin' && args[1] === 'add') return {};
     return {};
   };
   await assert.rejects(installPlugin({ root, run }), /retained/);
