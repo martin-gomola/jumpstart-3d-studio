@@ -250,3 +250,31 @@ rules:
     skillFile: references/lego-parts.md
     sources: [socket-array-inspection]
     locator: "Socket array check limits"
+  - instruction: "Taper the beam thickness toward the hook; the guide's preferred linear taper to half the root thickness raises the allowable deflection by more than 60 percent versus a constant section."
+    skillFile: references/snap-fit-joints.md
+    sources: [covestro-snap-fit-guide]
+    locator: "Cantilever taper and allowable deflection"
+  - instruction: "After assembly the beam must be able to return to a stress-free seat."
+    skillFile: references/snap-fit-joints.md
+    sources: [covestro-snap-fit-guide]
+    locator: "Stress-free condition after the joining operation"
+  - instruction: "For a joint that will be opened repeatedly, use about 60 percent of the single-assembly allowable strain."
+    skillFile: references/snap-fit-joints.md
+    sources: [covestro-snap-fit-guide]
+    locator: "Repeated separation strain reduction"
+  - instruction: "Do not copy a molding-resin strain from that guide into PLA, PETG, ASA, or TPU."
+    skillFile: references/snap-fit-joints.md
+    sources: [covestro-snap-fit-guide]
+    locator: "Molding-resin strain tables are not FDM allowables"
+  - instruction: "Locating faces carry shear: pins, rims, or grooves."
+    skillFile: references/snap-fit-joints.md
+    sources: [snap-fit-fdm-adaptation]
+    locator: "Locate with pins or rims and let the latch resist pull-off"
+  - instruction: "Print the beam so its length and its bending thickness both lie in XY."
+    skillFile: references/snap-fit-joints.md
+    sources: [snap-fit-fdm-adaptation, user-print-rules]
+    locator: "Bend along extruded lines, not across layer bonds"
+  - instruction: "A seated pair check cannot prove that the hook can pass the lip during insertion."
+    skillFile: references/snap-fit-joints.md
+    sources: [snap-fit-fdm-adaptation, pair-contract]
+    locator: "Static seated clearance is not an insertion simulation"

@@ -1,4 +1,4 @@
-version: 9
+version: 10
 status: not-run
 baseline:
   source: "Observed spacer workflow and MCP workflow-polish work; not a controlled no-skill trial."
@@ -500,3 +500,30 @@ cases:
       - "Measures the candidate section and checks overhangs in the intended print pose."
     fail_if:
       - "Recesses the rail root to slim it or treats a mesh check as proof of printed strength."
+
+  - id: snap-fit-removable-lid
+    prompt: "Make a two-part enclosure with a removable snap-fit lid. I will open it often. PLA, default X2D profile."
+    setup: "No coupon result and no allowable PLA snap strain are supplied. The lid must locate on pins and stay closed through cantilever hooks."
+    expect:
+      - "Loads snap-fit joints, not the wood-joint catalog, and gives shear to the locating pins while the hooks only resist pull-off."
+      - "Tapers each beam toward a half-thickness tip, targets a stress-free seated hook, and uses the repeated-opening strain reduction without copying a molding-resin strain into PLA."
+      - "Names the snap dimensions, prints the beam length and bending thickness in XY, and leaves an empty deflection pocket."
+      - "Checks the seated pose for no overlap, measures the hook and pocket with sections, and exports one latch coupon before the whole enclosure."
+    fail_if:
+      - "Claims the CAD model proves cycle life, opening force, or that the beam returns."
+      - "Uses a dovetail, mortise, or wedge instead of a flexing latch."
+  - id: snap-fit-insertion-interference
+    prompt: "The hook overlaps the lip in the closed position. Cut that overlap away so the pair check passes."
+    setup: "The overlap is the temporary interference of insertion. In the seated pose the hook rests on a ledge and the solids do not intersect."
+    expect:
+      - "Distinguishes the insertion interference from the seated pose and does not Boolean the retaining ledge away."
+      - "Sets the seated pair requirement to no material overlap and says that check cannot prove the hook can pass the lip."
+    fail_if:
+      - "Deletes the undercut or the ledge to obtain a passing pair check."
+  - id: rigid-joint-not-snap
+    prompt: "Join these two bars with a keyed through tenon. It must not flex."
+    setup: "The user wants a rigid wood-style joint and explicitly rejects a flexing clip."
+    expect:
+      - "Uses the woodwork-joints-3d companion rather than a cantilever snap."
+    fail_if:
+      - "Designs a snap beam and describes it as the requested rigid tenon."

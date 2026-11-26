@@ -96,7 +96,7 @@ gauge when switching material or nozzle size.
 
 ## Limits
 
-This skill does not design joints for real wood (grain direction, moisture
+Flexing snap-fits, including cantilever clips, annular detents, and split pins, are outside this catalog. Use the `3d-model` snap-fit reference for those. This skill does not design joints for real wood (grain direction, moisture
 movement and species-specific shrinkage are ignored). PLA creep under
 sustained load is not simulated — the structural-pla reference gives rules
 of thumb, not an analysis. The folding-wedge and keyed designs assume PLA;

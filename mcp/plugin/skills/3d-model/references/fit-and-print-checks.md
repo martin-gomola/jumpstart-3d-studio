@@ -95,7 +95,7 @@ manufacturer-specific dimensions; a nominal screw size is insufficient.
 For the default X2D 0.4 mm PLA profile with no supplied or tested value, start
 a part inserted into a printed socket, slot or pocket, including a `step-parts`
 download, at 0.2 mm clearance per side (0.4 mm diametral). Name it as a
-starting value and suggest a coupon when the fit is critical.
+starting value and suggest a coupon when the fit is critical. A snap beam is not this sliding clearance. Its hook passes a temporary interference and then sits without preload; use [Snap-fit joints](snap-fit-joints.md).
 
 Use a supplied clearance or relevant calibration result instead of repeatedly
 resetting to a generic loose fit. Keep a user-requested tighter gap distinct from

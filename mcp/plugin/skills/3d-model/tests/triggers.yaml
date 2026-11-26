@@ -1,4 +1,4 @@
-version: 9
+version: 10
 status: not-run
 cases:
   - prompt: "Keep the exact hooks from this original STL and thin the surrounding holder walls in JumpStart."
@@ -122,3 +122,12 @@ cases:
   - prompt: "Slim these sliding lid rails in JumpStart and keep their roots flush with the lid edge."
     expected: invoke
     mode: implicit
+  - prompt: "Design a removable snap-fit lid with cantilever clips and locating pins for this enclosure in JumpStart."
+    expected: invoke
+    mode: implicit
+  - prompt: "Add a split-pin catch so this cover clicks onto its posts and can be opened again."
+    expected: invoke
+    mode: implicit
+  - prompt: "Make a glue-free dovetail box with a keyed mortise and wedge, and no flexing clips."
+    expected: do-not-invoke
+    neighbor: woodwork-joints-3d

@@ -218,3 +218,11 @@ sources:
     path: mcp/browser/plans/models.js
     trust: "Named parametric plans can be revised from independent values with preview and model identity guards; generated geometry still needs independent inspection."
     mutable: true
+  - id: covestro-snap-fit-guide
+    url: https://solutions.covestro.com/-/media/covestro/solution-center/brands/downloads/imported/1557216102.pdf
+    trust: "Covestro snap-fit guide for molded thermoplastics. Deflection equals the undercut, a linear taper to half thickness raises allowable deflection by more than 60 percent, the seat should be stress-free, and repeated opening uses about 60 percent of the single-assembly strain. Its strain tables are not FDM PLA, PETG, ASA, or TPU allowables."
+    mutable: true
+  - id: snap-fit-fdm-adaptation
+    locator: "Existing X2D print rules, pair checks, and fit coupons applied to a flexing latch."
+    trust: "Workflow adaptation only. A static CAD check does not measure insertion force, return, creep, or cycle life."
+    mutable: false

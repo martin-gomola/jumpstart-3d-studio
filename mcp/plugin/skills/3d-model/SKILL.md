@@ -1,14 +1,13 @@
 ---
 name: 3d-model
-description: Creates and revises editable CAD parts, measured drawer layouts, Gridfinity bins, baseplates and custom inserts, household objects, and imported-part assemblies in JumpStart through local MCP. Use for drawer organization, magnet pockets, measured cutouts, trays, brackets, enclosures, hooks, phone holders and cases, spacers, knobs, fit checks, imported STL resizing, dimensioned SVG or PDF drawings, and tutorial models. Avoid generic 3D illustration, rendering, website design, and standalone product comparisons.
+description: Creates and revises editable CAD parts, measured drawer layouts, Gridfinity bins, baseplates and custom inserts, household objects, and imported-part assemblies in JumpStart through local MCP. Use for drawer organization, magnet pockets, measured cutouts, trays, brackets, enclosures, snap-fit clips and multi-part lids, hooks, phone holders and cases, spacers, knobs, fit checks, imported STL resizing, dimensioned SVG or PDF drawings, and tutorial models. Avoid generic 3D illustration, rendering, website design, and standalone product comparisons.
 metadata:
-  version: "1.23.4"
+  version: "1.24.0"
 ---
 
 # Model a part in JumpStart
 
-Use the installed `jumpstart` MCP with a running local editor. Model coordinates are millimetres.
-This instruction-only skill needs no shell scripts, external uploads, API keys or extra services.
+Use the installed `jumpstart` MCP with a running local editor. Model coordinates are millimetres. This instruction-only skill needs no shell scripts, external uploads, API keys or extra services.
 
 ## Contents
 
@@ -34,12 +33,13 @@ copy the entire tool catalog into working notes.
 | A shaped insert or sleeve fitted into an existing imported holder | [Fitted adapters](references/fitted-adapters.md) |
 | A named or pictured JumpStart tutorial | [Tutorial models](references/tutorial-models.md) |
 | Clearances, mating parts, pair checks, fit coupons | [Fit and print checks](references/fit-and-print-checks.md) |
+| Snap-fit clips, lids, split pins, detents, and locating pins | [Snap-fit joints](references/snap-fit-joints.md) |
 | Sliding lids that catch a flange, including lids that retain the original foil | [Sliding lids](references/sliding-lids.md) |
 | Printed parts, the default printer profile, print pose, screw, nut and insert holes | [Print setup and hardware](references/print-and-hardware.md) |
 | Acceptance checks, revisions, failures or final export | [Inspection and recovery](references/inspection-and-recovery.md) |
 | Estimating visible geometry from a photo with a ruler or grid | [Photo measurements](references/photo-measurements.md) |
 | LEGO-compatible parts, a named LEGO element, part-number lookup or LEGO System dimensions | [LEGO parts and dimensions](references/lego-parts.md) |
-| Glue- and screw-free joints or splitting oversized parts; a named purchased part (bearing, motor, board) to model around; opening an export in Bambu Studio or Bambu Connect | Companion skills `woodwork-joints-3d`; `step-parts` (downloads the STEP into managed imports); `bambu-handoff` |
+| Rigid glue-free wood joints or splits past the bed; a purchased part to model around; opening an export in Bambu Studio | Companion skills `woodwork-joints-3d`; `step-parts`; `bambu-handoff` |
 
 ## Inspect
 
